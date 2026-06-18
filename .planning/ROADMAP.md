@@ -92,8 +92,12 @@ Plans:
   3. Each node pair shows connectivity status (OK, Pending, NotAvailable) with clear visual distinction
   4. Dashboard uses `@st.cache_data(ttl=60)` for efficient data loading and `@st.fragment` for live auto-refreshing sections
   5. Dashboard refresh interval works cleanly with the data API — updates appear without full-page reload
-**Plans**: TBD
-**UI hint**: yes
+**Plans**: 1 plan
+
+```
+Plans:
+- [ ] 04-01-PLAN.md — Streamlit Dashboard (cached data fetching, 30m + 30d views, fragment auto-refresh)
+```
 
 ## Progress
 
@@ -103,4 +107,4 @@ Plans:
 | 2. Node Agent | 2/2 | ✓ Complete | 2026-06-18 |
 | 3. Persistence & Data API | 2/2 | ✓ Complete | 2026-06-18 |
 | 3.1. Integration tests | 2/2 | ◆ Ready to execute | - |
-| 4. Streamlit Dashboard | 0/0 | Not started | - |
+| 4. Streamlit Dashboard | 0/1 | Ready to plan | - |
