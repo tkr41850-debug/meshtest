@@ -88,45 +88,45 @@ Deferred to future release. Tracked but not in current roadmap.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| LEAD-01 | | Pending |
-| LEAD-02 | | Pending |
-| LEAD-03 | | Pending |
-| LEAD-04 | | Pending |
-| LEAD-05 | | Pending |
-| LEAD-06 | | Pending |
-| LEAD-07 | | Pending |
-| REGI-01 | | Pending |
-| REGI-02 | | Pending |
-| REGI-03 | | Pending |
-| REGI-04 | | Pending |
-| NODE-01 | | Pending |
-| NODE-02 | | Pending |
-| NODE-03 | | Pending |
-| NODE-04 | | Pending |
-| NODE-05 | | Pending |
-| NODE-06 | | Pending |
-| NODE-07 | | Pending |
-| NODE-08 | | Pending |
-| NODE-09 | | Pending |
-| NODE-10 | | Pending |
-| DATA-01 | | Pending |
-| DATA-02 | | Pending |
-| DATA-03 | | Pending |
-| DATA-04 | | Pending |
-| DATA-05 | | Pending |
-| DATA-06 | | Pending |
-| DATA-07 | | Pending |
-| DASH-01 | | Pending |
-| DASH-02 | | Pending |
-| DASH-03 | | Pending |
-| DASH-04 | | Pending |
-| DASH-05 | | Pending |
-| DASH-06 | | Pending |
+| LEAD-01 | Phase 1 | Pending |
+| LEAD-02 | Phase 1 | Pending |
+| LEAD-03 | Phase 1 | Pending |
+| LEAD-04 | Phase 1 | Pending |
+| LEAD-05 | Phase 1 | Pending |
+| LEAD-06 | Phase 1 | Pending |
+| LEAD-07 | Phase 1 | Pending |
+| REGI-01 | Phase 1 | Pending |
+| REGI-02 | Phase 1 | Pending |
+| REGI-03 | Phase 1 | Pending |
+| REGI-04 | Phase 1 | Pending |
+| NODE-01 | Phase 2 | Pending |
+| NODE-02 | Phase 2 | Pending |
+| NODE-03 | Phase 2 | Pending |
+| NODE-04 | Phase 2 | Pending |
+| NODE-05 | Phase 2 | Pending |
+| NODE-06 | Phase 2 | Pending |
+| NODE-07 | Phase 2 | Pending |
+| NODE-08 | Phase 2 | Pending |
+| NODE-09 | Phase 2 | Pending |
+| NODE-10 | Phase 2 | Pending |
+| DATA-01 | Phase 3 | Pending |
+| DATA-02 | Phase 3 | Pending |
+| DATA-03 | Phase 3 | Pending |
+| DATA-04 | Phase 3 | Pending |
+| DATA-05 | Phase 3 | Pending |
+| DATA-06 | Phase 3 | Pending |
+| DATA-07 | Phase 3 | Pending |
+| DASH-01 | Phase 4 | Pending |
+| DASH-02 | Phase 4 | Pending |
+| DASH-03 | Phase 4 | Pending |
+| DASH-04 | Phase 4 | Pending |
+| DASH-05 | Phase 4 | Pending |
+| DASH-06 | Phase 4 | Pending |
 
 **Coverage:**
 - v1 requirements: 34 total
-- Mapped to phases: 0
-- Unmapped: 34 ⚠️
+- Mapped to phases: 34
+- Unmapped: 0 ✓
 
 ---
 *Requirements defined: 2026-06-17*
