@@ -1,0 +1,6 @@
+import os
+
+LEADER_PORT = int(os.environ.get("MESH_STATUS_PORT", "58080"))
+CHECK_INTERVAL = int(os.environ.get("MESH_STATUS_INTERVAL", "10"))
+PEER_PUSH_TIMEOUT = int(os.environ.get("MESH_STATUS_PEER_PUSH_TIMEOUT", "5"))
+LOG_LEVEL = os.environ.get("MESH_STATUS_LOG_LEVEL", "INFO")
