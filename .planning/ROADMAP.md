@@ -6,7 +6,7 @@ A distributed mesh connectivity testing tool for monitoring network health acros
 
 ## Phases
 
-- [ ] **Phase 1: Leader Core & Registration** — Quart server on port 58080 with node registration, peer list distribution, in-memory state, and health endpoints
+- [x] **Phase 1: Leader Core & Registration** — Quart server on port 58080 with node registration, peer list distribution, in-memory state, and health endpoints
 - [ ] **Phase 2: Node Agent** — Async ping + HTTP health checks with semaphore-limited concurrency, result submission, and buffer-and-retry
 - [ ] **Phase 3: Persistence & Data API** — Hourly JSON Lines persistence, date-partitioned files, query endpoints for 30-minute and 30-day windows
 - [ ] **Phase 4: Streamlit Dashboard** — Connectivity matrix with 30-minute and 30-day views, cached data loading, fragment-based auto-refresh
@@ -27,9 +27,9 @@ A distributed mesh connectivity testing tool for monitoring network health acros
 
 ```
 Plans:
-- [ ] 01-01-PLAN.md — Project Foundation & Core Server (pyproject.toml, package, config, models, /livez, /readyz)
-- [ ] 01-02-PLAN.md — Registration & Submission Endpoints (POST /register, POST /submit, GET /node-list, peer push)
-- [ ] 01-03-PLAN.md — register.py CLI Script (argv + stdin registration)
+- [x] 01-01-PLAN.md — Project Foundation & Core Server (pyproject.toml, package, config, models, /livez, /readyz)
+- [x] 01-02-PLAN.md — Registration & Submission Endpoints (POST /register, POST /submit, GET /node-list, peer push)
+- [x] 01-03-PLAN.md — register.py CLI Script (argv + stdin registration)
 ```
 
 ### Phase 2: Node Agent
@@ -74,7 +74,7 @@ Plans:
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Leader Core & Registration | 0/3 | Not started | - |
+| 1. Leader Core & Registration | 3/3 | ✓ Complete | 2026-06-18 |
 | 2. Node Agent | 0/0 | Not started | - |
 | 3. Persistence & Data API | 0/0 | Not started | - |
 | 4. Streamlit Dashboard | 0/0 | Not started | - |
