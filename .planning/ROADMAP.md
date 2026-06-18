@@ -61,7 +61,7 @@ Plans:
   4. `GET /data?window=30d` returns daily aggregated uptime statistics
   5. Node status values (OK, Pending, NotAvailable) are calculated at query time based on submission recency and data presence
   6. All data API responses include CORS headers for cross-origin access from the Streamlit frontend
-**Plans**: TBD
+**Plans**: TDD (tests then implementation)
 
 ### Phase 4: Streamlit Dashboard
 **Goal**: Users can visualize mesh connectivity in real-time (30-minute window) and historically (30-day window) through a cached, auto-refreshing Streamlit dashboard
@@ -82,5 +82,5 @@ Plans:
 |-------|----------------|--------|-----------|
 | 1. Leader Core & Registration | 3/3 | ✓ Complete | 2026-06-18 |
 | 2. Node Agent | 2/2 | ✓ Complete | 2026-06-18 |
-| 3. Persistence & Data API | 0/0 | Not started | - |
+| 3. Persistence & Data API | 2/2 | ✓ Complete | 2026-06-18 |
 | 4. Streamlit Dashboard | 0/0 | Not started | - |

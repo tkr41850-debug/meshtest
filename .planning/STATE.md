@@ -5,16 +5,15 @@
 See: .planning/PROJECT.md (updated 2026-06-17)
 
 **Core value:** A node must be able to detect and report whether it can reach every other node in the mesh, and the leader must present an accurate, up-to-date connectivity view.
-**Current focus:** Phase 1 — Leader Core & Registration
+**Current focus:** Phase 4 — Streamlit Dashboard
 
 ## Current Position
 
-Phase: 3 of 4 (Persistence & Data API)
-Plan: 0 of 0 in current phase
+Phase: 4 of 4 (Streamlit Dashboard)
 Status: Ready to plan
-Last activity: 2026-06-18 — Phase 2 complete
+Last activity: 2026-06-18 — Phase 3 complete
 
-Progress: [████░░░░░░] 50%
+Progress: [███████░░░] 75%
 
 ## Performance Metrics
 
@@ -35,18 +34,20 @@ Progress: [████░░░░░░] 50%
 
 ### Decisions
 
-Decisions are logged in PROJECT.md Key Decisions table.
-Recent decisions affecting current work:
-
-- None yet (project initialized, roadmap created)
+Phase 3 decisions:
+- JSON Lines append-only writes, hourly flush, non-blocking flush_loop started at leader boot
+- Status calculated at query time per check type (ping_status, http_status)
+- Per-check-type OK threshold: 3× check interval
+- 30m response: raw checks + per-pair statuses; 30d response: daily aggregated per-pair uptime
+- After hourly flush: keep last 10 min of in-memory results for 30m queries
 
 ### Pending Todos
 
-None yet.
+None.
 
 ### Blockers/Concerns
 
-None yet.
+None.
 
 ## Session Continuity
 

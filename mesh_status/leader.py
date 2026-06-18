@@ -1,9 +1,8 @@
 import asyncio
-import json
 import logging
 import sys
 import time
-from typing import Optional
+from datetime import datetime, timedelta, date
 
 import httpx
 from hypercorn.asyncio import serve
@@ -12,7 +11,9 @@ from quart import Quart, request, jsonify
 from quart_cors import cors
 
 from mesh_status import config
-from mesh_status.models import CheckResult, NodeInfo, NodeRegistration, SubmitPayload
+from mesh_status.models import NodeInfo
+from mesh_status import persistence
+from mesh_status import status as status_module
 
 app = Quart(__name__)
 cors(app, allow_origin="*")
@@ -28,6 +29,12 @@ _registry: dict[str, NodeInfo] = {}
 _registry_lock = asyncio.Lock()
 _results: dict[str, list[dict]] = {}
 _peers_by_node: dict[str, list[str]] = {}
+
+
+@app.before_serving
+async def startup():
+    asyncio.create_task(persistence.flush_loop())
+    logger.info("Background flush task started")
 
 
 @app.route("/livez", methods=["GET"])
@@ -110,6 +117,63 @@ async def update_config():
         "status": "config_updated",
         "config": {"check_interval": config.CHECK_INTERVAL, "buffer_size": config.BUFFER_SIZE},
     }, 200
+
+
+@app.route("/data", methods=["GET"])
+async def get_data():
+    window = request.args.get("window", "")
+    if window == "30m":
+        cutoff = time.time() - 1800
+        checks = []
+        for node_ip, node_results in _results.items():
+            for r in node_results:
+                if r.get("timestamp", 0) >= cutoff:
+                    checks.append(r)
+        statuses = []
+        now = time.time()
+        for src_ip in list(_registry.keys()):
+            for dst_ip in list(_registry.keys()):
+                if src_ip != dst_ip:
+                    s = status_module.calculate_status(src_ip, dst_ip, _results, _registry, now)
+                    statuses.append(s)
+        return {"window": "30m", "checks": checks, "statuses": statuses, "timestamp": now}, 200
+
+    elif window == "30d":
+        now = time.time()
+        start = (datetime.now() - timedelta(days=30)).date()
+        end = datetime.now().date()
+        raw = persistence._read_results(start, end)
+        by_day: dict[str, dict] = {}
+        for r in raw:
+            ts = r.get("timestamp", 0)
+            day = datetime.fromtimestamp(ts).strftime("%Y-%m-%d")
+            if day not in by_day:
+                by_day[day] = {}
+            key = (r.get("node_ip", ""), r.get("target_ip", ""))
+            if key not in by_day[day]:
+                by_day[day][key] = {"total": 0, "ping_ok": 0, "http_ok": 0}
+            by_day[day][key]["total"] += 1
+            if r.get("ping_ok"):
+                by_day[day][key]["ping_ok"] += 1
+            if r.get("http_ok"):
+                by_day[day][key]["http_ok"] += 1
+
+        days_list = []
+        for day_str in sorted(by_day.keys()):
+            connections = []
+            for (src, dst), stats in by_day[day_str].items():
+                connections.append({
+                    "node_ip": src,
+                    "target_ip": dst,
+                    "total_checks": stats["total"],
+                    "ping_uptime_pct": round(stats["ping_ok"] / stats["total"] * 100, 1),
+                    "http_uptime_pct": round(stats["http_ok"] / stats["total"] * 100, 1),
+                })
+            days_list.append({"date": day_str, "connections": connections})
+        return {"window": "30d", "days": days_list, "timestamp": now}, 200
+
+    else:
+        return {"error": "Invalid or missing window parameter. Use ?window=30m or ?window=30d", "status": 400}, 400
 
 
 async def _notify_node(node_ip: str, peers: list[str]):
