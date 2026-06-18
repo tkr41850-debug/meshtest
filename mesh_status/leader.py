@@ -94,11 +94,33 @@ async def submit_results():
     return {"status": "accepted", "count": len(checks)}, 202
 
 
+@app.route("/updateConfig", methods=["POST"])
+async def update_config():
+    data = await request.get_json()
+    if not data:
+        return {"error": "Empty body", "status": 400}, 400
+
+    if "check_interval" in data:
+        config.CHECK_INTERVAL = int(data["check_interval"])
+    if "buffer_size" in data:
+        config.BUFFER_SIZE = int(data["buffer_size"])
+
+    await _push_config_to_all()
+    return {
+        "status": "config_updated",
+        "config": {"check_interval": config.CHECK_INTERVAL, "buffer_size": config.BUFFER_SIZE},
+    }, 200
+
+
 async def _notify_node(node_ip: str, peers: list[str]):
     url = f"http://{node_ip}:{config.LEADER_PORT}/update-peers"
     try:
         async with httpx.AsyncClient(timeout=config.PEER_PUSH_TIMEOUT) as client:
-            resp = await client.post(url, json={"peers": peers})
+            resp = await client.post(url, json={
+                "peers": peers,
+                "check_interval": config.CHECK_INTERVAL,
+                "buffer_size": config.BUFFER_SIZE,
+            })
             resp.raise_for_status()
             logger.debug("Peer notification sent to %s", node_ip)
     except Exception as e:
@@ -109,6 +131,16 @@ async def _push_peer_list_to_all():
     async with _registry_lock:
         all_peers = list(_registry.keys())
         tasks = [_notify_node(ip, all_peers) for ip in all_peers]
+    if tasks:
+        await asyncio.gather(*tasks, return_exceptions=True)
+
+
+async def _push_config_to_all():
+    async with _registry_lock:
+        all_peers = list(_registry.keys())
+        tasks = []
+        for ip in all_peers:
+            tasks.append(_notify_node(ip, list(_registry.keys())))
     if tasks:
         await asyncio.gather(*tasks, return_exceptions=True)
 
