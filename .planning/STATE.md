@@ -9,12 +9,12 @@ See: .planning/PROJECT.md (updated 2026-06-17)
 
 ## Current Position
 
-Phase: 2 of 4 (Node Agent)
+Phase: 3 of 4 (Persistence & Data API)
 Plan: 0 of 0 in current phase
 Status: Ready to plan
-Last activity: 2026-06-18 — Phase 1 complete
+Last activity: 2026-06-18 — Phase 2 complete
 
-Progress: [██░░░░░░░░] 25%
+Progress: [████░░░░░░] 50%
 
 ## Performance Metrics
 
