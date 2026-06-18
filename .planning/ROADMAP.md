@@ -22,8 +22,15 @@ A distributed mesh connectivity testing tool for monitoring network health acros
   2. A node can register with the leader via `register.py` (argv or stdin), receiving the full peer IP list in response
   3. Re-registering the same node IP is idempotent — updates state without error or duplicate entry
   4. When a new node registers, the leader pushes the updated node IP list to all currently registered nodes
-  5. `GET /node-list` returns all registered node IPs; `POST /submit` accepts check results into in-memory state
-**Plans**: TBD
+   5. `GET /node-list` returns all registered node IPs; `POST /submit` accepts check results into in-memory state
+**Plans**: 3 plans across 2 waves
+
+```
+Plans:
+- [ ] 01-01-PLAN.md — Project Foundation & Core Server (pyproject.toml, package, config, models, /livez, /readyz)
+- [ ] 01-02-PLAN.md — Registration & Submission Endpoints (POST /register, POST /submit, GET /node-list, peer push)
+- [ ] 01-03-PLAN.md — register.py CLI Script (argv + stdin registration)
+```
 
 ### Phase 2: Node Agent
 **Goal**: Registered nodes can probe all peers via ICMP ping and HTTP `/healthz`, then submit results to the leader, with resilience against submission failures
@@ -67,7 +74,7 @@ A distributed mesh connectivity testing tool for monitoring network health acros
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Leader Core & Registration | 0/0 | Not started | - |
+| 1. Leader Core & Registration | 0/3 | Not started | - |
 | 2. Node Agent | 0/0 | Not started | - |
 | 3. Persistence & Data API | 0/0 | Not started | - |
 | 4. Streamlit Dashboard | 0/0 | Not started | - |
