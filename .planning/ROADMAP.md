@@ -9,6 +9,7 @@ A distributed mesh connectivity testing tool for monitoring network health acros
 - [x] **Phase 1: Leader Core & Registration** — Quart server on port 58080 with node registration, peer list distribution, in-memory state, and health endpoints
 - [x] **Phase 2: Node Agent** — Async ping + HTTP health checks with semaphore-limited concurrency, result submission, and buffer-and-retry
 - [x] **Phase 3: Persistence & Data API** — Hourly JSON Lines persistence, date-partitioned files, query endpoints for 30-minute and 30-day windows
+- [x] **Phase 3.1: Integration Tests (inserted)** — 35 mocked integration tests covering leader HTTP endpoints and node agent components
 - [ ] **Phase 4: Streamlit Dashboard** — Connectivity matrix with 30-minute and 30-day views, cached data loading, fragment-based auto-refresh
 
 ## Phase Details
