@@ -96,7 +96,7 @@ Plans:
 
 ```
 Plans:
-- [ ] 04-01-PLAN.md — Streamlit Dashboard (cached data fetching, 30m + 30d views, fragment auto-refresh)
+- [x] 04-01-PLAN.md — Streamlit Dashboard (connectivity matrix, per-source expanders, fragment auto-refresh, README deployment docs)
 ```
 
 ## Progress
@@ -107,4 +107,4 @@ Plans:
 | 2. Node Agent | 2/2 | ✓ Complete | 2026-06-18 |
 | 3. Persistence & Data API | 2/2 | ✓ Complete | 2026-06-18 |
 | 3.1. Integration tests | 2/2 | ◆ Ready to execute | - |
-| 4. Streamlit Dashboard | 0/1 | Ready to plan | - |
+| 4. Streamlit Dashboard | 1/1 | ✓ Planned | 2026-06-18 |
