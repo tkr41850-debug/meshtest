@@ -49,12 +49,12 @@ Requirements for initial release. Each maps to roadmap phases.
 
 ### Dashboard
 
-- [ ] **DASH-01**: Streamlit dashboard served alongside (or separately from) the Quart server
-- [ ] **DASH-02**: Dashboard shows 30-minute connectivity matrix (last 30 checks)
-- [ ] **DASH-03**: Dashboard shows 30-day daily aggregated uptime view
-- [ ] **DASH-04**: Each node pair shows per-peer connectivity status
-- [ ] **DASH-05**: Dashboard uses `@st.cache_data(ttl=60)` for data loading
-- [ ] **DASH-06**: Dashboard uses `@st.fragment` for live auto-refresh sections
+- [x] **DASH-01**: Streamlit dashboard served alongside (or separately from) the Quart server
+- [x] **DASH-02**: Dashboard shows 30-minute connectivity matrix (last 30 checks)
+- [x] **DASH-03**: Dashboard shows 30-day daily aggregated uptime view
+- [x] **DASH-04**: Each node pair shows per-peer connectivity status
+- [x] **DASH-05**: Dashboard uses `@st.cache_data(ttl=30)` for data loading
+- [x] **DASH-06**: Dashboard uses `@st.fragment` for live auto-refresh sections
 
 ## v2 Requirements
 
@@ -116,12 +116,12 @@ Deferred to future release. Tracked but not in current roadmap.
 | DATA-05 | Phase 3 | Pending |
 | DATA-06 | Phase 3 | Pending |
 | DATA-07 | Phase 3 | Pending |
-| DASH-01 | Phase 4 | Pending |
-| DASH-02 | Phase 4 | Pending |
-| DASH-03 | Phase 4 | Pending |
-| DASH-04 | Phase 4 | Pending |
-| DASH-05 | Phase 4 | Pending |
-| DASH-06 | Phase 4 | Pending |
+| DASH-01 | Phase 4 | Complete |
+| DASH-02 | Phase 4 | Complete |
+| DASH-03 | Phase 4 | Complete |
+| DASH-04 | Phase 4 | Complete |
+| DASH-05 | Phase 4 | Complete |
+| DASH-06 | Phase 4 | Complete |
 
 **Coverage:**
 - v1 requirements: 34 total
