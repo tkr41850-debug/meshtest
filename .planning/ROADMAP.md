@@ -10,7 +10,7 @@ A distributed mesh connectivity testing tool for monitoring network health acros
 - [x] **Phase 2: Node Agent** — Async ping + HTTP health checks with semaphore-limited concurrency, result submission, and buffer-and-retry
 - [x] **Phase 3: Persistence & Data API** — Hourly JSON Lines persistence, date-partitioned files, query endpoints for 30-minute and 30-day windows
 - [x] **Phase 3.1: Integration Tests (inserted)** — 35 mocked integration tests covering leader HTTP endpoints and node agent components
-- [ ] **Phase 4: Streamlit Dashboard** — Connectivity matrix with 30-minute and 30-day views, cached data loading, fragment-based auto-refresh
+- [x] **Phase 4: Streamlit Dashboard** — Connectivity matrix with 30-minute and 30-day views, cached data loading, fragment-based auto-refresh
 
 ## Phase Details
 
@@ -78,8 +78,8 @@ Plans:
 
 ```
 Plans:
-- [ ] 03.1-01-PLAN.md — Mocked Leader Integration Tests (conftest, registration, peer push, submit, config push, data flow)
-- [ ] 03.1-02-PLAN.md — Mocked Node Integration Tests (check_node, check cycle, buffer/retry, submission HTTP)
+- [x] 03.1-01-PLAN.md — Mocked Leader Integration Tests (conftest, registration, peer push, submit, config push, data flow)
+- [x] 03.1-02-PLAN.md — Mocked Node Integration Tests (check_node, check cycle, buffer/retry, submission HTTP)
 ```
 
 ### Phase 4: Streamlit Dashboard
@@ -106,5 +106,5 @@ Plans:
 | 1. Leader Core & Registration | 3/3 | ✓ Complete | 2026-06-18 |
 | 2. Node Agent | 2/2 | ✓ Complete | 2026-06-18 |
 | 3. Persistence & Data API | 2/2 | ✓ Complete | 2026-06-18 |
-| 3.1. Integration tests | 2/2 | ◆ Ready to execute | - |
-| 4. Streamlit Dashboard | 1/1 | ✓ Planned | 2026-06-18 |
+| 3.1. Integration tests | 2/2 | ✓ Complete | 2026-06-18 |
+| 4. Streamlit Dashboard | 1/1 | ✓ Complete | 2026-06-18 |
