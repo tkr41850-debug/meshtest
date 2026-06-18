@@ -37,12 +37,18 @@ Plans:
 **Depends on**: Phase 1
 **Requirements**: NODE-01, NODE-02, NODE-03, NODE-04, NODE-05, NODE-06, NODE-07, NODE-08, NODE-09, NODE-10
 **Success Criteria** (what must be TRUE):
-  1. Node fetches peer IP list from leader at the start of each check cycle and runs ICMP ping + HTTP `GET /healthz` against all peers concurrently
-  2. Ping and HTTP checks use independent timeout handling; concurrent peer checks are limited by a semaphore to avoid resource exhaustion
-  3. Check results (status, latency, timestamp) are submitted to the leader's `POST /submit` after each cycle completes
-  4. On submission failure, results are buffered in memory and automatically retried on the next check cycle
-  5. The check interval is configurable on the leader side (default 10s); ping subprocess uses `asyncio.create_subprocess_exec` with cancellation-safe timeout
-**Plans**: TBD
+   1. Node fetches peer IP list from leader at the start of each check cycle and runs ICMP ping + HTTP `GET /healthz` against all peers concurrently
+   2. Ping and HTTP checks use independent timeout handling; concurrent peer checks are limited by a semaphore to avoid resource exhaustion
+   3. Check results (status, latency, timestamp) are submitted to the leader's `POST /submit` after each cycle completes
+   4. On submission failure, results are buffered in memory and automatically retried on the next check cycle
+   5. The check interval is configurable on the leader side (default 10s); ping subprocess uses `asyncio.create_subprocess_exec` with cancellation-safe timeout
+**Plans**: 2 plans across 2 waves
+
+```
+Plans:
+- [ ] 02-01-PLAN.md — Node Agent Core (async loop, ping + HTTP checks, semaphore, submission)
+- [ ] 02-02-PLAN.md — Buffer/Retry + Config Push (UpdateConfig on leader, node HTTP listener)
+```
 
 ### Phase 3: Persistence & Data API
 **Goal**: Check results persist to disk and become queryable through a data API that supports real-time and historical views with calculated node status
@@ -75,6 +81,6 @@ Plans:
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Leader Core & Registration | 3/3 | ✓ Complete | 2026-06-18 |
-| 2. Node Agent | 0/0 | Not started | - |
+| 2. Node Agent | 0/2 | In progress | - |
 | 3. Persistence & Data API | 0/0 | Not started | - |
 | 4. Streamlit Dashboard | 0/0 | Not started | - |
