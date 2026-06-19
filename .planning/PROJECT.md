@@ -8,17 +8,23 @@ A distributed mesh connectivity testing tool for monitoring network health acros
 
 A node must be able to detect and report whether it can reach every other node in the mesh, and the leader must present an accurate, up-to-date connectivity view.
 
-## Current Milestone: v0.5 Frontend Migration
+## Current State: v0.5 Shipped
 
-**Goal:** Replace Streamlit dashboard with a Vite + TypeScript + Tailwind CSS frontend served by the leader
+**Completed:** 2026-06-19
 
-**Target features:**
-- Vite + TS + Tailwind + Vitest project in `frontend/`
-- Leader serves built static files from port 58080
+**Accomplishments:**
+- Vite + TypeScript + Tailwind CSS frontend replaces Streamlit dashboard
+- Leader serves built static files from port 58080 (no separate Streamlit port)
 - Connectivity matrix, detail cards, and 30-day view ported from Streamlit
-- Auto-refresh via browser `setInterval`
-- UptimeRobot-style history visualization per node pair
-- Streamlit fully removed
+- UptimeRobot-style history visualization with bars + sparkline per node pair
+- Streamlit fully removed from codebase and dependencies
+- Docker multi-stage build (Node → Python)
+- 22 Vitest tests cover all views
+- 51 Python tests pass
+
+**Next Milestone Goals:**
+- Deferred features or v2+ requirements
+- See `.planning/milestones/v0.5-ROADMAP.md` for full details
 
 
 

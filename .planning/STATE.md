@@ -5,21 +5,21 @@
 See: .planning/PROJECT.md (updated 2026-06-18)
 
 **Core value:** A node must be able to detect and report whether it can reach every other node in the mesh, and the leader must present an accurate, up-to-date connectivity view.
-**Current focus:** v0.5 Frontend Migration
+**Current focus:** v0.5 Frontend Migration (Complete)
 
 ## Current Position
 
-Milestone: v0.5 (Frontend Migration) — In Progress
-Current Phase: Phase 8 (Frontend Scaffold + Build Pipeline)
+Milestone: v0.5 (Frontend Migration) — Complete
+Current Phase: Complete
 Plan: 4 phases (8, 9, 10, 11)
-Status: Defining requirements
-Last activity: 2026-06-18 — v0.5 milestone started
+Status: v0.5 complete
+Last activity: 2026-06-19 — v0.5 all phases complete
 
-Progress: [░░░░░░░░░░] 0%
-  Phase 8: Frontend Scaffold + Build Pipeline — Not Started
-  Phase 9: Dashboard Views — Not Started
-  Phase 10: Streamlit Cleanup — Not Started
-  Phase 11: Uptime History Visualization — Not Started
+Progress: [██████████] 100%
+  Phase 8: Frontend Scaffold + Build Pipeline — Complete
+  Phase 9: Dashboard Views — Complete
+  Phase 10: Streamlit Cleanup — Complete
+  Phase 11: Uptime History Visualization — Complete
 
 ## Performance Metrics
 
@@ -90,10 +90,10 @@ Phase 4 (CI/CD) decisions:
 ### Milestone v0.5 Status
 
 - [x] Define v0.5 requirements (25 requirements across 4 phases)
-- [x] Phase 8: Frontend Scaffold + Build Pipeline — Not Started
-- [ ] Phase 9: Dashboard Views — Not Started
-- [ ] Phase 10: Streamlit Cleanup — Not Started
-- [ ] Phase 11: Uptime History Visualization — Not Started
+- [x] Phase 8: Frontend Scaffold + Build Pipeline — Complete
+- [x] Phase 9: Dashboard Views — Complete
+- [x] Phase 10: Streamlit Cleanup — Complete
+- [x] Phase 11: Uptime History Visualization — Complete
 
 ### Blockers/Concerns
 
