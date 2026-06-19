@@ -116,10 +116,10 @@ async def run_check_cycle(
 
 
 async def submit_results(
-    results: list[dict], node_ip: str, leader_url: str
+    results: list[dict], node_ip: str, leader_url: str, node_url: str = ""
 ) -> bool:
     url = f"{leader_url.rstrip('/')}/submit"
-    payload = {"node_ip": node_ip, "checks": results, "timestamp": time.time()}
+    payload = {"node_ip": node_ip, "node_url": node_url, "checks": results, "timestamp": time.time()}
     try:
         async with httpx.AsyncClient(timeout=10.0) as client:
             resp = await client.post(url, json=payload)
@@ -205,7 +205,7 @@ async def run():
                 combined.append(results)
 
                 for batch in combined:
-                    ok = await submit_results(batch, node_ip, leader_url)
+                    ok = await submit_results(batch, node_ip, leader_url, node_url)
                     if ok:
                         result_buffer.clear()
                         if len(combined) > 1:

@@ -106,6 +106,7 @@ async def submit_results():
     node_ip = data.get("node_ip")
     checks = data.get("checks")
     timestamp = data.get("timestamp")
+    node_url = data.get("node_url", "")
 
     if not isinstance(node_ip, str):
         return {"error": "Invalid payload: node_ip must be a string", "status": 400}, 400
@@ -116,6 +117,18 @@ async def submit_results():
 
     _results[node_ip] = checks
     logger.info("Results submitted from %s: %d checks", node_ip, len(checks))
+
+    async with _registry_lock:
+        if node_ip not in _registry and node_url:
+            parsed = urlparse(node_url)
+            listen_port = parsed.port or config.DEFAULT_PORT
+            _registry[node_ip] = NodeInfo(
+                node_ip=node_ip, listen_port=listen_port, node_url=node_url,
+                last_seen=time.time(),
+            )
+            logger.info("Auto-registered node %s from submit", node_ip)
+            asyncio.create_task(_push_peer_list_to_all())
+
     return {"status": "accepted", "count": len(checks)}, 202
 
 
@@ -146,7 +159,9 @@ async def get_data():
         for node_ip, node_results in _results.items():
             for r in node_results:
                 if r.get("timestamp", 0) >= cutoff:
-                    checks.append(r)
+                    check = dict(r)
+                    check["node_ip"] = node_ip
+                    checks.append(check)
         statuses = []
         now = time.time()
         for src_ip in list(_registry.keys()):
