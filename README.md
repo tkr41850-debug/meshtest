@@ -44,14 +44,26 @@ docker run -d --restart unless-stopped \
   tkr41850/mesh-leader
 ```
 
-**Node agent:**
+**Node agent (same machine):**
 
 ```bash
 docker run -d --restart unless-stopped \
   --name mesh-node1 \
-  -p 58081:58080 \
-  -e LEADER_URL=http://<leader-host>:58080 \
-  -e NODE_URL=http://<this-host-ip>:58081 \
+  -p 58081:58081 \
+  -e LEADER_URL=http://localhost:58080 \
+  -e NODE_URL=http://localhost:58081 \
+  -e MESH_STATUS_INTERVAL=10 \
+  tkr41850/mesh-node
+```
+
+**Node agent (different machine — cross-VM):**
+
+```bash
+docker run -d --restart unless-stopped \
+  --name mesh-node1 \
+  -p 58081:58081 \
+  -e LEADER_URL=http://<leader-url>:58080 \
+  -e NODE_URL=http://<node-url>:58081 \
   -e MESH_STATUS_INTERVAL=10 \
   tkr41850/mesh-node
 ```
@@ -60,22 +72,22 @@ Data is persisted in `./data/` on the host. Check leader health at `http://local
 
 ### Port Management
 
-Each container has its own network namespace, so both leader and node can use port `58080` internally without conflict. Docker maps the ports to unique host ports:
+Each container listens on the port specified in its URL. Docker maps the container port to a matching host port:
 
-| Container | Internal Port | Host Port |
-|-----------|--------------|-----------|
-| Leader API | `58080` | `58080` |
+| Container | Container Port | Host Port |
+|-----------|---------------|-----------|
+| Leader API | from `LEADER_URL` (default `58080`) | `58080` |
 | Leader Dashboard | `58581` | `58581` |
-| Node HTTP | `58080` | `58081` |
+| Node HTTP | from `NODE_URL` (default `58081`) | `58081` |
 
-When running **natively** on the same machine, include the port in the URL:
+When running **natively** without Docker, pass the URLs directly:
 
 ```bash
-# First node
-uv run python node.py --leader-url http://<leader>:58080 --node-url http://<node1>:58081
+# Leader
+hypercorn mesh_status.leader:app --bind 0.0.0.0:58080
 
-# Second node
-uv run python node.py --leader-url http://<leader>:58080 --node-url http://<node2>:58082
+# Node
+uv run python node.py --leader-url http://<leader-url>:58080 --node-url http://<node-url>:58081
 ```
 
 ## Single-Architecture Builds
