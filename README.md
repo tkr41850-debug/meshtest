@@ -27,10 +27,38 @@ Pre-built multi-arch images are available on Docker Hub:
 
 | Image | Description |
 |-------|-------------|
-| `<org>/mesh-leader` | Leader + Dashboard |
-| `<org>/mesh-node` | Node agent |
+| `tkr41850/mesh-leader` | Leader + Dashboard |
+| `tkr41850/mesh-node` | Node agent |
 
-Replace `<org>` with the Docker Hub org or username used during build.
+### Run Pre-built Images
+
+**Leader (with Dashboard):**
+
+```bash
+docker run -d --restart unless-stopped \
+  --name mesh-leader \
+  -p 58080:58080 \
+  -p 58581:58581 \
+  -v ./data:/app/data \
+  -e LEADER_PORT=58080 \
+  -e LEADER_URL=http://localhost:58080 \
+  tkr41850/mesh-leader
+```
+
+**Node agent:**
+
+```bash
+docker run -d --restart unless-stopped \
+  --name mesh-node1 \
+  -p 58081:58080 \
+  -e LEADER_IP=<leader-host-ip> \
+  -e NODE_IP=<this-node-ip> \
+  -e MESH_STATUS_PORT=58080 \
+  -e MESH_STATUS_INTERVAL=10 \
+  tkr41850/mesh-node
+```
+
+Data is persisted in `./data/` on the host. Check leader health at `http://localhost:58080/livez` and open the dashboard at `http://localhost:58581`.
 
 ## Single-Architecture Builds
 
