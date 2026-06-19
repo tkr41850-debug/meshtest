@@ -9,7 +9,7 @@ import streamlit as st
 
 logger = logging.getLogger(__name__)
 
-LEADER_URL = os.environ.get("LEADER_URL", "http://localhost:58080")
+LEADER_URL = "http://localhost:58080"
 DATA_FETCH_TIMEOUT = 5
 REFRESH_INTERVAL = 30
 

@@ -22,10 +22,10 @@ services:
       context: .
       dockerfile: Dockerfile.node
     ports:
-      - "58081:58080"
+      - "58081:58081"
     environment:
       LEADER_URL: http://leader:58080
-      NODE_URL: http://node1:58080
+      NODE_URL: http://node1:58081
     depends_on:
       leader:
         condition: service_healthy
