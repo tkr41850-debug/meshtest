@@ -36,14 +36,14 @@ Deferred to future release. Tracked but not in current roadmap.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| DASHF-01 | — | Pending |
-| DASHD-01 | — | Pending |
-| DASHU-01 | — | Pending |
+| DASHF-01 | Phase 6 | Pending |
+| DASHD-01 | Phase 5 | Pending |
+| DASHU-01 | Phase 6 | Pending |
 
 **Coverage:**
 - v3 requirements: 3 total
-- Mapped to phases: 0
-- Unmapped: 3 ⚠️
+- Mapped to phases: 3
+- Unmapped: 0 ✓
 
 ---
 *Requirements defined: 2026-06-18*

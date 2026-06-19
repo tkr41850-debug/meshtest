@@ -10,10 +10,10 @@ See: .planning/PROJECT.md (updated 2026-06-18)
 ## Current Position
 
 Milestone: v0.3 (Dashboard Fixes)
-Current Phase: Not started (defining requirements)
-Plan: —
-Status: Defining requirements
-Last activity: 2026-06-18 — Milestone v0.3 started
+Current Phase: Not started (roadmap created)
+Plan: 2 phases (5-6)
+Status: Ready to build
+Last activity: 2026-06-18 — v0.3 roadmap created (2 phases)
 
 Progress: [░░░░░░░░░░] 0%
 
@@ -84,8 +84,10 @@ Phase 4 (CI/CD) decisions:
 
 ### Pending Todos
 
-- [ ] Define v0.3 requirements
-- [ ] Create v0.3 roadmap
+- [x] Define v0.3 requirements
+- [x] Create v0.3 roadmap
+- [ ] Phase 5: Backend — Data Latency Grace Period
+- [ ] Phase 6: Frontend — Dashboard Bug Fix + UI Enhancement
 
 ### Blockers/Concerns
 
