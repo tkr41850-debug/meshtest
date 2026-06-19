@@ -1,0 +1,38 @@
+FROM python:3.12-slim AS base
+
+RUN apt-get update && apt-get install -y --no-install-recommends curl && \
+    rm -rf /var/lib/apt/lists/*
+
+COPY --from=ghcr.io/astral-sh/uv:0.6.0 /uv /uv
+
+WORKDIR /app
+
+COPY pyproject.toml /app/
+RUN --mount=type=cache,target=/root/.cache/uv \
+    uv sync --no-dev --no-install-project
+
+COPY mesh_status/ /app/mesh_status/
+
+RUN --mount=type=cache,target=/root/.cache/uv \
+    uv sync --no-dev
+
+COPY --chmod=+x entrypoint.sh /app/entrypoint.sh
+
+RUN addgroup --system --gid 1001 meshstatus && \
+    adduser --system --uid 1001 --ingroup meshstatus --no-create-home meshstatus && \
+    chown meshstatus:meshstatus /app/data
+
+USER meshstatus
+
+ENV PATH="/app/.venv/bin:$PATH"
+ENV LEADER_HOST=0.0.0.0
+ENV LEADER_PORT=58080
+ENV LEADER_URL=http://localhost:58080
+ENV DATA_DIR=/app/data
+
+EXPOSE 58080 58581
+
+HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 \
+    CMD curl -f http://localhost:58080/livez
+
+ENTRYPOINT ["/app/entrypoint.sh"]
