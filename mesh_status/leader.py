@@ -47,6 +47,11 @@ async def readyz():
     return {"status": "ready"}, 200
 
 
+@app.route("/healthz", methods=["GET"])
+async def healthz():
+    return {"status": "alive"}, 200
+
+
 @app.route("/register", methods=["POST"])
 async def register():
     data = await request.get_json()

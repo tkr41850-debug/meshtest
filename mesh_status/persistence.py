@@ -75,7 +75,7 @@ async def flush_loop(interval: int = 3600):
             batch = dict(_results)
             _flush_results(batch)
             # Keep last 10 minutes in memory
-            cutoff = time.time() - 600
+            cutoff = time.time() - 1800
             for node_ip in list(_results.keys()):
                 _results[node_ip] = [
                     r for r in _results[node_ip]

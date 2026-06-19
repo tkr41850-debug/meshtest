@@ -14,6 +14,7 @@ from collections import deque
 import httpx
 
 from mesh_status import config
+from aiohttp import web
 
 logging.basicConfig(
     level=getattr(logging, config.LOG_LEVEL),
@@ -117,6 +118,45 @@ async def submit_results(
         return False
 
 
+async def handle_update_peers(request: web.Request) -> web.Response:
+    data = await request.json()
+    app = request.app
+    if "peers" in data and isinstance(data["peers"], list):
+        app["state"]["peers"] = data["peers"]
+    if "check_interval" in data:
+        app["state"]["interval"] = int(data["check_interval"])
+    if "buffer_size" in data:
+        app["state"]["buffer_size"] = int(data["buffer_size"])
+    logger.info("Updated peers via push: %d peers, interval=%s, buffer=%s",
+                len(app["state"]["peers"]), app["state"]["interval"], app["state"]["buffer_size"])
+    return web.json_response({"status": "ok"})
+
+
+async def handle_update_config(request: web.Request) -> web.Response:
+    data = await request.json()
+    app = request.app
+    if "check_interval" in data:
+        app["state"]["interval"] = int(data["check_interval"])
+    if "buffer_size" in data:
+        app["state"]["buffer_size"] = int(data["buffer_size"])
+    logger.info("Updated config via push: interval=%s, buffer=%s",
+                app["state"]["interval"], app["state"]["buffer_size"])
+    return web.json_response({"status": "ok"})
+
+
+async def start_http_server(state: dict, host: str = "0.0.0.0", port: int = 0) -> web.AppRunner:
+    app = web.Application()
+    app["state"] = state
+    app.router.add_post("/update-peers", handle_update_peers)
+    app.router.add_post("/updateConfig", handle_update_config)
+    runner = web.AppRunner(app)
+    await runner.setup()
+    site = web.TCPSite(runner, host, port)
+    await site.start()
+    logger.info("Node HTTP server listening on %s:%d", host, port)
+    return runner
+
+
 async def run():
     args = parse_args()
 
@@ -126,8 +166,15 @@ async def run():
 
     node_ip = args.node_ip or get_own_ip()
     port = args.port
-    interval = config.CHECK_INTERVAL
-    buffer_size = config.BUFFER_SIZE
+
+    shared_state = {
+        "peers": [],
+        "interval": config.CHECK_INTERVAL,
+        "buffer_size": config.BUFFER_SIZE,
+    }
+    http_runner = await start_http_server(shared_state, port=config.LEADER_PORT)
+    interval = shared_state["interval"]
+    buffer_size = shared_state["buffer_size"]
     result_buffer: deque[list[dict]] = deque(maxlen=buffer_size)
     semaphore = asyncio.Semaphore(10)
 
@@ -142,37 +189,44 @@ async def run():
             logger.error("Registration failed: %s", resp.text)
             sys.exit(1)
         data = resp.json()
-        peers = data.get("peers", [])
-        logger.info("Registered. Peers: %s", peers)
+        if "peers" in data and isinstance(data["peers"], list):
+            shared_state["peers"] = data["peers"]
+        logger.info("Registered. Peers: %s", shared_state["peers"])
 
-    while True:
+    try:
+        while True:
+            try:
+                async with httpx.AsyncClient(timeout=10.0) as client:
+                    resp = await client.get(f"http://{leader_ip}:{port}/node-list")
+                    if resp.is_success:
+                        shared_state["peers"] = resp.json().get("nodes", [])
+
+                logger.debug("Check cycle: %d peers", len(shared_state["peers"]))
+                results = await run_check_cycle(semaphore, shared_state["peers"])
+
+                combined = list(result_buffer)
+                combined.append(results)
+
+                for batch in combined:
+                    ok = await submit_results(batch, node_ip, leader_ip, port)
+                    if ok:
+                        result_buffer.clear()
+                        if len(combined) > 1:
+                            logger.info("Buffered data submitted successfully")
+                        break
+                    else:
+                        result_buffer.append(batch)
+                        logger.warning("Buffer size: %d cycles", len(result_buffer))
+
+            except Exception as e:
+                logger.error("Check cycle error: %s", e)
+
+            await asyncio.sleep(shared_state["interval"])
+    finally:
         try:
-            async with httpx.AsyncClient(timeout=10.0) as client:
-                resp = await client.get(f"http://{leader_ip}:{port}/node-list")
-                if resp.is_success:
-                    peers = resp.json().get("nodes", [])
-
-            logger.debug("Check cycle: %d peers", len(peers))
-            results = await run_check_cycle(semaphore, peers)
-
-            combined = list(result_buffer)
-            combined.append(results)
-
-            for batch in combined:
-                ok = await submit_results(batch, node_ip, leader_ip, port)
-                if ok:
-                    result_buffer.clear()
-                    if len(combined) > 1:
-                        logger.info("Buffered data submitted successfully")
-                    break
-                else:
-                    result_buffer.append(batch)
-                    logger.warning("Buffer size: %d cycles", len(result_buffer))
-
-        except Exception as e:
-            logger.error("Check cycle error: %s", e)
-
-        await asyncio.sleep(interval)
+            await http_runner.cleanup()
+        except Exception:
+            pass
 
 
 if __name__ == "__main__":
