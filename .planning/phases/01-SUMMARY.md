@@ -7,7 +7,7 @@
 
 - `Dockerfile.leader` — Multi-arch Dockerfile for leader+dashboard container
   - Base: `python:3.12-slim`
-  - UV pinned to `ghcr.io/astral-sh/uv:0.6.0` (reproducible builds)
+  - UV installed via `curl -LsSf https://astral.sh/uv/install.sh | UV_INSTALL_DIR=/usr/local/bin sh` (multi-arch compatible)
   - `curl` installed for HEALTHCHECK and startup check
   - Layer caching via `--mount=type=cache` for `uv sync`
   - Two-stage uv sync: deps first, then project install

@@ -19,6 +19,18 @@ open http://localhost:58581
 
 Data is persisted in `./data/` on the host.
 
+## Single-Architecture Builds
+
+Build for the current platform:
+
+```bash
+# Leader
+docker build -f Dockerfile.leader -t mesh-leader .
+
+# Node
+docker build -f Dockerfile.node -t mesh-node .
+```
+
 ## Multi-Architecture Builds
 
 Build for both `linux/amd64` and `linux/arm64`:
