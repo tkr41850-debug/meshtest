@@ -5,16 +5,17 @@
 See: .planning/PROJECT.md (updated 2026-06-18)
 
 **Core value:** A node must be able to detect and report whether it can reach every other node in the mesh, and the leader must present an accurate, up-to-date connectivity view.
-**Current focus:** Phase 4 of v0.2 — GitHub Actions CI/CD
+**Current focus:** Defining requirements for v0.3 Dashboard Fixes
 
 ## Current Position
 
-Milestone: v0.2 (Containerize mesh-status)
-Current Phase: Phase 4 — GitHub Actions CI/CD
-Status: Complete — all phases delivered
-Last activity: 2026-06-18 — Phase 4 complete, v0.2 ready for tagging
+Milestone: v0.3 (Dashboard Fixes)
+Current Phase: Not started (defining requirements)
+Plan: —
+Status: Defining requirements
+Last activity: 2026-06-18 — Milestone v0.3 started
 
-Progress: [██████████] 100%
+Progress: [░░░░░░░░░░] 0%
 
 ## Performance Metrics
 
@@ -67,6 +68,14 @@ Phase 3 decisions:
 - 30m response: raw checks + per-pair statuses; 30d response: daily aggregated per-pair uptime
 - After hourly flush: keep last 10 min of in-memory results for 30m queries
 
+Phase 4 (CI/CD) decisions:
+- Matrix build strategy for parallel leader+node builds
+- docker/metadata-action for tag generation (latest, semver, branch, PR)
+- Fail-fast: false for matrix (one image can fail independently)
+- Push only on non-PR events (PR builds without push for verification)
+- Cache via `type=gha` with `mode=max` for maximum layer reuse
+- QEMU + Buildx for multi-arch (linux/amd64, linux/arm64)
+
 ### Roadmap Evolution
 
 - Phase **3.1** inserted after Phase **3** (URGENT) — Add mocked integration tests for Phase 1 and 2
@@ -75,19 +84,8 @@ Phase 3 decisions:
 
 ### Pending Todos
 
-- [x] Milestone v0.2: Define phases and requirements
-- [x] Phase 1: Dockerfile for leader+dashboard container
-- [x] Phase 2: Dockerfile for node agent container
-- [x] Phase 3: docker-compose.yml + docs
-- [x] Phase 4: GitHub Actions CI/CD — Build & Push to Docker Hub
-
-Phase 4 decisions:
-- Matrix build strategy for parallel leader+node builds
-- docker/metadata-action for tag generation (latest, semver, branch, PR)
-- Fail-fast: false for matrix (one image can fail independently)
-- Push only on non-PR events (PR builds without push for verification)
-- Cache via `type=gha` with `mode=max` for maximum layer reuse
-- QEMU + Buildx for multi-arch (linux/amd64, linux/arm64)
+- [ ] Define v0.3 requirements
+- [ ] Create v0.3 roadmap
 
 ### Blockers/Concerns
 
@@ -96,5 +94,5 @@ None.
 ## Session Continuity
 
 Last session: 2026-06-18
-Stopped at: Phase 1 complete — moving to Phase 2 (node Dockerfile)
+Stopped at: v0.2 complete — starting v0.3 Dashboard Fixes
 Resume file: None

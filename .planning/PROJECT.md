@@ -8,16 +8,14 @@ A distributed mesh connectivity testing tool for monitoring network health acros
 
 A node must be able to detect and report whether it can reach every other node in the mesh, and the leader must present an accurate, up-to-date connectivity view.
 
-## Current Milestone: v0.2 Containerize mesh-status
+## Current Milestone: v0.3 Dashboard Fixes
 
-**Goal:** Dockerize the leader+dashboard and node components for easy deployment across multi-VM VPN WAN
+**Goal:** Fix dashboard bugs and improve data latency handling with UptimeRobot-style detail views
 
 **Target features:**
-- Dockerfile for leader+dashboard (Quart + Streamlit)
-- Dockerfile for node agent
-- docker-compose.yml for local dev/test
-- README deployment docs for Docker-based deployment
-- Multi-architecture support: builds for both `linux/amd64` and `linux/arm64`
+- Fix `st.rerun(scope="fragment")` error
+- 2-minute grace period before marking data as "Not Available"
+- Details dropdown with uptime summary card (UptimeRobot-style)
 
 ## Requirements
 
@@ -60,14 +58,18 @@ A node must be able to detect and report whether it can reach every other node i
 - ✓ **NODE-HTTP**: Node HTTP server receives peer push and config updates
 - ✓ **HEALTHZ**: Leader exposes `GET /healthz`
 - ✓ **RETENTION**: 30-minute data window retains 30 min after flush
+- ✓ **DOCK-01**: Dockerfile for leader+dashboard container (Quart + Streamlit) — v0.2
+- ✓ **DOCK-02**: Dockerfile for node agent container — v0.2
+- ✓ **DOCK-03**: docker-compose.yml for local dev/test — v0.2
+- ✓ **DOCK-04**: Docker-specific config (environment variables, ports, volumes for data) — v0.2
+- ✓ **DOCK-05**: README deployment docs for Docker-based deployment — v0.2
+- ✓ **CI-01**: GitHub Actions workflow builds and pushes multi-arch images to Docker Hub — v0.2
 
 ### Active
 
-- [ ] **DOCK-01**: Dockerfile for leader+dashboard container (Quart + Streamlit)
-- [ ] **DOCK-02**: Dockerfile for node agent container
-- [ ] **DOCK-03**: docker-compose.yml for local dev/test
-- [ ] **DOCK-04**: Docker-specific config (environment variables, ports, volumes for data)
-- [ ] **DOCK-05**: README deployment docs for Docker-based deployment
+- [ ] **DASHF-01**: Fix `st.rerun(scope="fragment")` error on dashboard
+- [ ] **DASHD-01**: 2-minute grace period before marking node data as "Not Available"
+- [ ] **DASHU-01**: Per-node-pair details dropdown with uptime summary card (UptimeRobot-style)
 
 ### Out of Scope
 
@@ -75,8 +77,7 @@ A node must be able to detect and report whether it can reach every other node i
 - Database backend — JSON file storage sufficient for prototype scale
 - Real-time push/WebSocket — Frontend polls the data endpoint
 - Encryption of data in transit or at rest — prototype
-- Kubernetes / orchestration — Docker Compose sufficient for v0.2
-- Docker Hub publishing / CI — manual build for now
+- Kubernetes / orchestration — Docker Compose sufficient for prototype
 
 ## Context
 
@@ -123,4 +124,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-06-17 after initialization*
+*Last updated: 2026-06-18 after v0.3 milestone start*
