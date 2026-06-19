@@ -99,6 +99,17 @@ Plans:
 - [x] 04-01-PLAN.md — Streamlit Dashboard (connectivity matrix, per-source expanders, fragment auto-refresh, README deployment docs)
 ```
 
+### Phase 4.1: Fix cross-phase integration gaps (INSERTED)
+**Goal**: Fix the 3 critical cross-phase integration gaps identified during milestone audit: add HTTP server to node.py for peer push and config push reception, add /healthz endpoint to leader, and ensure 30-minute data window works after hourly flush
+**Depends on**: Phase 4
+**Urgent**: Discovered during milestone audit — peer push, HTTP health checks, and 30m data retention are broken at runtime
+**Plans**: 1 plan
+
+```
+Plans:
+- [ ] 4.1-01-PLAN.md — Fix 3 integration gaps (node HTTP server, /healthz, 30m retention)
+```
+
 ## Progress
 
 | Phase | Plans Complete | Status | Completed |
@@ -108,3 +119,4 @@ Plans:
 | 3. Persistence & Data API | 2/2 | ✓ Complete | 2026-06-18 |
 | 3.1. Integration tests | 2/2 | ✓ Complete | 2026-06-18 |
 | 4. Streamlit Dashboard | 1/1 | ✓ Complete | 2026-06-18 |
+| 4.1. Integration fixes | 0/1 | Planned | - |
