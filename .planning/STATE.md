@@ -11,10 +11,10 @@ See: .planning/PROJECT.md (updated 2026-06-18)
 
 Milestone: v0.2 (Containerize mesh-status)
 Current Phase: Phase 2 — Dockerfile Node Agent
-Status: Phase 1 complete, Phase 2 ready
-Last activity: 2026-06-18 — Phase 1 verified (docker build + run + endpoints all pass)
+Status: Planned, ready for execution
+Last activity: 2026-06-18 — Phase 2 planned (Dockerfile.node)
 
-Progress: [██░░░░░░░░] 33%
+Progress: [███░░░░░░░] 40%
 
 ## Performance Metrics
 
