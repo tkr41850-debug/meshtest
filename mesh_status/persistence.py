@@ -59,7 +59,9 @@ def _flush_results(results_batch: dict[str, list[dict]]):
         for check in checks:
             ts = check.get("timestamp", time.time())
             dt = datetime.fromtimestamp(ts).date()
-            by_date.setdefault(dt, []).append(check)
+            stored = dict(check)
+            stored["node_ip"] = node_ip
+            by_date.setdefault(dt, []).append(stored)
     for d, items in by_date.items():
         _append_results(d, items)
         logger.info("Flushed %d results to %s", len(items), _date_path(d))

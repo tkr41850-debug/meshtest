@@ -190,6 +190,12 @@ async def get_data():
         start = (datetime.now() - timedelta(days=30)).date()
         end = datetime.now().date()
         raw = persistence._read_results(start, end)
+        # Include in-memory data that hasn't been flushed yet
+        for node_ip, node_results in list(_results.items()):
+            for r in node_results:
+                check = dict(r)
+                check["node_ip"] = node_ip
+                raw.append(check)
         by_day: dict[str, dict] = {}
         for r in raw:
             ts = r.get("timestamp", 0)

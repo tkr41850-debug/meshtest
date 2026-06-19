@@ -141,6 +141,62 @@ class TestDataApiIntegration:
         assert "days" in data
         assert "timestamp" in data
 
+    async def test_data_30d_includes_in_memory_data(self, client):
+        await client.post("/submit", json={
+            "node_ip": "10.0.0.1",
+            "checks": [{
+                "target_ip": "10.0.0.2",
+                "ping_ok": True,
+                "http_ok": True,
+                "timestamp": 1000.0,
+            }],
+            "timestamp": 1000.0,
+        })
+        resp = await client.get("/data?window=30d")
+        assert resp.status_code == 200
+        data = await resp.get_json()
+        assert len(data["days"]) > 0
+        day = data["days"][0]
+        assert len(day["connections"]) > 0
+        conn = day["connections"][0]
+        assert conn["ping_uptime_pct"] == 100.0
+        assert conn["http_uptime_pct"] == 100.0
+
+    async def test_data_30d_aggregates_by_day(self, client):
+        await client.post("/submit", json={
+            "node_ip": "10.0.0.2",
+            "checks": [{
+                "target_ip": "10.0.0.1",
+                "ping_ok": True,
+                "http_ok": False,
+                "timestamp": 1000.0,
+            }, {
+                "target_ip": "10.0.0.3",
+                "ping_ok": False,
+                "http_ok": False,
+                "timestamp": 1000.5,
+            }],
+            "timestamp": 1000.0,
+        })
+        resp = await client.get("/data?window=30d")
+        assert resp.status_code == 200
+        data = await resp.get_json()
+        assert len(data["days"]) > 0
+        day = data["days"][0]
+        assert len(day["connections"]) == 2
+        conn_a = next(c for c in day["connections"] if c["target_ip"] == "10.0.0.1")
+        assert conn_a["ping_uptime_pct"] == 100.0
+        assert conn_a["http_uptime_pct"] == 0.0
+        conn_b = next(c for c in day["connections"] if c["target_ip"] == "10.0.0.3")
+        assert conn_b["ping_uptime_pct"] == 0.0
+        assert conn_b["http_uptime_pct"] == 0.0
+
+    async def test_data_30d_returns_empty_days_with_no_data(self, client):
+        resp = await client.get("/data?window=30d")
+        assert resp.status_code == 200
+        data = await resp.get_json()
+        assert data["days"] == []
+
     async def test_data_without_window_returns_400(self, client):
         resp = await client.get("/data")
         assert resp.status_code == 400

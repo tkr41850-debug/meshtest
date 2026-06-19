@@ -1,3 +1,5 @@
+import os
+import shutil
 import pytest
 from unittest.mock import Mock, patch, AsyncMock
 
@@ -8,6 +10,10 @@ def reset_leader_state():
     _registry.clear()
     _results.clear()
     _peers_by_node.clear()
+    # Remove stale disk data from previous runs
+    data_dir = os.path.join(os.path.dirname(__file__), "..", "data")
+    if os.path.isdir(data_dir):
+        shutil.rmtree(data_dir)
 
 
 @pytest.fixture
