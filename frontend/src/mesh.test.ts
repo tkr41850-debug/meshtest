@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import { renderMatrix } from "./views/matrix";
 import { renderCards } from "./views/cards";
 import { renderDay30 } from "./views/day30";
+import { renderHistory } from "./views/history";
 
 describe("renderMatrix", () => {
   it("renders table with correct number of rows/cols", () => {
@@ -210,5 +211,96 @@ describe("renderDay30", () => {
       },
     ]);
     expect(container.innerHTML).toContain("2026-06-01");
+  });
+});
+
+describe("renderHistory", () => {
+  it("renders source node expanders", () => {
+    const container = document.createElement("div");
+    renderHistory(container, ["10.0.0.1", "10.0.0.2"], [
+      {
+        date: "2026-06-01",
+        connections: [
+          {
+            node_ip: "10.0.0.1",
+            target_ip: "10.0.0.2",
+            ping_uptime_pct: 100,
+            http_uptime_pct: 99.5,
+            total_checks: 8640,
+          },
+        ],
+      },
+    ]);
+    expect(container.querySelectorAll("details").length).toBeGreaterThan(
+      0,
+    );
+  });
+
+  it("shows no-data message for undefined days", () => {
+    const container = document.createElement("div");
+    renderHistory(container, ["10.0.0.1"], undefined);
+    expect(container.innerHTML).toContain("No history data");
+  });
+
+  it("renders bars with gradient for connection data", () => {
+    const container = document.createElement("div");
+    renderHistory(container, ["10.0.0.1", "10.0.0.2"], [
+      {
+        date: "2026-06-01",
+        connections: [
+          {
+            node_ip: "10.0.0.1",
+            target_ip: "10.0.0.2",
+            ping_uptime_pct: 100,
+            http_uptime_pct: 99.5,
+            total_checks: 8640,
+          },
+        ],
+      },
+    ]);
+    expect(container.innerHTML).toContain(
+      "background:linear-gradient",
+    );
+    expect(container.innerHTML).toContain("svg");
+  });
+
+  it("sets history section id for scrollTo", () => {
+    const container = document.createElement("div");
+    renderHistory(container, ["10.0.0.1", "10.0.0.2"], [
+      {
+        date: "2026-06-01",
+        connections: [
+          {
+            node_ip: "10.0.0.1",
+            target_ip: "10.0.0.2",
+            ping_uptime_pct: 100,
+            http_uptime_pct: 99.5,
+            total_checks: 8640,
+          },
+        ],
+      },
+    ]);
+    expect(container.innerHTML).toContain(
+      'id="history-10.0.0.1--10.0.0.2"',
+    );
+  });
+
+  it("shows empty bars when there is less than 30 days of data", () => {
+    const container = document.createElement("div");
+    renderHistory(container, ["10.0.0.1", "10.0.0.2"], [
+      {
+        date: "2026-06-01",
+        connections: [
+          {
+            node_ip: "10.0.0.1",
+            target_ip: "10.0.0.2",
+            ping_uptime_pct: 100,
+            http_uptime_pct: 99.5,
+            total_checks: 8640,
+          },
+        ],
+      },
+    ]);
+    expect(container.innerHTML).toContain("No data");
   });
 });
