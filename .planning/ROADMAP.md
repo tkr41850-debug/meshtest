@@ -60,6 +60,12 @@ See archived roadmap: `.planning/milestones/v0.4-ROADMAP.md`
 
 Completed 2026-06-19. See `.planning/milestones/v0.5-ROADMAP.md` for full details.
 
+### 🔄 v0.6 — Dashboard UX Improvements
+
+- [x] Phase 12: Fix 30d endpoint to include in-memory data (Python TDD)
+- [x] Phase 13: Flat card layout + uptime % (frontend TDD)
+- [x] Phase 14: History bars in both tabs + remove old History tab (frontend TDD)
+
 ## Progress
 
 | Phase | Milestone | Status | Completed |
@@ -80,3 +86,6 @@ Completed 2026-06-19. See `.planning/milestones/v0.5-ROADMAP.md` for full detail
 | 9 | v0.5 | Complete | 2026-06-19 |
 | 10 | v0.5 | Complete | 2026-06-19 |
 | 11 | v0.5 | Complete | 2026-06-19 |
+| 12 | v0.6 | Complete | 2026-06-19 |
+| 13 | v0.6 | Complete | 2026-06-19 |
+| 14 | v0.6 | Complete | 2026-06-19 |

@@ -2,24 +2,23 @@
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-06-18)
+See: .planning/PROJECT.md (updated 2026-06-19)
 
 **Core value:** A node must be able to detect and report whether it can reach every other node in the mesh, and the leader must present an accurate, up-to-date connectivity view.
-**Current focus:** v0.5 Frontend Migration (Complete)
+**Current focus:** v0.6 Dashboard UX Improvements
 
 ## Current Position
 
-Milestone: v0.5 (Frontend Migration) — Complete
-Current Phase: Complete
-Plan: 4 phases (8, 9, 10, 11)
-Status: v0.5 complete
-Last activity: 2026-06-19 — v0.5 all phases complete
+Milestone: v0.6 (Dashboard UX Improvements) — In Progress
+Current Phase: All phases complete
+Plan: 3 phases (12, 13, 14)
+Status: Ready for commit/tag
+Last activity: 2026-06-19 — v0.6 all phases complete
 
 Progress: [██████████] 100%
-  Phase 8: Frontend Scaffold + Build Pipeline — Complete
-  Phase 9: Dashboard Views — Complete
-  Phase 10: Streamlit Cleanup — Complete
-  Phase 11: Uptime History Visualization — Complete
+  Phase 12: Fix 30d Data Aggregation — Complete
+  Phase 13: Flat Card Layout + Uptime % — Complete
+  Phase 14: History Bars Inline — Complete
 
 ## Performance Metrics
 
@@ -36,7 +35,7 @@ Progress: [██████████] 100%
 | 4.1 | 1 | 5 min | 5 min |
 | 01 | 1 | ~20 min | 20 min |
 
-**Recent Trend:** N/A
+**Recent Trend:** v0.6 all 3 phases completed in single session
 
 ## Accumulated Context
 
@@ -80,6 +79,18 @@ Phase 4 (CI/CD) decisions:
 - Cache via `type=gha` with `mode=max` for maximum layer reuse
 - QEMU + Buildx for multi-arch (linux/amd64, linux/arm64)
 
+### Decisions (v0.6)
+
+- 30d endpoint merges in-memory `_results` with disk data for correct daily aggregation
+- Flush now stores `node_ip` in each check dict to fix node_ip grouping in disk data
+- Cards use flat layout with `data-source-group` divs and sticky headers (replaces `<details>`)
+- History bars are 8px wide, 20px tall, with diagonal gradient split color for Ping/HTTP
+- 30m history bars aggregated by minute from raw `CheckResult[]` data
+- 30d history bars computed from daily `DayData[]` with padding for missing days
+- Old separate History tab removed; bars shown inline in both card and day30 views
+- Scroll-to from 30-day split circles targets cards tab (30m) with sticky header navigation
+- Frontend tests use `data-history-bar` attribute for bar selection
+
 ### Roadmap Evolution
 
 - Phase **3.1** inserted after Phase **3** (URGENT) — Add mocked integration tests for Phase 1 and 2
@@ -87,13 +98,11 @@ Phase 4 (CI/CD) decisions:
 - Phase **4** added to v0.2: GitHub Actions CI/CD — Build & Push to Docker Hub
 - v0.4 replaces original v3.5+ deferred items with dashboard UI polish
 
-### Milestone v0.5 Status
+### Milestone v0.6 Status
 
-- [x] Define v0.5 requirements (25 requirements across 4 phases)
-- [x] Phase 8: Frontend Scaffold + Build Pipeline — Complete
-- [x] Phase 9: Dashboard Views — Complete
-- [x] Phase 10: Streamlit Cleanup — Complete
-- [x] Phase 11: Uptime History Visualization — Complete
+- [x] Phase 12: Fix 30d endpoint to include in-memory data (Python TDD)
+- [x] Phase 13: Flat card layout + uptime % (frontend TDD)
+- [x] Phase 14: History bars in both tabs + remove old History tab (frontend TDD)
 
 ### Blockers/Concerns
 
@@ -101,6 +110,6 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-06-18
-Stopped at: v0.5 milestone started — ready for Phase 8
+Last session: 2026-06-19
+Stopped at: v0.6 all phases complete — ready for commit/tag
 Resume file: None

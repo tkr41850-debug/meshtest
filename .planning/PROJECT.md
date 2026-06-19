@@ -8,23 +8,24 @@ A distributed mesh connectivity testing tool for monitoring network health acros
 
 A node must be able to detect and report whether it can reach every other node in the mesh, and the leader must present an accurate, up-to-date connectivity view.
 
-## Current State: v0.5 Shipped
+## Current State: v0.6 In Progress
 
-**Completed:** 2026-06-19
+**Started:** 2026-06-19
 
-**Accomplishments:**
-- Vite + TypeScript + Tailwind CSS frontend replaces Streamlit dashboard
-- Leader serves built static files from port 58080 (no separate Streamlit port)
-- Connectivity matrix, detail cards, and 30-day view ported from Streamlit
-- UptimeRobot-style history visualization with bars + sparkline per node pair
-- Streamlit fully removed from codebase and dependencies
-- Docker multi-stage build (Node → Python)
-- 22 Vitest tests cover all views
-- 51 Python tests pass
+**Accomplishments so far:**
+- Fixed 30d endpoint to include in-memory data (not just disk)
+- Persistence now stores `node_ip` with each check for correct daily aggregation
+- Replaced expander dropdowns with flat grouped layout using sticky source headers
+- Added missing uptime % next to latency stats in detail cards
+- Added UptimeRobot-style 30-bar history to both 30m (per-minute) and 30d (per-day) views
+- Removed old separate History tab, integrated bars inline
+- History bars show diagonal gradient split color (Ping/HTTP) with on-hover tooltip
+- Retargeted 30-day split-circle click to scroll to cards tab
+- 54 Python tests pass
+- 25 Vitest tests cover all views
 
 **Next Milestone Goals:**
-- Deferred features or v2+ requirements
-- See `.planning/milestones/v0.5-ROADMAP.md` for full details
+- Remaining v0.6 improvements or v2+ features
 
 
 
@@ -78,11 +79,12 @@ A node must be able to detect and report whether it can reach every other node i
 
 ### Active
 
-- [ ] **FRNT-01**: Vite + TypeScript + Tailwind CSS project initialized in `frontend/`
-- [ ] **LEAD-01**: Leader serves built `./dist` folder on port 58080
-- [ ] **DASH-01**: Connectivity matrix, detail cards, and 30-day view ported to new frontend
-- [ ] **DASH-07**: UptimeRobot-style history visualization per node pair
-- [ ] **CLEAN-01**: Streamlit fully removed
+- [ ] **DATA-08**: 30d endpoint includes in-memory data, not just disk
+- [ ] **DASH-08**: Detail cards use flat grouped layout with sticky headers
+- [ ] **DASH-09**: Uptime % displayed next to latency stats in cards
+- [ ] **DASH-10**: History bars (30 per pair) shown inline in both 30m and 30d views
+- [ ] **DASH-11**: Old separate History tab removed, bars integrated into existing tabs
+- [ ] **DASH-12**: Scroll-to from 30-day view targets cards tab instead of history tab
 
 ### Out of Scope
 
