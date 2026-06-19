@@ -27,7 +27,6 @@ USER meshstatus
 
 ENV PATH="/app/.venv/bin:$PATH"
 ENV LEADER_HOST=0.0.0.0
-ENV LEADER_PORT=58080
 ENV LEADER_URL=http://localhost:58080
 ENV DATA_DIR=/app/data
 

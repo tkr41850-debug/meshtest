@@ -1,8 +1,10 @@
 import asyncio
 import logging
+import os
 import sys
 import time
 from datetime import datetime, timedelta, date
+from urllib.parse import urlparse
 
 import httpx
 from hypercorn.asyncio import serve
@@ -29,6 +31,12 @@ _registry: dict[str, NodeInfo] = {}
 _registry_lock = asyncio.Lock()
 _results: dict[str, list[dict]] = {}
 _peers_by_node: dict[str, list[str]] = {}
+
+
+def _leader_port() -> int:
+    url = os.environ.get("LEADER_URL", f"http://0.0.0.0:{config.DEFAULT_PORT}")
+    parsed = urlparse(url)
+    return parsed.port or config.DEFAULT_PORT
 
 
 @app.before_serving
@@ -60,17 +68,19 @@ async def register():
 
     node_ip = data["node_ip"]
     hostname = data.get("hostname")
-    listen_port = data.get("listen_port", config.LEADER_PORT)
+    listen_port = data.get("listen_port", config.DEFAULT_PORT)
+    node_url = data.get("node_url")
 
     async with _registry_lock:
         if node_ip in _registry:
             _registry[node_ip].last_seen = time.time()
             _registry[node_ip].listen_port = listen_port
+            _registry[node_ip].node_url = node_url
             logger.info("Node re-registered: %s", node_ip)
         else:
             _registry[node_ip] = NodeInfo(
                 node_ip=node_ip, hostname=hostname, last_seen=time.time(),
-                listen_port=listen_port,
+                listen_port=listen_port, node_url=node_url,
             )
             logger.info("Node registered: %s", node_ip)
 
@@ -184,10 +194,17 @@ async def get_data():
         return {"error": "Invalid or missing window parameter. Use ?window=30m or ?window=30d", "status": 400}, 400
 
 
+def _node_peer_push_url(node: NodeInfo) -> str:
+    if node.node_url:
+        return f"{node.node_url.rstrip('/')}/update-peers"
+    return f"http://{node.node_ip}:{node.listen_port}/update-peers"
+
+
 async def _notify_node(node_ip: str, peers: list[str]):
     node = _registry.get(node_ip)
-    port = node.listen_port if node else config.LEADER_PORT
-    url = f"http://{node_ip}:{port}/update-peers"
+    if not node:
+        return
+    url = _node_peer_push_url(node)
     try:
         async with httpx.AsyncClient(timeout=config.PEER_PUSH_TIMEOUT) as client:
             resp = await client.post(url, json={
@@ -220,7 +237,8 @@ async def _push_config_to_all():
 
 
 def main():
+    port = _leader_port()
     hypercorn_config = Config()
-    hypercorn_config.bind = [f"0.0.0.0:{config.LEADER_PORT}"]
-    logger.info("Starting mesh-status leader on port %d", config.LEADER_PORT)
+    hypercorn_config.bind = [f"0.0.0.0:{port}"]
+    logger.info("Starting mesh-status leader on port %d", port)
     asyncio.run(serve(app, hypercorn_config))

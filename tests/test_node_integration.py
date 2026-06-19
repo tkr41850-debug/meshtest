@@ -181,7 +181,7 @@ class TestBufferRetryIntegration:
 
         for batch in combined:
             with patch("node.submit_results", AsyncMock(return_value=False)) as mock_sub:
-                ok = await node.submit_results(batch, "10.0.0.1", "10.0.0.2", 58080)
+                ok = await node.submit_results(batch, "10.0.0.1", "http://10.0.0.2:58080")
                 if not ok:
                     buffer.append(batch)
                 break
@@ -200,7 +200,7 @@ class TestBufferRetryIntegration:
 
         for batch in combined:
             with patch("node.submit_results", AsyncMock(return_value=True)):
-                ok = await node.submit_results(batch, "10.0.0.1", "10.0.0.2", 58080)
+                ok = await node.submit_results(batch, "10.0.0.1", "http://10.0.0.2:58080")
                 if ok:
                     buffer.clear()
                 break
@@ -245,13 +245,13 @@ class TestRegistrationHttpIntegration:
 
             url = f"http://10.0.0.1:58080/register"
             async with mock_cls(timeout=10.0) as client:
-                resp = await client.post(url, json={"node_ip": "10.0.0.2"})
+                resp = await client.post(url, json={"node_ip": "10.0.0.2", "listen_port": 58080, "node_url": ""})
 
             mock_inst.post.assert_called_once()
             call_url = mock_inst.post.call_args[0][0]
             call_json = mock_inst.post.call_args[1]["json"]
             assert call_url == "http://10.0.0.1:58080/register"
-            assert call_json == {"node_ip": "10.0.0.2"}
+            assert call_json == {"node_ip": "10.0.0.2", "listen_port": 58080, "node_url": ""}
 
     async def test_parses_response_and_extracts_peers(self):
         with patch("node.httpx.AsyncClient") as mock_cls:
@@ -265,7 +265,7 @@ class TestRegistrationHttpIntegration:
             async with mock_cls(timeout=10.0) as client:
                 resp = await client.post(
                     "http://10.0.0.1:58080/register",
-                    json={"node_ip": "10.0.0.2"},
+                    json={"node_ip": "10.0.0.2", "listen_port": 58080, "node_url": ""},
                 )
                 data = resp.json()
                 peers = data.get("peers", [])
@@ -285,7 +285,7 @@ class TestRegistrationHttpIntegration:
             async with mock_cls(timeout=10.0) as client:
                 resp = await client.post(
                     "http://10.0.0.1:58080/register",
-                    json={"node_ip": "10.0.0.2"},
+                    json={"node_ip": "10.0.0.2", "listen_port": 58080, "node_url": ""},
                 )
 
             assert resp.is_success is False
@@ -296,7 +296,7 @@ class TestCycleIntegration:
     async def test_full_cycle_fetch_check_submit(self):
         with patch("node.parse_args") as mock_args:
             mock_args.return_value = Namespace(
-                leader_ip="10.0.0.1", node_ip="10.0.0.2", port=58080, listen_port=58080
+                leader_url="http://10.0.0.1:58080", node_url="http://10.0.0.2:58080"
             )
 
             with patch("node.httpx.AsyncClient") as mock_cls:
@@ -338,7 +338,7 @@ class TestCycleIntegration:
     async def test_full_cycle_with_buffer_retry(self):
         with patch("node.parse_args") as mock_args:
             mock_args.return_value = Namespace(
-                leader_ip="10.0.0.1", node_ip="10.0.0.2", port=58080, listen_port=58080
+                leader_url="http://10.0.0.1:58080", node_url="http://10.0.0.2:58080"
             )
 
             with patch("node.httpx.AsyncClient") as mock_cls:

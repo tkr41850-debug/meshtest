@@ -40,7 +40,6 @@ docker run -d --restart unless-stopped \
   -p 58080:58080 \
   -p 58581:58581 \
   -v ./data:/app/data \
-  -e LEADER_PORT=58080 \
   -e LEADER_URL=http://localhost:58080 \
   tkr41850/mesh-leader
 ```
@@ -51,9 +50,8 @@ docker run -d --restart unless-stopped \
 docker run -d --restart unless-stopped \
   --name mesh-node1 \
   -p 58081:58080 \
-  -e LEADER_IP=<leader-host-ip> \
-  -e NODE_IP=<this-node-ip> \
-  -e MESH_STATUS_LISTEN_PORT=58080 \
+  -e LEADER_URL=http://<leader-host>:58080 \
+  -e NODE_URL=http://<this-node-host>:58080 \
   -e MESH_STATUS_INTERVAL=10 \
   tkr41850/mesh-node
 ```
@@ -70,16 +68,14 @@ Each container has its own network namespace, so both leader and node can use po
 | Leader Dashboard | `58581` | `58581` |
 | Node HTTP | `58080` | `58081` |
 
-When running **natively** on the same machine, set `MESH_STATUS_LISTEN_PORT` to an unused port (e.g., `58081`) for each additional node:
+When running **natively** on the same machine, include the port in the URL:
 
 ```bash
 # First node
-MESH_STATUS_LISTEN_PORT=58081 uv run python node.py \
-  --leader-ip <leader-ip> --node-ip <node1-ip> --port 58080 --listen-port 58081
+uv run python node.py --leader-url http://<leader>:58080 --node-url http://<node1>:58081
 
 # Second node
-MESH_STATUS_LISTEN_PORT=58082 uv run python node.py \
-  --leader-ip <leader-ip> --node-ip <node2-ip> --port 58080 --listen-port 58082
+uv run python node.py --leader-url http://<leader>:58080 --node-url http://<node2>:58082
 ```
 
 ## Single-Architecture Builds
@@ -152,15 +148,11 @@ The `.github/workflows/docker-publish.yml` workflow:
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `LEADER_URL` | `http://localhost:58080` | URL of the leader's HTTP API (for dashboard) |
+| `LEADER_URL` | `http://0.0.0.0:58080` | Leader URL (bind port extracted for Hypercorn; nodes/dashboard connect here) |
 | `LEADER_HOST` | `0.0.0.0` | Leader bind address |
-| `LEADER_PORT` | `58080` | Leader API port |
+| `NODE_URL` | (auto-detect) | Node URL — hostname is registry identity, port is aiohttp listen port |
 | `DATA_DIR` | `/app/data` | Data persistence directory |
-| `MESH_STATUS_PORT` | `58080` | Leader API port (alias, overrides `LEADER_PORT`) |
-| `MESH_STATUS_LISTEN_PORT` | `58080` | Node's HTTP server port (for leader callbacks) |
 | `MESH_STATUS_INTERVAL` | `10` | Check interval in seconds |
-| `LEADER_IP` | `leader` | Leader hostname (node connects to this) |
-| `NODE_IP` | (auto-detect) | IP the node advertises to the leader |
 
 ### Ports
 
@@ -192,10 +184,10 @@ pip install -e .
 hypercorn mesh_status.leader:app --bind 0.0.0.0:58080
 
 # Node
-uv run python node.py --leader-ip <leader-ip> --node-ip <this-node-ip>
+uv run python node.py --leader-url http://<leader>:58080 --node-url http://<this-node>:58080
 
 # Dashboard
-LEADER_URL=http://<leader-ip>:58080 streamlit run mesh_status/dashboard.py --server.port 58581
+LEADER_URL=http://<leader>:58080 streamlit run mesh_status/dashboard.py --server.port 58581
 ```
 
 Open `http://localhost:58581` (or the host IP) in a browser.

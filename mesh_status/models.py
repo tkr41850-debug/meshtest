@@ -33,3 +33,4 @@ class NodeInfo:
     hostname: Optional[str] = None
     last_seen: float = 0.0
     listen_port: int = 58080
+    node_url: Optional[str] = None

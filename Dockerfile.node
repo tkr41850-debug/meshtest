@@ -24,12 +24,9 @@ RUN addgroup --system --gid 1001 meshstatus && \
 USER meshstatus
 
 ENV HOME=/app
-ENV MESH_STATUS_PORT=58080
-ENV MESH_STATUS_LISTEN_PORT=58080
 ENV MESH_STATUS_INTERVAL=10
-ENV LEADER_IP=leader
-ENV NODE_IP=
+ENV LEADER_URL=http://leader:58080
 
 EXPOSE 58080
 
-CMD exec uv run python node.py --leader-ip ${LEADER_IP} --node-ip ${NODE_IP}
+CMD exec uv run python node.py --leader-url ${LEADER_URL} --node-url ${NODE_URL}

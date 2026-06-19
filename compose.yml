@@ -24,8 +24,8 @@ services:
     ports:
       - "58081:58080"
     environment:
-      LEADER_IP: leader
-      NODE_IP: node1
+      LEADER_URL: http://leader:58080
+      NODE_URL: http://node1:58080
     depends_on:
       leader:
         condition: service_healthy

@@ -5,11 +5,13 @@ import argparse
 import asyncio
 import json
 import logging
+import os
 import re
 import socket
 import sys
 import time
 from collections import deque
+from urllib.parse import urlparse
 
 import httpx
 
@@ -26,12 +28,12 @@ logger = logging.getLogger("mesh-status-node")
 
 def parse_args():
     parser = argparse.ArgumentParser(description="mesh-status node agent")
-    parser.add_argument("--leader-ip", "-l", help="Leader server IP address")
-    parser.add_argument("--node-ip", "-n", help="This node's IP address")
-    parser.add_argument("--port", "-p", type=int, default=config.LEADER_PORT, help="Leader API port")
-    parser.add_argument("--listen-port", type=int,
-                        default=int(os.environ.get("MESH_STATUS_LISTEN_PORT", config.LEADER_PORT)),
-                        help="This node's HTTP server port (for leader callbacks)")
+    parser.add_argument("--leader-url", "-l",
+                        default=os.environ.get("LEADER_URL", f"http://localhost:{config.DEFAULT_PORT}"),
+                        help="Leader URL (e.g. http://leader:58080)")
+    parser.add_argument("--node-url", "-n",
+                        default=os.environ.get("NODE_URL", ""),
+                        help="This node's URL (e.g. http://node1:58081)")
     return parser.parse_args()
 
 
@@ -42,6 +44,15 @@ def get_own_ip() -> str:
             return s.getsockname()[0]
     except Exception:
         return socket.gethostbyname(socket.gethostname())
+
+
+def _parse_node_url(url: str) -> tuple[str, int]:
+    if not url:
+        return get_own_ip(), config.DEFAULT_PORT
+    parsed = urlparse(url)
+    hostname = parsed.hostname or get_own_ip()
+    port = parsed.port or config.DEFAULT_PORT
+    return hostname, port
 
 
 async def check_node(
@@ -75,7 +86,7 @@ async def check_node(
     try:
         http_start = time.time()
         async with httpx.AsyncClient(timeout=timeout) as client:
-            resp = await client.get(f"http://{target_ip}:{config.LEADER_PORT}/healthz")
+            resp = await client.get(f"http://{target_ip}:{config.DEFAULT_PORT}/healthz")
             http_latency_ms = (time.time() - http_start) * 1000
             http_ok = resp.is_success
             http_status = resp.status_code
@@ -105,9 +116,9 @@ async def run_check_cycle(
 
 
 async def submit_results(
-    results: list[dict], node_ip: str, leader_ip: str, port: int
+    results: list[dict], node_ip: str, leader_url: str
 ) -> bool:
-    url = f"http://{leader_ip}:{port}/submit"
+    url = f"{leader_url.rstrip('/')}/submit"
     payload = {"node_ip": node_ip, "checks": results, "timestamp": time.time()}
     try:
         async with httpx.AsyncClient(timeout=10.0) as client:
@@ -124,8 +135,7 @@ async def submit_results(
 async def handle_update_peers(request: web.Request) -> web.Response:
     data = await request.json()
     app = request.app
-    if "peers" in data and isinstance(data["peers"], list):
-        app["state"]["peers"] = data["peers"]
+    app["state"]["peers"] = data.get("peers", app["state"]["peers"])
     if "check_interval" in data:
         app["state"]["interval"] = int(data["check_interval"])
     if "buffer_size" in data:
@@ -163,30 +173,27 @@ async def start_http_server(state: dict, host: str = "0.0.0.0", port: int = 0) -
 async def run():
     args = parse_args()
 
-    leader_ip = args.leader_ip
-    if not leader_ip:
-        leader_ip = input("Enter leader IP: ").strip()
-
-    node_ip = args.node_ip or get_own_ip()
-    port = args.port
+    leader_url = args.leader_url
+    node_ip, listen_port = _parse_node_url(args.node_url)
+    node_url = args.node_url
 
     shared_state = {
         "peers": [],
         "interval": config.CHECK_INTERVAL,
         "buffer_size": config.BUFFER_SIZE,
     }
-    http_runner = await start_http_server(shared_state, port=args.listen_port)
+    http_runner = await start_http_server(shared_state, port=listen_port)
     interval = shared_state["interval"]
     buffer_size = shared_state["buffer_size"]
     result_buffer: deque[list[dict]] = deque(maxlen=buffer_size)
     semaphore = asyncio.Semaphore(10)
 
-    logger.info("Registering with leader at %s:%d as %s", leader_ip, port, node_ip)
+    logger.info("Registering with leader at %s as %s", leader_url, node_ip)
 
     async with httpx.AsyncClient(timeout=10.0) as client:
         resp = await client.post(
-            f"http://{leader_ip}:{port}/register",
-            json={"node_ip": node_ip, "listen_port": args.listen_port},
+            f"{leader_url.rstrip('/')}/register",
+            json={"node_ip": node_ip, "listen_port": listen_port, "node_url": node_url},
         )
         if not resp.is_success:
             logger.error("Registration failed: %s", resp.text)
@@ -200,7 +207,7 @@ async def run():
         while True:
             try:
                 async with httpx.AsyncClient(timeout=10.0) as client:
-                    resp = await client.get(f"http://{leader_ip}:{port}/node-list")
+                    resp = await client.get(f"{leader_url.rstrip('/')}/node-list")
                     if resp.is_success:
                         shared_state["peers"] = resp.json().get("nodes", [])
 
@@ -211,7 +218,7 @@ async def run():
                 combined.append(results)
 
                 for batch in combined:
-                    ok = await submit_results(batch, node_ip, leader_ip, port)
+                    ok = await submit_results(batch, node_ip, leader_url)
                     if ok:
                         result_buffer.clear()
                         if len(combined) > 1:

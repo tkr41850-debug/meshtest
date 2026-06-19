@@ -8,8 +8,8 @@ import pytest
 from mesh_status import config
 
 # Test that config loads
-def test_config_has_data_dir():
-    assert hasattr(config, "LEADER_PORT")
+def test_config_has_defaults():
+    assert hasattr(config, "DEFAULT_PORT")
 
 
 class TestPersistence:
