@@ -11,10 +11,10 @@ See: .planning/PROJECT.md (updated 2026-06-18)
 
 Milestone: v0.2 (Containerize mesh-status)
 Current Phase: Phase 4 — GitHub Actions CI/CD
-Status: Just added, needs planning
-Last activity: 2026-06-18 — Phase 1-3 complete, Phase 4 added
+Status: Complete — all phases delivered
+Last activity: 2026-06-18 — Phase 4 complete, v0.2 ready for tagging
 
-Progress: [████████░░] 80%
+Progress: [██████████] 100%
 
 ## Performance Metrics
 
@@ -79,7 +79,15 @@ Phase 3 decisions:
 - [x] Phase 1: Dockerfile for leader+dashboard container
 - [x] Phase 2: Dockerfile for node agent container
 - [x] Phase 3: docker-compose.yml + docs
-- [ ] Phase 4: GitHub Actions CI/CD — Build & Push to Docker Hub
+- [x] Phase 4: GitHub Actions CI/CD — Build & Push to Docker Hub
+
+Phase 4 decisions:
+- Matrix build strategy for parallel leader+node builds
+- docker/metadata-action for tag generation (latest, semver, branch, PR)
+- Fail-fast: false for matrix (one image can fail independently)
+- Push only on non-PR events (PR builds without push for verification)
+- Cache via `type=gha` with `mode=max` for maximum layer reuse
+- QEMU + Buildx for multi-arch (linux/amd64, linux/arm64)
 
 ### Blockers/Concerns
 

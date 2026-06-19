@@ -1,5 +1,7 @@
 # mesh-status
 
+[![Build & Push Docker Images](https://github.com/{{REPO_OWNER}}/mesh-status/actions/workflows/docker-publish.yml/badge.svg)](https://github.com/{{REPO_OWNER}}/mesh-status/actions/workflows/docker-publish.yml)
+
 A distributed mesh connectivity testing tool for monitoring network health across VMs connected via VPN WAN.
 
 ## Quick Start (Docker)
@@ -18,6 +20,17 @@ open http://localhost:58581
 ```
 
 Data is persisted in `./data/` on the host.
+
+## Docker Images
+
+Pre-built multi-arch images are available on Docker Hub:
+
+| Image | Description |
+|-------|-------------|
+| `<org>/mesh-leader` | Leader + Dashboard |
+| `<org>/mesh-node` | Node agent |
+
+Replace `<org>` with the Docker Hub org or username used during build.
 
 ## Single-Architecture Builds
 
@@ -49,6 +62,39 @@ docker buildx build --platform linux/amd64,linux/arm64 \
 ```
 
 Note: `--load` saves only the current architecture locally. Use `--push` to push a multi-arch manifest to a registry.
+
+## CI/CD Setup
+
+### Prerequisites
+
+1. Create Docker Hub repositories: `<org>/mesh-leader` and `<org>/mesh-node`
+2. Generate a [Docker Hub Personal Access Token](https://hub.docker.com/settings/security) (Read & Write)
+
+### GitHub Secrets
+
+Add these secrets to your GitHub repository (Settings → Secrets and variables → Actions):
+
+| Secret | Value |
+|--------|-------|
+| `DOCKER_USERNAME` | Docker Hub username |
+| `DOCKER_PASSWORD` | Docker Hub Personal Access Token |
+
+### GitHub Variables (optional)
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `DOCKER_ORG` | `github.repository_owner` | Docker Hub org for image tags |
+
+### Workflow
+
+The `.github/workflows/docker-publish.yml` workflow:
+
+- **Trigger**: Push to `main`, tags (`v*`), or PR to `main`
+- **Matrix**: Builds both `mesh-leader` and `mesh-node` in parallel
+- **Platforms**: `linux/amd64` and `linux/arm64`
+- **Push**: To Docker Hub on push/merge (not on PRs)
+- **Tags**: `latest` (on main), semver (`v1.2.3`, `v1.2`), branch name
+- **Cache**: GitHub Actions cache for layer reuse
 
 ## Configuration
 
