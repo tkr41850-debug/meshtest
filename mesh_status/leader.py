@@ -60,14 +60,17 @@ async def register():
 
     node_ip = data["node_ip"]
     hostname = data.get("hostname")
+    listen_port = data.get("listen_port", config.LEADER_PORT)
 
     async with _registry_lock:
         if node_ip in _registry:
             _registry[node_ip].last_seen = time.time()
+            _registry[node_ip].listen_port = listen_port
             logger.info("Node re-registered: %s", node_ip)
         else:
             _registry[node_ip] = NodeInfo(
-                node_ip=node_ip, hostname=hostname, last_seen=time.time()
+                node_ip=node_ip, hostname=hostname, last_seen=time.time(),
+                listen_port=listen_port,
             )
             logger.info("Node registered: %s", node_ip)
 
@@ -182,7 +185,9 @@ async def get_data():
 
 
 async def _notify_node(node_ip: str, peers: list[str]):
-    url = f"http://{node_ip}:{config.LEADER_PORT}/update-peers"
+    node = _registry.get(node_ip)
+    port = node.listen_port if node else config.LEADER_PORT
+    url = f"http://{node_ip}:{port}/update-peers"
     try:
         async with httpx.AsyncClient(timeout=config.PEER_PUSH_TIMEOUT) as client:
             resp = await client.post(url, json={

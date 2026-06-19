@@ -296,7 +296,7 @@ class TestCycleIntegration:
     async def test_full_cycle_fetch_check_submit(self):
         with patch("node.parse_args") as mock_args:
             mock_args.return_value = Namespace(
-                leader_ip="10.0.0.1", node_ip="10.0.0.2", port=58080
+                leader_ip="10.0.0.1", node_ip="10.0.0.2", port=58080, listen_port=58080
             )
 
             with patch("node.httpx.AsyncClient") as mock_cls:
@@ -338,7 +338,7 @@ class TestCycleIntegration:
     async def test_full_cycle_with_buffer_retry(self):
         with patch("node.parse_args") as mock_args:
             mock_args.return_value = Namespace(
-                leader_ip="10.0.0.1", node_ip="10.0.0.2", port=58080
+                leader_ip="10.0.0.1", node_ip="10.0.0.2", port=58080, listen_port=58080
             )
 
             with patch("node.httpx.AsyncClient") as mock_cls:

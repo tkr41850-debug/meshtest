@@ -28,7 +28,10 @@ def parse_args():
     parser = argparse.ArgumentParser(description="mesh-status node agent")
     parser.add_argument("--leader-ip", "-l", help="Leader server IP address")
     parser.add_argument("--node-ip", "-n", help="This node's IP address")
-    parser.add_argument("--port", "-p", type=int, default=config.LEADER_PORT, help="Leader port")
+    parser.add_argument("--port", "-p", type=int, default=config.LEADER_PORT, help="Leader API port")
+    parser.add_argument("--listen-port", type=int,
+                        default=int(os.environ.get("MESH_STATUS_LISTEN_PORT", config.LEADER_PORT)),
+                        help="This node's HTTP server port (for leader callbacks)")
     return parser.parse_args()
 
 
@@ -172,7 +175,7 @@ async def run():
         "interval": config.CHECK_INTERVAL,
         "buffer_size": config.BUFFER_SIZE,
     }
-    http_runner = await start_http_server(shared_state, port=config.LEADER_PORT)
+    http_runner = await start_http_server(shared_state, port=args.listen_port)
     interval = shared_state["interval"]
     buffer_size = shared_state["buffer_size"]
     result_buffer: deque[list[dict]] = deque(maxlen=buffer_size)
@@ -183,7 +186,7 @@ async def run():
     async with httpx.AsyncClient(timeout=10.0) as client:
         resp = await client.post(
             f"http://{leader_ip}:{port}/register",
-            json={"node_ip": node_ip},
+            json={"node_ip": node_ip, "listen_port": args.listen_port},
         )
         if not resp.is_success:
             logger.error("Registration failed: %s", resp.text)

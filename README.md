@@ -53,12 +53,34 @@ docker run -d --restart unless-stopped \
   -p 58081:58080 \
   -e LEADER_IP=<leader-host-ip> \
   -e NODE_IP=<this-node-ip> \
-  -e MESH_STATUS_PORT=58080 \
+  -e MESH_STATUS_LISTEN_PORT=58080 \
   -e MESH_STATUS_INTERVAL=10 \
   tkr41850/mesh-node
 ```
 
 Data is persisted in `./data/` on the host. Check leader health at `http://localhost:58080/livez` and open the dashboard at `http://localhost:58581`.
+
+### Port Management
+
+Each container has its own network namespace, so both leader and node can use port `58080` internally without conflict. Docker maps the ports to unique host ports:
+
+| Container | Internal Port | Host Port |
+|-----------|--------------|-----------|
+| Leader API | `58080` | `58080` |
+| Leader Dashboard | `58581` | `58581` |
+| Node HTTP | `58080` | `58081` |
+
+When running **natively** on the same machine, set `MESH_STATUS_LISTEN_PORT` to an unused port (e.g., `58081`) for each additional node:
+
+```bash
+# First node
+MESH_STATUS_LISTEN_PORT=58081 uv run python node.py \
+  --leader-ip <leader-ip> --node-ip <node1-ip> --port 58080 --listen-port 58081
+
+# Second node
+MESH_STATUS_LISTEN_PORT=58082 uv run python node.py \
+  --leader-ip <leader-ip> --node-ip <node2-ip> --port 58080 --listen-port 58082
+```
 
 ## Single-Architecture Builds
 
@@ -134,7 +156,8 @@ The `.github/workflows/docker-publish.yml` workflow:
 | `LEADER_HOST` | `0.0.0.0` | Leader bind address |
 | `LEADER_PORT` | `58080` | Leader API port |
 | `DATA_DIR` | `/app/data` | Data persistence directory |
-| `MESH_STATUS_PORT` | `58080` | Node HTTP server port |
+| `MESH_STATUS_PORT` | `58080` | Leader API port (alias, overrides `LEADER_PORT`) |
+| `MESH_STATUS_LISTEN_PORT` | `58080` | Node's HTTP server port (for leader callbacks) |
 | `MESH_STATUS_INTERVAL` | `10` | Check interval in seconds |
 | `LEADER_IP` | `leader` | Leader hostname (node connects to this) |
 | `NODE_IP` | (auto-detect) | IP the node advertises to the leader |

@@ -32,3 +32,4 @@ class NodeInfo:
     node_ip: str
     hostname: Optional[str] = None
     last_seen: float = 0.0
+    listen_port: int = 58080
