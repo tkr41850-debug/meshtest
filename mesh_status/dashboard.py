@@ -98,7 +98,77 @@ def _render_connectivity_matrix(combined, nodes):
     st.markdown("".join(html_parts), unsafe_allow_html=True)
 
 
-def _render_30m_view(data_30m, nodes):
+def _build_uptime_map(data_30d) -> dict:
+    uptime = {}
+    if not data_30d or not data_30d.get("days"):
+        return uptime
+    for day_data in data_30d["days"]:
+        for conn in day_data.get("connections", []):
+            key = (conn.get("node_ip"), conn.get("target_ip"))
+            uptime[key] = max(
+                conn.get("ping_uptime_pct", 0),
+                conn.get("http_uptime_pct", 0),
+            )
+    return uptime
+
+
+def _render_detail_card(tgt_ip, status, ping_lat, http_lat, last_seen, uptime_pct):
+    if status == "OK":
+        border_color = "#22c55e"
+        badge_color = "#22c55e"
+        badge = "OK"
+    elif status == "NotAvailable":
+        border_color = "#f59e0b"
+        badge_color = "#f59e0b"
+        badge = "Not Available"
+    else:
+        border_color = "#9ca3af"
+        badge_color = "#9ca3af"
+        badge = "Pending"
+
+    uptime_html = ""
+    if uptime_pct is not None:
+        if uptime_pct >= 99:
+            uptime_color = "#22c55e"
+        elif uptime_pct >= 95:
+            uptime_color = "#f59e0b"
+        else:
+            uptime_color = "#ef4444"
+        uptime_html = f'<span style="color:{uptime_color}; font-weight:600;">{uptime_pct:.1f}% uptime</span>'
+
+    card = f"""<div style="
+    border: 1px solid #e5e7eb;
+    border-left: 4px solid {border_color};
+    border-radius: 8px;
+    padding: 10px 14px;
+    margin-bottom: 8px;
+    background: #ffffff;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+">
+    <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 4px;">
+        <span style="
+            display: inline-block;
+            background: {badge_color};
+            color: white;
+            padding: 2px 10px;
+            border-radius: 10px;
+            font-size: 11px;
+            font-weight: 600;
+            letter-spacing: 0.3px;
+        ">{badge}</span>
+        <span style="font-family: monospace; font-size: 14px; font-weight: 600; color: #1f2937;">{html.escape(tgt_ip)}</span>
+    </div>
+    <div style="font-size: 12px; color: #6b7280; display: flex; gap: 16px; flex-wrap: wrap;">
+        <span>Ping: <strong style="color:#374151;">{ping_lat}</strong></span>
+        <span>HTTP: <strong style="color:#374151;">{http_lat}</strong></span>
+        <span>Last: <strong style="color:#374151;">{last_seen}</strong></span>
+        {uptime_html}
+    </div>
+</div>"""
+    st.markdown(card, unsafe_allow_html=True)
+
+
+def _render_30m_view(data_30m, nodes, data_30d=None):
     if not nodes:
         st.markdown('<p style="color: #6b7280;">No nodes registered \u2014 run mesh-register on each VM</p>', unsafe_allow_html=True)
         return
@@ -128,6 +198,8 @@ def _render_30m_view(data_30m, nodes):
         if key not in latencies or c.get("timestamp", 0) > latencies[key].get("timestamp", 0):
             latencies[key] = c
 
+    uptime_map = _build_uptime_map(data_30d) if data_30d else {}
+
     sorted_nodes = sorted(nodes)
 
     if len(sorted_nodes) >= 2:
@@ -148,36 +220,18 @@ def _render_30m_view(data_30m, nodes):
             summary = f"{targets_total - targets_ok} of {targets_total} down"
 
         with st.expander(f"\u25b6 {src_ip}  [{summary}]  \u2014  {targets_total} targets"):
-            cols = st.columns([2, 1, 1, 1, 1])
-            cols[0].markdown("**Target**")
-            cols[1].markdown("**Status**")
-            cols[2].markdown("**Ping**")
-            cols[3].markdown("**HTTP**")
-            cols[4].markdown("**Last Check**")
-
             for tgt_ip in sorted_nodes:
                 if src_ip == tgt_ip:
                     continue
 
                 status = combined.get((src_ip, tgt_ip), "Pending")
-                if status == "OK":
-                    badge = '<span style="background:#22c55e; color:white; padding:2px 8px; border-radius:4px; font-size:12px;">OK</span>'
-                elif status == "NotAvailable":
-                    badge = '<span style="background:#f59e0b; color:white; padding:2px 8px; border-radius:4px; font-size:12px;">Not Available</span>'
-                else:
-                    badge = '<span style="background:#9ca3af; color:white; padding:2px 8px; border-radius:4px; font-size:12px;">Pending</span>'
-
                 check = latencies.get((src_ip, tgt_ip), {})
                 ping_lat = f'{check["ping_latency_ms"]:.1f}ms' if check.get("ping_latency_ms") is not None else "\u2014"
                 http_lat = f'{check["http_latency_ms"]:.1f}ms' if check.get("http_latency_ms") is not None else "\u2014"
                 last_seen = dt.fromtimestamp(check["timestamp"]).strftime("%H:%M:%S") if check.get("timestamp") else "\u2014"
+                uptime_pct = uptime_map.get((src_ip, tgt_ip))
 
-                cols = st.columns([2, 1, 1, 1, 1])
-                cols[0].markdown(f'<span style="font-family:monospace; font-size:14px;">{html.escape(tgt_ip)}</span>', unsafe_allow_html=True)
-                cols[1].markdown(badge, unsafe_allow_html=True)
-                cols[2].markdown(f'<span style="color:#6b7280; font-size:14px;">{ping_lat}</span>', unsafe_allow_html=True)
-                cols[3].markdown(f'<span style="color:#6b7280; font-size:14px;">{http_lat}</span>', unsafe_allow_html=True)
-                cols[4].markdown(f'<span style="color:#6b7280; font-size:14px;">{last_seen}</span>', unsafe_allow_html=True)
+                _render_detail_card(tgt_ip, status, ping_lat, http_lat, last_seen, uptime_pct)
 
 
 def _render_30d_view(data_30d, nodes):
@@ -258,7 +312,7 @@ def render_dashboard():
         st.warning("\u26a0 Leader unreachable \u2014 showing cached data")
 
     with tab1_placeholder.container():
-        _render_30m_view(data_30m, nodes)
+        _render_30m_view(data_30m, nodes, data_30d)
 
     with tab2_placeholder.container():
         _render_30d_view(data_30d, nodes)
@@ -267,7 +321,7 @@ def render_dashboard():
         _render_refresh_indicator(leader_ok)
 
     time.sleep(REFRESH_INTERVAL)
-    st.rerun(scope="fragment")
+    st.rerun()
 
 
 with st.spinner("Loading mesh data..."):

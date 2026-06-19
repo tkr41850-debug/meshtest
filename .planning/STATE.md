@@ -10,12 +10,14 @@ See: .planning/PROJECT.md (updated 2026-06-18)
 ## Current Position
 
 Milestone: v0.3 (Dashboard Fixes)
-Current Phase: Not started (roadmap created)
-Plan: 2 phases (5-6)
-Status: Ready to build
-Last activity: 2026-06-18 — v0.3 roadmap created (2 phases)
+Current Phase: Complete
+Plan: 2 phases (5-6) — both delivered
+Status: Complete
+Last activity: 2026-06-18 — v0.3 dashboard fixes and enhancements delivered
 
-Progress: [░░░░░░░░░░] 0%
+Progress: [██████████] 100%
+  Phase 5: Backend — Data Latency Grace Period (DASHD-01) ✓
+  Phase 6: Frontend — Dashboard Bug Fix + UI Enhancement (DASHF-01, DASHU-01) ✓
 
 ## Performance Metrics
 
