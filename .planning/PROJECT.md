@@ -17,6 +17,7 @@ A node must be able to detect and report whether it can reach every other node i
 - Dockerfile for node agent
 - docker-compose.yml for local dev/test
 - README deployment docs for Docker-based deployment
+- Multi-architecture support: builds for both `linux/amd64` and `linux/arm64`
 
 ## Requirements
 
