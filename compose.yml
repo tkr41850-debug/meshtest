@@ -1,0 +1,37 @@
+services:
+  leader:
+    build:
+      context: .
+      dockerfile: Dockerfile.leader
+    ports:
+      - "58080:58080"
+      - "58581:58581"
+    volumes:
+      - ./data:/app/data
+    networks:
+      - mesh-net
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:58080/livez"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+
+  node1:
+    build:
+      context: .
+      dockerfile: Dockerfile.node
+    ports:
+      - "58081:58080"
+    environment:
+      LEADER_IP: leader
+      NODE_IP: node1
+    depends_on:
+      leader:
+        condition: service_healthy
+    networks:
+      - mesh-net
+
+networks:
+  mesh-net:
+    driver: bridge
