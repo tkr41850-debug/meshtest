@@ -24,6 +24,10 @@ See archived requirements: `.planning/milestones/v0.2-REQUIREMENTS.md`
 
 Fixed dashboard bugs, added data latency grace period, and enhanced per-node-pair detail views with UptimeRobot-style cards.
 
+### v0.4 — Dashboard UI Polish (In Progress)
+
+Tuned refresh rate, added inline per-check-type uptime display, fixed matrix labels, and resolved HTML rendering in expander cards.
+
 ## Phase Structure
 
 ### Phase 5: Backend — Data Latency Grace Period (Complete ✓)
@@ -48,3 +52,28 @@ Fixed dashboard bugs, added data latency grace period, and enhanced per-node-pai
 - [x] Each node-pair expander shows an UptimeRobot-style summary card with: status badge, uptime %, latest ping/HTTP latency, last check timestamp
 - [x] Cards are visually distinct from the current flat table layout
 - [x] All existing dashboard views (30m matrix, 30d view) remain functional
+
+### Phase 7a: Display & Refresh Tuning
+
+**Goal:** Improve dashboard responsiveness and info density
+
+**Requirements:** v0.4 items 2-4
+
+**Success criteria:**
+- [x] Auto-refresh interval reduced from 30s to 10s with cache TTL adjusted to 8s
+- [x] Refresh indicator text updated to reflect new interval
+- [x] Card shows per-check-type uptime inline with latencies (Ping: Xms (Y%), HTTP: Xms (Y%))
+- [x] Matrix column headers show short numeric labels (e.g., "1" instead of "ai") with full hostname on hover
+- [x] All existing tests continue to pass
+
+### Phase 7b: HTML Rendering Fix
+
+**Goal:** Fix raw HTML code display in expander cards
+
+**Requirements:** v0.4 item 1
+
+**Success criteria:**
+- [x] Uptime info renders as styled text, not raw HTML code
+- [x] No `</div>` or other HTML tags visible in rendered output
+- [x] Card visual appearance preserved
+- [x] All existing tests pass

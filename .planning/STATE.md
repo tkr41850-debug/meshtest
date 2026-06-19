@@ -5,19 +5,19 @@
 See: .planning/PROJECT.md (updated 2026-06-18)
 
 **Core value:** A node must be able to detect and report whether it can reach every other node in the mesh, and the leader must present an accurate, up-to-date connectivity view.
-**Current focus:** Defining requirements for v0.3 Dashboard Fixes
+**Current focus:** v0.4 Dashboard UI Polish
 
 ## Current Position
 
-Milestone: v0.3 (Dashboard Fixes) — Complete ✓
+Milestone: v0.4 (Dashboard UI Polish) — Complete ✓
 Current Phase: None (milestone delivered)
-Plan: 2 phases (5-6) — both delivered
+Plan: 2 phases (7a, 7b) — both delivered
 Status: Delivered
-Last activity: 2026-06-18 — v0.3 delivered, pushed to GitHub (GHA builds images)
+Last activity: 2026-06-18 — v0.4 delivered
 
 Progress: [██████████] 100%
-  Phase 5: Backend — Data Latency Grace Period (DASHD-01) ✓
-  Phase 6: Frontend — Dashboard Bug Fix + UI Enhancement (DASHF-01, DASHU-01) ✓
+  Phase 7a: Display & Refresh Tuning (items 2-4) ✓
+  Phase 7b: HTML Rendering Fix (item 1) ✓
 
 ## Performance Metrics
 
@@ -83,14 +83,14 @@ Phase 4 (CI/CD) decisions:
 - Phase **3.1** inserted after Phase **3** (URGENT) — Add mocked integration tests for Phase 1 and 2
 - Phase **4.1** inserted after Phase **4** (URGENT) — Fix cross-phase integration gaps (node HTTP server, /healthz, 30m data retention)
 - Phase **4** added to v0.2: GitHub Actions CI/CD — Build & Push to Docker Hub
+- v0.4 replaces original v3.5+ deferred items with dashboard UI polish
 
-### Milestone v0.3 Status
+### Milestone v0.4 Status
 
-- [x] Define v0.3 requirements
-- [x] Create v0.3 roadmap
-- [x] Phase 5: Backend — Data Latency Grace Period
-- [x] Phase 6: Frontend — Dashboard Bug Fix + UI Enhancement
-- [x] Images pushed to GitHub — GHA workflow auto-builds
+- [x] Define v0.4 items (4 items)
+- [x] Split into Phase 7a (items 2-4) and Phase 7b (item 1)
+- [x] Phase 7a: Display & Refresh Tuning — Complete ✓
+- [x] Phase 7b: HTML Rendering Fix — Complete ✓
 
 ### Blockers/Concerns
 
@@ -99,5 +99,5 @@ None.
 ## Session Continuity
 
 Last session: 2026-06-18
-Stopped at: v0.2 complete — starting v0.3 Dashboard Fixes
+Stopped at: v0.4 complete — ready for milestone lifecycle (audit → complete → cleanup)
 Resume file: None

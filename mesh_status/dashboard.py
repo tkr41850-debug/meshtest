@@ -11,10 +11,10 @@ logger = logging.getLogger(__name__)
 
 LEADER_URL = "http://localhost:58080"
 DATA_FETCH_TIMEOUT = 5
-REFRESH_INTERVAL = 30
+REFRESH_INTERVAL = 10
 
 
-@st.cache_data(ttl=25)  # slightly less than fragment sleep (30s) to ensure fresh fetch
+@st.cache_data(ttl=8)  # slightly less than fragment sleep (10s) to ensure fresh fetch
 def fetch_data_30m():
     try:
         resp = requests.get(f"{LEADER_URL}/data?window=30m", timeout=DATA_FETCH_TIMEOUT)
@@ -25,7 +25,7 @@ def fetch_data_30m():
         return None
 
 
-@st.cache_data(ttl=25)  # slightly less than fragment sleep (30s) to ensure fresh fetch
+@st.cache_data(ttl=8)  # slightly less than fragment sleep (10s) to ensure fresh fetch
 def fetch_data_30d():
     try:
         resp = requests.get(f"{LEADER_URL}/data?window=30d", timeout=DATA_FETCH_TIMEOUT)
@@ -36,7 +36,7 @@ def fetch_data_30d():
         return None
 
 
-@st.cache_data(ttl=25)  # slightly less than fragment sleep (30s) to ensure fresh fetch
+@st.cache_data(ttl=8)  # slightly less than fragment sleep (10s) to ensure fresh fetch
 def fetch_node_list():
     try:
         resp = requests.get(f"{LEADER_URL}/node-list", timeout=DATA_FETCH_TIMEOUT)
@@ -66,11 +66,11 @@ def _render_connectivity_matrix(combined, nodes):
         'Src \\ Target</th>'
     )
     for tgt_ip in nodes:
-        short = tgt_ip.rsplit(".", 1)[-1]
+        short = tgt_ip.split(".")[0].rsplit("-", 1)[-1] if "-" in tgt_ip.split(".")[0] else tgt_ip.split(".")[0]
         html_parts.append(
             f'<th style="padding: 4px 8px; text-align: center; font-weight: 600; '
             f'color: #374151; background: #f3f4f6; border: 1px solid #e5e7eb; '
-            f'font-family: monospace;">{html.escape(short)}</th>'
+            f'font-family: monospace;" title="{html.escape(tgt_ip)}">{html.escape(short)}</th>'
         )
     html_parts.append('</tr>')
     for src_ip in nodes:
@@ -99,6 +99,21 @@ def _render_connectivity_matrix(combined, nodes):
     st.markdown("".join(html_parts), unsafe_allow_html=True)
 
 
+def _uptime_color(pct):
+    if pct >= 99:
+        return "#22c55e"
+    elif pct >= 95:
+        return "#f59e0b"
+    return "#ef4444"
+
+
+def _inline_uptime_html(pct):
+    if pct is None:
+        return ""
+    c = _uptime_color(pct)
+    return f'<span style="color:{c}; font-weight:600;">({pct:.1f}%)</span>'
+
+
 def _build_uptime_map(data_30d) -> dict:
     uptime = {}
     if not data_30d or not data_30d.get("days"):
@@ -106,67 +121,42 @@ def _build_uptime_map(data_30d) -> dict:
     for day_data in data_30d["days"]:
         for conn in day_data.get("connections", []):
             key = (conn.get("node_ip"), conn.get("target_ip"))
-            uptime[key] = max(
-                conn.get("ping_uptime_pct", 0),
-                conn.get("http_uptime_pct", 0),
+            uptime[key] = (
+                conn.get("ping_uptime_pct"),
+                conn.get("http_uptime_pct"),
             )
     return uptime
 
 
-def _render_detail_card(tgt_ip, status, ping_lat, http_lat, last_seen, uptime_pct):
+def _render_detail_card(tgt_ip, status, ping_lat, http_lat, last_seen, ping_uptime_pct, http_uptime_pct):
     if status == "OK":
-        border_color = "#22c55e"
-        badge_color = "#22c55e"
+        border_color = badge_color = "#22c55e"
         badge = "OK"
     elif status == "NotAvailable":
-        border_color = "#f59e0b"
-        badge_color = "#f59e0b"
+        border_color = badge_color = "#f59e0b"
         badge = "Not Available"
     else:
-        border_color = "#9ca3af"
-        badge_color = "#9ca3af"
+        border_color = badge_color = "#9ca3af"
         badge = "Pending"
 
-    uptime_html = ""
-    if uptime_pct is not None:
-        if uptime_pct >= 99:
-            uptime_color = "#22c55e"
-        elif uptime_pct >= 95:
-            uptime_color = "#f59e0b"
-        else:
-            uptime_color = "#ef4444"
-        uptime_html = f'<span style="color:{uptime_color}; font-weight:600;">{uptime_pct:.1f}% uptime</span>'
+    ping_up = _inline_uptime_html(ping_uptime_pct)
+    http_up = _inline_uptime_html(http_uptime_pct)
+    ip_escaped = html.escape(tgt_ip)
 
-    card = f"""<div style="
-    border: 1px solid #e5e7eb;
-    border-left: 4px solid {border_color};
-    border-radius: 8px;
-    padding: 10px 14px;
-    margin-bottom: 8px;
-    background: #ffffff;
-    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-">
-    <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 4px;">
-        <span style="
-            display: inline-block;
-            background: {badge_color};
-            color: white;
-            padding: 2px 10px;
-            border-radius: 10px;
-            font-size: 11px;
-            font-weight: 600;
-            letter-spacing: 0.3px;
-        ">{badge}</span>
-        <span style="font-family: monospace; font-size: 14px; font-weight: 600; color: #1f2937;">{html.escape(tgt_ip)}</span>
-    </div>
-    <div style="font-size: 12px; color: #6b7280; display: flex; gap: 16px; flex-wrap: wrap;">
-        <span>Ping: <strong style="color:#374151;">{ping_lat}</strong></span>
-        <span>HTTP: <strong style="color:#374151;">{http_lat}</strong></span>
-        <span>Last: <strong style="color:#374151;">{last_seen}</strong></span>
-        {uptime_html}
-    </div>
-</div>"""
-    st.markdown(card, unsafe_allow_html=True)
+    parts = [
+        f'<div style="border:1px solid #e5e7eb;border-left:4px solid {border_color};border-radius:8px;padding:10px 14px;margin-bottom:8px;background:#fff;font-family:-apple-system,BlinkMacSystemFont,\'Segoe UI\',sans-serif;">',
+        f'<div style="display:flex;align-items:center;gap:10px;margin-bottom:4px;">',
+        f'<span style="display:inline-block;background:{badge_color};color:#fff;padding:2px 10px;border-radius:10px;font-size:11px;font-weight:600;letter-spacing:.3px;">{badge}</span>',
+        f'<span style="font-family:monospace;font-size:14px;font-weight:600;color:#1f2937;">{ip_escaped}</span>',
+        '</div>',
+        '<div style="font-size:12px;color:#6b7280;display:flex;gap:16px;flex-wrap:wrap;">',
+        f'<span>Ping: <strong style="color:#374151;">{ping_lat}</strong> {ping_up}</span>',
+        f'<span>HTTP: <strong style="color:#374151;">{http_lat}</strong> {http_up}</span>',
+        f'<span>Last: <strong style="color:#374151;">{last_seen}</strong></span>',
+        '</div>',
+        '</div>',
+    ]
+    st.markdown("".join(parts), unsafe_allow_html=True)
 
 
 def _render_30m_view(data_30m, nodes, data_30d=None):
@@ -230,9 +220,11 @@ def _render_30m_view(data_30m, nodes, data_30d=None):
                 ping_lat = f'{check["ping_latency_ms"]:.1f}ms' if check.get("ping_latency_ms") is not None else "\u2014"
                 http_lat = f'{check["http_latency_ms"]:.1f}ms' if check.get("http_latency_ms") is not None else "\u2014"
                 last_seen = dt.fromtimestamp(check["timestamp"]).strftime("%H:%M:%S") if check.get("timestamp") else "\u2014"
-                uptime_pct = uptime_map.get((src_ip, tgt_ip))
+                uptime_pcts = uptime_map.get((src_ip, tgt_ip))
+                ping_up = uptime_pcts[0] if uptime_pcts else None
+                http_up = uptime_pcts[1] if uptime_pcts else None
 
-                _render_detail_card(tgt_ip, status, ping_lat, http_lat, last_seen, uptime_pct)
+                _render_detail_card(tgt_ip, status, ping_lat, http_lat, last_seen, ping_up, http_up)
 
 
 def _render_30d_view(data_30d, nodes):
@@ -284,7 +276,7 @@ def _render_refresh_indicator(leader_ok):
     now_str = dt.now().strftime("%H:%M:%S")
     st.markdown(
         f'<p style="color: #9ca3af; font-size: 14px; text-align: center;">'
-        f'\U0001f504 Auto-refreshing every 30s  |  Last update: {now_str}'
+        f'\U0001f504 Auto-refreshing every 10s  |  Last update: {now_str}'
         f'</p>',
         unsafe_allow_html=True,
     )
