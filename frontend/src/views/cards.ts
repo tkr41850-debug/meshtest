@@ -33,6 +33,73 @@ const BADGE_MAP: Record<string, { color: string; label: string }> = {
   Pending: { color: "#9ca3af", label: "Pending" },
 };
 
+function historyBarHtml(
+  pingPct: number,
+  httpPct: number,
+  title: string,
+): string {
+  if (pingPct < 0) {
+    return `<span data-history-bar style="display:inline-block;width:8px;height:20px;border-radius:1px;background:#e5e7eb;border:1px solid #d1d5db;" title="No data"></span>`;
+  }
+  const pingColor = uptimeColor(pingPct);
+  const httpColor = uptimeColor(httpPct);
+  return [
+    `<span data-history-bar style="display:inline-block;width:8px;height:20px;border-radius:1px;`,
+    `background:linear-gradient(135deg,${pingColor} 50%,${httpColor} 50%);`,
+    `border:1px solid #d1d5db;"`,
+    ` title="${title} | Ping: ${pingPct.toFixed(1)}% | HTTP: ${httpPct.toFixed(1)}%"`,
+    `></span>`,
+  ].join("");
+}
+
+function aggregateByMinute(
+  checks: CheckResult[],
+  src: string,
+  tgt: string,
+): Array<{ label: string; pingPct: number; httpPct: number }> {
+  const pairChecks = checks.filter(
+    (c) => c.node_ip === src && c.target_ip === tgt,
+  );
+  const now = pairChecks.length > 0
+    ? Math.max(...pairChecks.map((c) => c.timestamp))
+    : Date.now() / 1000;
+  const currentMinute = Math.floor(now / 60) * 60;
+  const buckets = new Map<
+    number,
+    { total: number; pingOk: number; httpOk: number }
+  >();
+  for (const c of pairChecks) {
+    const minute = Math.floor(c.timestamp / 60) * 60;
+    if (!buckets.has(minute)) {
+      buckets.set(minute, { total: 0, pingOk: 0, httpOk: 0 });
+    }
+    const b = buckets.get(minute)!;
+    b.total++;
+    if (c.ping_status === "OK") b.pingOk++;
+    if (c.http_status === "OK") b.httpOk++;
+  }
+  const result: Array<{ label: string; pingPct: number; httpPct: number }> =
+    [];
+  for (let i = 29; i >= 0; i--) {
+    const minute = currentMinute - i * 60;
+    const b = buckets.get(minute);
+    if (b && b.total > 0) {
+      const label = new Date(minute * 1000).toLocaleTimeString([], {
+        hour: "2-digit",
+        minute: "2-digit",
+      });
+      result.push({
+        label,
+        pingPct: (b.pingOk / b.total) * 100,
+        httpPct: (b.httpOk / b.total) * 100,
+      });
+    } else {
+      result.push({ label: "", pingPct: -1, httpPct: -1 });
+    }
+  }
+  return result;
+}
+
 function cardHtml(
   tgtIp: string,
   status: string,
@@ -41,8 +108,12 @@ function cardHtml(
   lastSeen: string,
   pingUp: number | null,
   httpUp: number | null,
+  minuteBars: Array<{ label: string; pingPct: number; httpPct: number }>,
 ): string {
   const badge = BADGE_MAP[status] ?? BADGE_MAP.Pending;
+  const barsHtml = minuteBars
+    .map((b) => historyBarHtml(b.pingPct, b.httpPct, b.label))
+    .join("");
   return [
     `<div class="border border-mesh-border border-l-4 rounded-lg p-3 mb-2 bg-white" style="border-left-color:${badge.color}">`,
     `<div class="flex items-center gap-2 mb-1">`,
@@ -53,7 +124,9 @@ function cardHtml(
     `<span>Ping: <strong class="text-mesh-dark">${pingLat}</strong> ${uptimeSpan(pingUp)}</span>`,
     `<span>HTTP: <strong class="text-mesh-dark">${httpLat}</strong> ${uptimeSpan(httpUp)}</span>`,
     `<span>Last: <strong class="text-mesh-dark">${lastSeen}</strong></span>`,
-    `</div></div>`,
+    `</div>`,
+    `<div class="flex items-end gap-0.5 mt-1.5">${barsHtml}</div>`,
+    `</div>`,
   ].join("");
 }
 
@@ -98,9 +171,11 @@ export function renderCards(
   let html = "";
   for (const src of sorted) {
     const summary = summaryLabel(src, sorted, combined);
-    html += `<details class="mb-3"><summary class="cursor-pointer font-mono text-sm text-mesh-dark font-semibold">${src}  [${summary}]  — ${sorted.filter((n) => n !== src).length} targets</summary><div class="pl-4 mt-2">`;
-    for (const tgt of sorted) {
-      if (src === tgt) continue;
+    const targets = sorted.filter((n) => n !== src);
+    html += `<div data-source-group class="mb-6">`;
+    html += `<div data-source-header class="sticky top-0 bg-mesh-bg z-10 font-mono text-sm font-semibold text-mesh-dark py-2 border-b border-mesh-border">${src}  [${summary}]  — ${targets.length} targets</div>`;
+    html += `<div class="pl-4 mt-2">`;
+    for (const tgt of targets) {
       const st = combined.get(`${src}|${tgt}`) ?? "Pending";
       const ck = latestCheck.get(`${src}|${tgt}`) ?? ({} as CheckResult);
       const pingLat =
@@ -115,6 +190,7 @@ export function renderCards(
         ? new Date(ck.timestamp * 1000).toLocaleTimeString()
         : "—";
       const uptime = uptimeMap.get(`${src}|${tgt}`) ?? [null, null];
+      const minuteBars = aggregateByMinute(checks, src, tgt);
       html += cardHtml(
         tgt,
         st,
@@ -123,9 +199,10 @@ export function renderCards(
         lastSeen,
         uptime[0],
         uptime[1],
+        minuteBars,
       );
     }
-    html += "</div></details>";
+    html += "</div></div>";
   }
 
   container.innerHTML = html;
