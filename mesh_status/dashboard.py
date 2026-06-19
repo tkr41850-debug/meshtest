@@ -41,7 +41,8 @@ def fetch_node_list():
     try:
         resp = requests.get(f"{LEADER_URL}/node-list", timeout=DATA_FETCH_TIMEOUT)
         resp.raise_for_status()
-        return resp.json().get("nodes", [])
+        nodes = resp.json().get("nodes", [])
+        return [n["ip"] if isinstance(n, dict) else n for n in nodes]
     except requests.RequestException as e:
         logger.warning("Failed to fetch node list from leader: %s", e)
         return []
