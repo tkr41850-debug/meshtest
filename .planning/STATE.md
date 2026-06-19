@@ -5,23 +5,23 @@
 See: .planning/PROJECT.md (updated 2026-06-17)
 
 **Core value:** A node must be able to detect and report whether it can reach every other node in the mesh, and the leader must present an accurate, up-to-date connectivity view.
-**Current focus:** Phase 4.1 — Fix cross-phase integration gaps
+**Current focus:** v0.2 — Dockerfile builds for leader+dashboard and node containers
 
 ## Current Position
 
-Phase: 5 phases + 2 inserted decimals
-Current: Phase 4.1 (Fix cross-phase integration gaps)
-Status: Complete
-Last activity: 2026-06-18 — Phase 4.1 complete (node HTTP server, /healthz, 30m retention)
+Milestone: v0.2 (Containerize mesh-status)
+Phase: None yet — milestone just initiated
+Status: Ready to plan Phase 1
+Last activity: 2026-06-18 — v0.1 complete and tagged (v0.1)
 
-Progress: [██████████] 100%
+Progress: [░░░░░░░░░░] 0%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 3
-- Average duration: 23 min
-- Total execution time: 70 min
+- v0.1 total plans completed: 5
+- v0.1 average duration: ~14 min
+- v0.1 total execution time: ~70 min
 
 **By Phase:**
 
@@ -63,12 +63,10 @@ Phase 3 decisions:
 
 ### Pending Todos
 
-- [x] Plan and execute Phase 4.1
-
-- [x] Plan Phase 3.1: `/gsd-plan-phase 3.1`
-- [x] Execute Phase 3.1: `/gsd-execute-phase 3.1`
-- [x] Plan Phase 4: `/gsd-plan-phase 4`
-- [x] Execute Phase 4: `/gsd-execute-phase 4`
+- [ ] Milestone v0.2: Define phases and requirements
+- [ ] Phase 1: Dockerfile for leader+dashboard container
+- [ ] Phase 2: Dockerfile for node agent container
+- [ ] Phase 3: docker-compose.yml + docs
 
 ### Blockers/Concerns
 
@@ -77,5 +75,5 @@ None.
 ## Session Continuity
 
 Last session: 2026-06-18
-Stopped at: Phase 4.1 complete — node HTTP server, leader /healthz, 30m retention
+Stopped at: v0.2 milestone initiated — Dockerfile builds for leader+dashboard and node containers
 Resume file: None
