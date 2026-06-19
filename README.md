@@ -7,7 +7,7 @@ A distributed mesh connectivity testing tool for monitoring network health acros
 The dashboard provides real-time (30-minute) and historical (30-day) views of mesh connectivity.
 
 **Prerequisites:**
-- Python 3.11+
+- Python 3.12+
 - Install the package: `pip install -e .`
 
 **Environment Variables:**

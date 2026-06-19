@@ -1,41 +1,49 @@
+import html
+import logging
 import os
 import time
-from datetime import datetime
+from datetime import datetime as dt
 
 import requests
 import streamlit as st
 
+logger = logging.getLogger(__name__)
+
 LEADER_URL = os.environ.get("LEADER_URL", "http://localhost:58080")
 DATA_FETCH_TIMEOUT = 5
+REFRESH_INTERVAL = 30
 
 
-@st.cache_data(ttl=30)
+@st.cache_data(ttl=25)  # slightly less than fragment sleep (30s) to ensure fresh fetch
 def fetch_data_30m():
     try:
         resp = requests.get(f"{LEADER_URL}/data?window=30m", timeout=DATA_FETCH_TIMEOUT)
         resp.raise_for_status()
         return resp.json()
-    except requests.RequestException:
+    except requests.RequestException as e:
+        logger.warning("Failed to fetch 30m data from leader: %s", e)
         return None
 
 
-@st.cache_data(ttl=30)
+@st.cache_data(ttl=25)  # slightly less than fragment sleep (30s) to ensure fresh fetch
 def fetch_data_30d():
     try:
         resp = requests.get(f"{LEADER_URL}/data?window=30d", timeout=DATA_FETCH_TIMEOUT)
         resp.raise_for_status()
         return resp.json()
-    except requests.RequestException:
+    except requests.RequestException as e:
+        logger.warning("Failed to fetch 30d data from leader: %s", e)
         return None
 
 
-@st.cache_data(ttl=30)
+@st.cache_data(ttl=25)  # slightly less than fragment sleep (30s) to ensure fresh fetch
 def fetch_node_list():
     try:
         resp = requests.get(f"{LEADER_URL}/node-list", timeout=DATA_FETCH_TIMEOUT)
         resp.raise_for_status()
         return resp.json().get("nodes", [])
-    except requests.RequestException:
+    except requests.RequestException as e:
+        logger.warning("Failed to fetch node list from leader: %s", e)
         return []
 
 
@@ -61,14 +69,14 @@ def _render_connectivity_matrix(combined, nodes):
         html_parts.append(
             f'<th style="padding: 4px 8px; text-align: center; font-weight: 600; '
             f'color: #374151; background: #f3f4f6; border: 1px solid #e5e7eb; '
-            f'font-family: monospace;">{short}</th>'
+            f'font-family: monospace;">{html.escape(short)}</th>'
         )
     html_parts.append('</tr>')
     for src_ip in nodes:
         html_parts.append('<tr>')
         html_parts.append(
             f'<td style="padding: 4px 8px; font-family: monospace; color: #374151; '
-            f'border: 1px solid #e5e7eb; white-space: nowrap;">{src_ip}</td>'
+            f'border: 1px solid #e5e7eb; white-space: nowrap;">{html.escape(src_ip)}</td>'
         )
         for tgt_ip in nodes:
             html_parts.append(
@@ -101,10 +109,12 @@ def _render_30m_view(data_30m, nodes):
 
     combined = {}
     for s in data_30m.get("statuses", []):
-        src = s["node_ip"]
-        tgt = s["target_ip"]
-        ping = s["ping_status"]
-        http = s["http_status"]
+        src = s.get("node_ip")
+        tgt = s.get("target_ip")
+        ping = s.get("ping_status")
+        http = s.get("http_status")
+        if not all([src, tgt, ping, http]):
+            continue
         if ping == "OK" and http == "OK":
             combined[(src, tgt)] = "OK"
         elif ping == "NotAvailable" or http == "NotAvailable":
@@ -114,7 +124,7 @@ def _render_30m_view(data_30m, nodes):
 
     latencies = {}
     for c in data_30m.get("checks", []):
-        key = (c["node_ip"], c["target_ip"])
+        key = (c.get("node_ip"), c.get("target_ip"))
         if key not in latencies or c.get("timestamp", 0) > latencies[key].get("timestamp", 0):
             latencies[key] = c
 
@@ -158,12 +168,12 @@ def _render_30m_view(data_30m, nodes):
                     badge = '<span style="background:#9ca3af; color:white; padding:2px 8px; border-radius:4px; font-size:12px;">Pending</span>'
 
                 check = latencies.get((src_ip, tgt_ip), {})
-                ping_lat = f'{check.get("ping_latency_ms", "\u2014"):.1f}ms' if check.get("ping_latency_ms") is not None else "\u2014"
-                http_lat = f'{check.get("http_latency_ms", "\u2014"):.1f}ms' if check.get("http_latency_ms") is not None else "\u2014"
-                last_seen = datetime.fromtimestamp(check["timestamp"]).strftime("%H:%M:%S") if check.get("timestamp") else "\u2014"
+                ping_lat = f'{check["ping_latency_ms"]:.1f}ms' if check.get("ping_latency_ms") is not None else "\u2014"
+                http_lat = f'{check["http_latency_ms"]:.1f}ms' if check.get("http_latency_ms") is not None else "\u2014"
+                last_seen = dt.fromtimestamp(check["timestamp"]).strftime("%H:%M:%S") if check.get("timestamp") else "\u2014"
 
                 cols = st.columns([2, 1, 1, 1, 1])
-                cols[0].markdown(f'<span style="font-family:monospace; font-size:14px;">{tgt_ip}</span>', unsafe_allow_html=True)
+                cols[0].markdown(f'<span style="font-family:monospace; font-size:14px;">{html.escape(tgt_ip)}</span>', unsafe_allow_html=True)
                 cols[1].markdown(badge, unsafe_allow_html=True)
                 cols[2].markdown(f'<span style="color:#6b7280; font-size:14px;">{ping_lat}</span>', unsafe_allow_html=True)
                 cols[3].markdown(f'<span style="color:#6b7280; font-size:14px;">{http_lat}</span>', unsafe_allow_html=True)
@@ -180,7 +190,7 @@ def _render_30d_view(data_30d, nodes):
             has_data = False
             for day_data in data_30d["days"]:
                 date_label = day_data["date"]
-                src_connections = [c for c in day_data.get("connections", []) if c["node_ip"] == src_ip]
+                src_connections = [c for c in day_data.get("connections", []) if c.get("node_ip") == src_ip]
                 if not src_connections:
                     cols = st.columns([1.5, 1, 1, 1, 1])
                     cols[0].markdown(date_label)
@@ -192,9 +202,9 @@ def _render_30d_view(data_30d, nodes):
 
                 has_data = True
                 for conn in src_connections:
-                    ping_pct = conn["ping_uptime_pct"]
-                    http_pct = conn["http_uptime_pct"]
-                    total = conn["total_checks"]
+                    ping_pct = conn.get("ping_uptime_pct", 0)
+                    http_pct = conn.get("http_uptime_pct", 0)
+                    total = conn.get("total_checks", 0)
 
                     best_pct = max(ping_pct, http_pct)
                     if best_pct >= 99:
@@ -205,7 +215,7 @@ def _render_30d_view(data_30d, nodes):
                         badge = f'<span style="background:#ef4444; color:white; padding:2px 8px; border-radius:4px; font-size:12px;">{best_pct:.1f}%</span>'
 
                     cols = st.columns([1.5, 1, 1, 1, 1])
-                    cols[0].markdown(f'{date_label} \u2192 {conn["target_ip"]}')
+                    cols[0].markdown(f'{date_label} \u2192 {conn.get("target_ip", "\u2014")}')
                     cols[1].markdown(badge, unsafe_allow_html=True)
                     cols[2].markdown(f"{ping_pct:.1f}%")
                     cols[3].markdown(f"{http_pct:.1f}%")
@@ -216,7 +226,7 @@ def _render_30d_view(data_30d, nodes):
 
 
 def _render_refresh_indicator(leader_ok):
-    now_str = datetime.now().strftime("%H:%M:%S")
+    now_str = dt.now().strftime("%H:%M:%S")
     st.markdown(
         f'<p style="color: #9ca3af; font-size: 14px; text-align: center;">'
         f'\U0001f504 Auto-refreshing every 30s  |  Last update: {now_str}'
@@ -228,6 +238,17 @@ def _render_refresh_indicator(leader_ok):
 st.set_page_config(page_title="mesh-status", page_icon="\U0001f310", layout="wide")
 st.title("mesh-status")
 
+# Tabs created outside the fragment so they persist across reruns (fixes WR-02)
+tab1, tab2 = st.tabs(["30-Minute View", "30-Day View"])
+
+with tab1:
+    tab1_placeholder = st.empty()
+
+with tab2:
+    tab2_placeholder = st.empty()
+
+refresh_indicator_placeholder = st.empty()
+
 
 @st.fragment
 def render_dashboard():
@@ -236,18 +257,18 @@ def render_dashboard():
     if not leader_ok:
         st.warning("\u26a0 Leader unreachable \u2014 showing cached data")
 
-    tab1, tab2 = st.tabs(["30-Minute View", "30-Day View"])
-
-    with tab1:
+    with tab1_placeholder.container():
         _render_30m_view(data_30m, nodes)
 
-    with tab2:
+    with tab2_placeholder.container():
         _render_30d_view(data_30d, nodes)
 
-    _render_refresh_indicator(leader_ok)
+    with refresh_indicator_placeholder.container():
+        _render_refresh_indicator(leader_ok)
 
-    time.sleep(30)
+    time.sleep(REFRESH_INTERVAL)
     st.rerun(scope="fragment")
 
 
-render_dashboard()
+with st.spinner("Loading mesh data..."):
+    render_dashboard()
