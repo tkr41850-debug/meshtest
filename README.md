@@ -51,7 +51,7 @@ docker run -d --restart unless-stopped \
   --name mesh-node1 \
   -p 58081:58080 \
   -e LEADER_URL=http://<leader-host>:58080 \
-  -e NODE_URL=http://<this-node-host>:58080 \
+  -e NODE_URL=http://<this-host-ip>:58081 \
   -e MESH_STATUS_INTERVAL=10 \
   tkr41850/mesh-node
 ```
