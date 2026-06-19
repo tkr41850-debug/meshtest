@@ -20,9 +20,9 @@ Dockerized leader+dashboard and node components with CI/CD pipeline and multi-ar
 See archived roadmap: `.planning/milestones/v0.2-ROADMAP.md`
 See archived requirements: `.planning/milestones/v0.2-REQUIREMENTS.md`
 
-### v0.3 — Dashboard Fixes (Active)
+### v0.3 — Dashboard Fixes (Complete ✓)
 
-Fix dashboard bugs, add data latency grace period, and enhance per-node-pair detail views.
+Fixed dashboard bugs, added data latency grace period, and enhanced per-node-pair detail views with UptimeRobot-style cards.
 
 ## Phase Structure
 

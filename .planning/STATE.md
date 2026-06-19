@@ -9,11 +9,11 @@ See: .planning/PROJECT.md (updated 2026-06-18)
 
 ## Current Position
 
-Milestone: v0.3 (Dashboard Fixes)
-Current Phase: Complete
+Milestone: v0.3 (Dashboard Fixes) — Complete ✓
+Current Phase: None (milestone delivered)
 Plan: 2 phases (5-6) — both delivered
-Status: Complete
-Last activity: 2026-06-18 — v0.3 dashboard fixes and enhancements delivered
+Status: Delivered
+Last activity: 2026-06-18 — v0.3 delivered, pushed to GitHub (GHA builds images)
 
 Progress: [██████████] 100%
   Phase 5: Backend — Data Latency Grace Period (DASHD-01) ✓
@@ -84,12 +84,13 @@ Phase 4 (CI/CD) decisions:
 - Phase **4.1** inserted after Phase **4** (URGENT) — Fix cross-phase integration gaps (node HTTP server, /healthz, 30m data retention)
 - Phase **4** added to v0.2: GitHub Actions CI/CD — Build & Push to Docker Hub
 
-### Pending Todos
+### Milestone v0.3 Status
 
 - [x] Define v0.3 requirements
 - [x] Create v0.3 roadmap
-- [ ] Phase 5: Backend — Data Latency Grace Period
-- [ ] Phase 6: Frontend — Dashboard Bug Fix + UI Enhancement
+- [x] Phase 5: Backend — Data Latency Grace Period
+- [x] Phase 6: Frontend — Dashboard Bug Fix + UI Enhancement
+- [x] Images pushed to GitHub — GHA workflow auto-builds
 
 ### Blockers/Concerns
 
