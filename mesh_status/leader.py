@@ -4,12 +4,13 @@ import os
 import sys
 import time
 from datetime import datetime, timedelta, date
+from pathlib import Path
 from urllib.parse import urlparse
 
 import httpx
 from hypercorn.asyncio import serve
 from hypercorn.config import Config
-from quart import Quart, request, jsonify
+from quart import Quart, request, jsonify, send_from_directory
 from quart_cors import cors
 
 from mesh_status import config
@@ -43,6 +44,19 @@ def _leader_port() -> int:
 async def startup():
     asyncio.create_task(persistence.flush_loop())
     logger.info("Background flush task started")
+
+
+_dist_dir = Path(__file__).resolve().parent.parent / "dist"
+
+
+@app.route("/")
+async def index():
+    return await send_from_directory(str(_dist_dir), "index.html")
+
+
+@app.route("/assets/<path:filename>")
+async def assets(filename):
+    return await send_from_directory(str(_dist_dir / "assets"), filename)
 
 
 @app.route("/livez", methods=["GET"])

@@ -1,4 +1,14 @@
-FROM python:3.12-slim AS base
+# Stage 1: Build frontend
+FROM node:22-alpine AS frontend-builder
+
+WORKDIR /app
+COPY frontend/package.json frontend/package-lock.json /app/
+RUN npm ci
+COPY frontend/ /app/
+RUN npm run build
+
+# Stage 2: Python runtime
+FROM python:3.12-slim AS runtime
 
 RUN apt-get update && apt-get install -y --no-install-recommends curl && \
     rm -rf /var/lib/apt/lists/*
@@ -16,6 +26,8 @@ COPY mesh_status/ /app/mesh_status/
 RUN --mount=type=cache,target=/root/.cache/uv \
     uv sync --no-dev
 
+COPY --from=frontend-builder /app/dist /app/dist
+
 COPY --chmod=+x entrypoint.sh /app/entrypoint.sh
 
 RUN addgroup --system --gid 1001 meshstatus && \
@@ -30,7 +42,7 @@ ENV LEADER_HOST=0.0.0.0
 ENV LEADER_URL=http://localhost:58080
 ENV DATA_DIR=/app/data
 
-EXPOSE 58080 58581
+EXPOSE 58080
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 \
     CMD curl -f http://localhost:58080/livez

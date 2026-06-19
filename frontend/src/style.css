@@ -1,0 +1,13 @@
+@import "tailwindcss";
+
+@theme {
+  --color-mesh-green: #22c55e;
+  --color-mesh-amber: #f59e0b;
+  --color-mesh-red: #ef4444;
+  --color-mesh-gray: #9ca3af;
+  --color-mesh-dark: #1f2937;
+  --color-mesh-muted: #6b7280;
+  --color-mesh-border: #e5e7eb;
+  --color-mesh-bg: #f3f4f6;
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+}
