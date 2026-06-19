@@ -8,24 +8,17 @@ A distributed mesh connectivity testing tool for monitoring network health acros
 
 A node must be able to detect and report whether it can reach every other node in the mesh, and the leader must present an accurate, up-to-date connectivity view.
 
-## Current State: v0.6 In Progress
+## Current Milestone: v0.7 Dashboard Bugfixes
 
-**Started:** 2026-06-19
+**Goal:** Fix history bar rendering (0% tooltips, single gradient bar, missing node_ip) and polish 30d view layout
 
-**Accomplishments so far:**
-- Fixed 30d endpoint to include in-memory data (not just disk)
-- Persistence now stores `node_ip` with each check for correct daily aggregation
-- Replaced expander dropdowns with flat grouped layout using sticky source headers
-- Added missing uptime % next to latency stats in detail cards
-- Added UptimeRobot-style 30-bar history to both 30m (per-minute) and 30d (per-day) views
-- Removed old separate History tab, integrated bars inline
-- History bars show diagonal gradient split color (Ping/HTTP) with on-hover tooltip
-- Retargeted 30-day split-circle click to scroll to cards tab
-- 54 Python tests pass
-- 25 Vitest tests cover all views
-
-**Next Milestone Goals:**
-- Remaining v0.6 improvements or v2+ features
+**Target features:**
+- Shared `renderBars` utility with HSB-interpolated color (hue 0° red → 120° green)
+- Two separate history bar rows per pair (ICMP + HTTP) instead of one gradient bar
+- Flat 30-day view (no `<details>` expanders)
+- Gap between matrix table and cards in 30m tab
+- Backend infers `node_ip` from `_results` when disk data has empty `node_ip`
+- All frontend TDD: tests written first for every change
 
 
 
@@ -77,14 +70,20 @@ A node must be able to detect and report whether it can reach every other node i
 - ✓ **DOCK-05**: README deployment docs for Docker-based deployment — v0.2
 - ✓ **CI-01**: GitHub Actions workflow builds and pushes multi-arch images to Docker Hub — v0.2
 
-### Active
+### v0.6 Validated
 
-- [ ] **DATA-08**: 30d endpoint includes in-memory data, not just disk
-- [ ] **DASH-08**: Detail cards use flat grouped layout with sticky headers
-- [ ] **DASH-09**: Uptime % displayed next to latency stats in cards
-- [ ] **DASH-10**: History bars (30 per pair) shown inline in both 30m and 30d views
-- [ ] **DASH-11**: Old separate History tab removed, bars integrated into existing tabs
-- [ ] **DASH-12**: Scroll-to from 30-day view targets cards tab instead of history tab
+Now part of validated requirements — see v0.5 validated section.
+
+### v0.7 Active
+
+- [ ] **FIX-01**: Fix `CheckResult` interface — use `ping_ok: boolean` / `http_ok: boolean` to match real API
+- [ ] **FIX-02**: Fix `aggregateByMinute` checks `c.ping_status` (not in API data) → use `c.ping_ok`
+- [ ] **FIX-03**: Backend infers `node_ip` from `_results` when disk data has empty `node_ip`
+- [ ] **DASH-13**: Flat 30-day view — remove `<details>` expanders, use sticky headers
+- [ ] **DASH-14**: Gap between matrix table and cards in 30m tab
+- [ ] **DASH-15**: Two separate history bar rows per pair (ICMP + HTTP) in both views
+- [ ] **DASH-16**: HSB-interpolated bar colors via shared `bars.ts` (`renderBars(bars: {percent, tooltip}[])`)
+- [ ] **TEST-04**: Update all frontend test fixtures for new `CheckResult` type and bar format
 
 ### Out of Scope
 
@@ -141,4 +140,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-06-18 after v0.5 milestone start*
+*Last updated: 2026-06-19 after v0.7 milestone start*

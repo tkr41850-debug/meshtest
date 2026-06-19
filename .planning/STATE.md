@@ -5,27 +5,17 @@
 See: .planning/PROJECT.md (updated 2026-06-19)
 
 **Core value:** A node must be able to detect and report whether it can reach every other node in the mesh, and the leader must present an accurate, up-to-date connectivity view.
-**Current focus:** v0.6 Dashboard UX Improvements
+**Current focus:** v0.7 Dashboard Bugfixes
 
 ## Current Position
 
-Milestone: v0.6 (Dashboard UX Improvements) — In Progress
-Current Phase: All phases complete
-Plan: 3 phases (12, 13, 14)
-Status: Ready for commit/tag
-Last activity: 2026-06-19 — v0.6 all phases complete
-
-Progress: [██████████] 100%
-  Phase 12: Fix 30d Data Aggregation — Complete
-  Phase 13: Flat Card Layout + Uptime % — Complete
-  Phase 14: History Bars Inline — Complete
+Milestone: v0.7 (Dashboard Bugfixes) — Planning
+Current Phase: Not started
+Plan: 2 phases (15, 16)
+Status: Defining requirements
+Last activity: 2026-06-19 — Milestone v0.7 started
 
 ## Performance Metrics
-
-**Velocity:**
-- v0.1 total plans completed: 5
-- v0.1 average duration: ~14 min
-- v0.1 total execution time: ~70 min
 
 **By Phase:**
 
@@ -35,7 +25,7 @@ Progress: [██████████] 100%
 | 4.1 | 1 | 5 min | 5 min |
 | 01 | 1 | ~20 min | 20 min |
 
-**Recent Trend:** v0.6 all 3 phases completed in single session
+**Recent Trend:** N/A
 
 ## Accumulated Context
 
@@ -91,6 +81,15 @@ Phase 4 (CI/CD) decisions:
 - Scroll-to from 30-day split circles targets cards tab (30m) with sticky header navigation
 - Frontend tests use `data-history-bar` attribute for bar selection
 
+### Decisions (v0.7)
+
+- Separate bar rows for ICMP and HTTP (two rows per card/pair) instead of single gradient bar
+- Bar color uses HSB interpolation: `hsl(hue, 85%, 40%)` where `hue = percent * 120` (0° red at 0% → 120° green at 100%)
+- Shared `bars.ts` utility with `renderBars(bars: {percent: number, tooltip: string}[])` used by both views
+- 30-day view always expanded (flat layout, no `<details>`)
+- Backend infers `node_ip` by matching against `_results` keys for disk records with empty `node_ip`
+- All changes TDD: write Vitest tests first, then implementation
+
 ### Roadmap Evolution
 
 - Phase **3.1** inserted after Phase **3** (URGENT) — Add mocked integration tests for Phase 1 and 2
@@ -98,11 +97,10 @@ Phase 4 (CI/CD) decisions:
 - Phase **4** added to v0.2: GitHub Actions CI/CD — Build & Push to Docker Hub
 - v0.4 replaces original v3.5+ deferred items with dashboard UI polish
 
-### Milestone v0.6 Status
+### Milestone v0.7 Status
 
-- [x] Phase 12: Fix 30d endpoint to include in-memory data (Python TDD)
-- [x] Phase 13: Flat card layout + uptime % (frontend TDD)
-- [x] Phase 14: History bars in both tabs + remove old History tab (frontend TDD)
+- [ ] Phase 15: Bar foundation + type fixes (TDD) — Pending
+- [ ] Phase 16: UI integration — flat 30d, dual rows, gap (TDD) — Pending
 
 ### Blockers/Concerns
 
@@ -111,5 +109,5 @@ None.
 ## Session Continuity
 
 Last session: 2026-06-19
-Stopped at: v0.6 all phases complete — ready for commit/tag
+Stopped at: v0.7 milestone initialized — ready for Phase 15 planning
 Resume file: None
