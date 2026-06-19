@@ -79,13 +79,13 @@ wait
 **File:** `Dockerfile.leader:6`
 **Issue:** `COPY --from=ghcr.io/astral-sh/uv:latest /uv /uv` uses the `latest` tag. If the UV maintainers release a breaking change to the binary interface, or if the `latest` tag shifts between Docker builds, the final image is not reproducible. This also breaks Docker layer caching — when `latest` moves, the entire layer invalidates.
 
-**Fix:** Pin to a specific version tag:
+**Fix:** Use the official UV install script which auto-detects platform:
 
 ```dockerfile
-COPY --from=ghcr.io/astral-sh/uv:0.5.0 /uv /uv
+RUN curl -LsSf https://astral.sh/uv/install.sh | UV_INSTALL_DIR=/usr/local/bin sh
 ```
 
-Verify the current stable version from https://github.com/astral-sh/uv/releases before pinning.
+This handles multi-arch correctly (downloads the right binary per platform at build time).
 
 ### WR-02: `sleep 1` race condition for Hypercorn start check
 

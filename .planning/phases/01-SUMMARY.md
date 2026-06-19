@@ -48,6 +48,9 @@
 ## Verification Results
 
 - All file structure checks: ✅ PASS
-- Docker build: ⏭ SKIPPED (socket unavailable)
-- Multi-arch buildx: ⏭ SKIPPED
-- Container run test: ⏭ SKIPPED
+- Docker build: ✅ PASS (70 packages, uv 0.11.22 via install script)
+- /livez: ✅ PASS (`{"status":"alive"}`)
+- /readyz: ✅ PASS (`{"status":"ready"}`)
+- /healthz: ✅ PASS (`{"status":"alive"}`)
+- Dashboard port 58581: ✅ PASS (HTTP 200)
+- Multi-arch buildx: ⏭ SKIP (not supported in this CI environment)

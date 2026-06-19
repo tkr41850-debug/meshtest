@@ -2,19 +2,19 @@
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-06-17)
+See: .planning/PROJECT.md (updated 2026-06-18)
 
 **Core value:** A node must be able to detect and report whether it can reach every other node in the mesh, and the leader must present an accurate, up-to-date connectivity view.
-**Current focus:** v0.2 — Dockerfile builds for leader+dashboard and node containers
+**Current focus:** Phase 2 of v0.2 — Dockerfile for node agent container
 
 ## Current Position
 
 Milestone: v0.2 (Containerize mesh-status)
-Phase: None yet — milestone just initiated
-Status: Ready to plan Phase 1
-Last activity: 2026-06-18 — v0.1 complete and tagged (v0.1)
+Current Phase: Phase 2 — Dockerfile Node Agent
+Status: Phase 1 complete, Phase 2 ready
+Last activity: 2026-06-18 — Phase 1 verified (docker build + run + endpoints all pass)
 
-Progress: [░░░░░░░░░░] 0%
+Progress: [██░░░░░░░░] 33%
 
 ## Performance Metrics
 
@@ -29,12 +29,23 @@ Progress: [░░░░░░░░░░] 0%
 |-------|-------|-------|----------|
 | 03.1 | 2 | 45 min | 22 min |
 | 4.1 | 1 | 5 min | 5 min |
+| 01 | 1 | ~20 min | 20 min |
 
 **Recent Trend:** N/A
 
 ## Accumulated Context
 
 ### Decisions
+
+Phase 1 decisions (Dockerfile leader+dashboard):
+- UV installed via `curl -LsSf https://astral.sh/uv/install.sh | UV_INSTALL_DIR=/usr/local/bin sh` (auto-detects arch for multi-arch support)
+- Both Hypercorn and Streamlit run as background processes with PID wait loop (not `exec`)
+- Non-root user `meshstatus` (uid 1001) for runtime
+- `/app/data` created at build time and owned by meshstatus
+- HEALTHCHECK via `curl -f http://localhost:58080/livez`
+- Entrypoint retries Hypercorn startup check up to 10 times (1s apart) via /livez endpoint
+- Signal trap (TERM/INT) kills both processes; exit code propagated from process that died first
+- `.dockerignore` extended with tests/, coverage, and build artifacts
 
 Phase 4.1 decisions:
 - aiohttp for node HTTP server (pure async, no threading)
@@ -63,8 +74,8 @@ Phase 3 decisions:
 
 ### Pending Todos
 
-- [ ] Milestone v0.2: Define phases and requirements
-- [ ] Phase 1: Dockerfile for leader+dashboard container
+- [x] Milestone v0.2: Define phases and requirements
+- [x] Phase 1: Dockerfile for leader+dashboard container
 - [ ] Phase 2: Dockerfile for node agent container
 - [ ] Phase 3: docker-compose.yml + docs
 
@@ -75,5 +86,5 @@ None.
 ## Session Continuity
 
 Last session: 2026-06-18
-Stopped at: v0.2 milestone initiated — Dockerfile builds for leader+dashboard and node containers
+Stopped at: Phase 1 complete — moving to Phase 2 (node Dockerfile)
 Resume file: None
