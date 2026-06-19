@@ -5,16 +5,16 @@
 See: .planning/PROJECT.md (updated 2026-06-18)
 
 **Core value:** A node must be able to detect and report whether it can reach every other node in the mesh, and the leader must present an accurate, up-to-date connectivity view.
-**Current focus:** Phase 2 of v0.2 — Dockerfile for node agent container
+**Current focus:** Phase 4 of v0.2 — GitHub Actions CI/CD
 
 ## Current Position
 
 Milestone: v0.2 (Containerize mesh-status)
-Current Phase: Phase 2 — Dockerfile Node Agent
-Status: Planned, ready for execution
-Last activity: 2026-06-18 — Phase 2 planned (Dockerfile.node)
+Current Phase: Phase 4 — GitHub Actions CI/CD
+Status: Just added, needs planning
+Last activity: 2026-06-18 — Phase 1-3 complete, Phase 4 added
 
-Progress: [███░░░░░░░] 40%
+Progress: [████████░░] 80%
 
 ## Performance Metrics
 
@@ -71,13 +71,15 @@ Phase 3 decisions:
 
 - Phase **3.1** inserted after Phase **3** (URGENT) — Add mocked integration tests for Phase 1 and 2
 - Phase **4.1** inserted after Phase **4** (URGENT) — Fix cross-phase integration gaps (node HTTP server, /healthz, 30m data retention)
+- Phase **4** added to v0.2: GitHub Actions CI/CD — Build & Push to Docker Hub
 
 ### Pending Todos
 
 - [x] Milestone v0.2: Define phases and requirements
 - [x] Phase 1: Dockerfile for leader+dashboard container
-- [ ] Phase 2: Dockerfile for node agent container
-- [ ] Phase 3: docker-compose.yml + docs
+- [x] Phase 2: Dockerfile for node agent container
+- [x] Phase 3: docker-compose.yml + docs
+- [ ] Phase 4: GitHub Actions CI/CD — Build & Push to Docker Hub
 
 ### Blockers/Concerns
 
