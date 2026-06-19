@@ -145,23 +145,10 @@ async def handle_update_peers(request: web.Request) -> web.Response:
     return web.json_response({"status": "ok"})
 
 
-async def handle_update_config(request: web.Request) -> web.Response:
-    data = await request.json()
-    app = request.app
-    if "check_interval" in data:
-        app["state"]["interval"] = int(data["check_interval"])
-    if "buffer_size" in data:
-        app["state"]["buffer_size"] = int(data["buffer_size"])
-    logger.info("Updated config via push: interval=%s, buffer=%s",
-                app["state"]["interval"], app["state"]["buffer_size"])
-    return web.json_response({"status": "ok"})
-
-
 async def start_http_server(state: dict, host: str = "0.0.0.0", port: int = 0) -> web.AppRunner:
     app = web.Application()
     app["state"] = state
     app.router.add_post("/update-peers", handle_update_peers)
-    app.router.add_post("/updateConfig", handle_update_config)
     runner = web.AppRunner(app)
     await runner.setup()
     site = web.TCPSite(runner, host, port)

@@ -10,7 +10,7 @@ def calculate_status(
 ) -> dict:
     if now is None:
         now = time.time()
-    threshold = 3 * config.CHECK_INTERVAL
+    threshold = max(config.GRACE_PERIOD, 3 * config.CHECK_INTERVAL)
 
     node_results = results.get(node_ip, [])
     has_results = len(node_results) > 0

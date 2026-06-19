@@ -31,8 +31,8 @@ class TestStatus:
     def test_not_available_status(self):
         from mesh_status.status import calculate_status
         now = 1000.0
-        interval = getattr(config, "CHECK_INTERVAL", 10)
-        old_time = now - (4 * interval)
+        grace = getattr(config, "GRACE_PERIOD", 120)
+        old_time = now - grace - 1  # 1s beyond grace period
         results = {
             "10.0.0.1": [
                 {"target_ip": "10.0.0.2", "ping_ok": True, "http_ok": True, "timestamp": old_time}
