@@ -8,14 +8,19 @@ A distributed mesh connectivity testing tool for monitoring network health acros
 
 A node must be able to detect and report whether it can reach every other node in the mesh, and the leader must present an accurate, up-to-date connectivity view.
 
-## Current Milestone: v0.3 Dashboard Fixes
+## Current Milestone: v0.5 Frontend Migration
 
-**Goal:** Fix dashboard bugs and improve data latency handling with UptimeRobot-style detail views
+**Goal:** Replace Streamlit dashboard with a Vite + TypeScript + Tailwind CSS frontend served by the leader
 
 **Target features:**
-- Fix `st.rerun(scope="fragment")` error
-- 2-minute grace period before marking data as "Not Available"
-- Details dropdown with uptime summary card (UptimeRobot-style)
+- Vite + TS + Tailwind + Vitest project in `frontend/`
+- Leader serves built static files from port 58080
+- Connectivity matrix, detail cards, and 30-day view ported from Streamlit
+- Auto-refresh via browser `setInterval`
+- UptimeRobot-style history visualization per node pair
+- Streamlit fully removed
+
+
 
 ## Requirements
 
@@ -67,9 +72,11 @@ A node must be able to detect and report whether it can reach every other node i
 
 ### Active
 
-- [ ] **DASHF-01**: Fix `st.rerun(scope="fragment")` error on dashboard
-- [ ] **DASHD-01**: 2-minute grace period before marking node data as "Not Available"
-- [ ] **DASHU-01**: Per-node-pair details dropdown with uptime summary card (UptimeRobot-style)
+- [ ] **FRNT-01**: Vite + TypeScript + Tailwind CSS project initialized in `frontend/`
+- [ ] **LEAD-01**: Leader serves built `./dist` folder on port 58080
+- [ ] **DASH-01**: Connectivity matrix, detail cards, and 30-day view ported to new frontend
+- [ ] **DASH-07**: UptimeRobot-style history visualization per node pair
+- [ ] **CLEAN-01**: Streamlit fully removed
 
 ### Out of Scope
 
@@ -81,20 +88,20 @@ A node must be able to detect and report whether it can reach every other node i
 
 ## Context
 
-- Python prototype, Quart for HTTP server, Streamlit for dashboard
+- Python backend (Quart) on port 58080, frontend (Vite + TS + Tailwind) served from same port
 - Deployed across multiple VMs on different geographies connected via VPN WAN
 - Data is small per check, retained in memory on nodes between submissions
 - Leader writes JSON files hourly to avoid memory/disk pressure
 - System `ping` binary used for ICMP (shelled out)
-- v0.1 shipped all 5 phases — codebase stable and tested
+- Frontend fetches from same-origin API endpoints
 
 ## Constraints
 
-- **Port**: Leader must listen on 58080
-- **Language**: Python (fast prototyping)
-- **Framework**: Quart (async HTTP server), Streamlit (frontend)
+- **Port**: Leader must listen on 58080 (serving both API and frontend)
+- **Language**: Python (Quart) + TypeScript (React/Vanilla TS frontend)
+- **Framework**: Quart (async HTTP server), Vite + Tailwind CSS (frontend)
 - **Deployment**: Multi-VM over VPN WAN
-- **Base image**: python:3.12-slim (minimal, matches requires-python)
+- **Base image**: python:3.12-slim with Node.js build stage
 
 ## Key Decisions
 
@@ -104,7 +111,9 @@ A node must be able to detect and report whether it can reach every other node i
 | JSON file persistence | Quick to implement, inspectable, no DB setup | — Pending |
 | System ping binary | Avoids root/capabilities for raw ICMP sockets | — Pending |
 | No auth | VPN is trusted, prototype speed | — Pending |
-| Port 58080 | Avoids privileged ports, unlikely to conflict | — Pending |
+| Port 58080 | Avoids privileged ports, unlikely to conflict | ✓ Good |
+| Vite + Tailwind for frontend | Modern tooling, fast dev iteration, type-safe | — Pending |
+| Leader serves frontend from same port | Simpler deployment, no CORS, one port to manage | — Pending |
 
 ## Evolution
 
@@ -124,4 +133,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-06-18 after v0.3 milestone start*
+*Last updated: 2026-06-18 after v0.5 milestone start*

@@ -5,19 +5,21 @@
 See: .planning/PROJECT.md (updated 2026-06-18)
 
 **Core value:** A node must be able to detect and report whether it can reach every other node in the mesh, and the leader must present an accurate, up-to-date connectivity view.
-**Current focus:** v0.4 Dashboard UI Polish
+**Current focus:** v0.5 Frontend Migration
 
 ## Current Position
 
-Milestone: v0.4 (Dashboard UI Polish) — Complete ✓
-Current Phase: None (milestone delivered)
-Plan: 2 phases (7a, 7b) — both delivered
-Status: Delivered
-Last activity: 2026-06-18 — v0.4 delivered
+Milestone: v0.5 (Frontend Migration) — In Progress
+Current Phase: Phase 8 (Frontend Scaffold + Build Pipeline)
+Plan: 4 phases (8, 9, 10, 11)
+Status: Defining requirements
+Last activity: 2026-06-18 — v0.5 milestone started
 
-Progress: [██████████] 100%
-  Phase 7a: Display & Refresh Tuning (items 2-4) ✓
-  Phase 7b: HTML Rendering Fix (item 1) ✓
+Progress: [░░░░░░░░░░] 0%
+  Phase 8: Frontend Scaffold + Build Pipeline — Not Started
+  Phase 9: Dashboard Views — Not Started
+  Phase 10: Streamlit Cleanup — Not Started
+  Phase 11: Uptime History Visualization — Not Started
 
 ## Performance Metrics
 
@@ -85,12 +87,13 @@ Phase 4 (CI/CD) decisions:
 - Phase **4** added to v0.2: GitHub Actions CI/CD — Build & Push to Docker Hub
 - v0.4 replaces original v3.5+ deferred items with dashboard UI polish
 
-### Milestone v0.4 Status
+### Milestone v0.5 Status
 
-- [x] Define v0.4 items (4 items)
-- [x] Split into Phase 7a (items 2-4) and Phase 7b (item 1)
-- [x] Phase 7a: Display & Refresh Tuning — Complete ✓
-- [x] Phase 7b: HTML Rendering Fix — Complete ✓
+- [x] Define v0.5 requirements (25 requirements across 4 phases)
+- [x] Phase 8: Frontend Scaffold + Build Pipeline — Not Started
+- [ ] Phase 9: Dashboard Views — Not Started
+- [ ] Phase 10: Streamlit Cleanup — Not Started
+- [ ] Phase 11: Uptime History Visualization — Not Started
 
 ### Blockers/Concerns
 
@@ -99,5 +102,5 @@ None.
 ## Session Continuity
 
 Last session: 2026-06-18
-Stopped at: v0.4 complete — ready for milestone lifecycle (audit → complete → cleanup)
+Stopped at: v0.5 milestone started — ready for Phase 8
 Resume file: None
