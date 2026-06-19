@@ -56,7 +56,7 @@ def _parse_node_url(url: str) -> tuple[str, int]:
 
 
 async def check_node(
-    target_ip: str, timeout: float = 5.0
+    target_ip: str, port: int = config.DEFAULT_PORT, timeout: float = 5.0
 ) -> dict:
     timestamp = time.time()
     ping_ok = False
@@ -86,7 +86,7 @@ async def check_node(
     try:
         http_start = time.time()
         async with httpx.AsyncClient(timeout=timeout) as client:
-            resp = await client.get(f"http://{target_ip}:{config.DEFAULT_PORT}/healthz")
+            resp = await client.get(f"http://{target_ip}:{port}/healthz")
             http_latency_ms = (time.time() - http_start) * 1000
             http_ok = resp.is_success
             http_status = resp.status_code
@@ -105,13 +105,13 @@ async def check_node(
 
 
 async def run_check_cycle(
-    semaphore: asyncio.Semaphore, peers: list[str], timeout: float = 5.0
+    semaphore: asyncio.Semaphore, peers: list[dict], timeout: float = 5.0
 ) -> list[dict]:
-    async def limited_check(ip: str):
+    async def limited_check(peer: dict):
         async with semaphore:
-            return await check_node(ip, timeout)
+            return await check_node(peer["ip"], peer.get("port", config.DEFAULT_PORT), timeout)
 
-    results = await asyncio.gather(*[limited_check(ip) for ip in peers], return_exceptions=True)
+    results = await asyncio.gather(*[limited_check(p) for p in peers], return_exceptions=True)
     return [r for r in results if isinstance(r, dict)]
 
 
@@ -132,6 +132,10 @@ async def submit_results(
         return False
 
 
+async def handle_healthz(request: web.Request) -> web.Response:
+    return web.json_response({"status": "alive"})
+
+
 async def handle_update_peers(request: web.Request) -> web.Response:
     data = await request.json()
     app = request.app
@@ -148,6 +152,7 @@ async def handle_update_peers(request: web.Request) -> web.Response:
 async def start_http_server(state: dict, host: str = "0.0.0.0", port: int = 0) -> web.AppRunner:
     app = web.Application()
     app["state"] = state
+    app.router.add_get("/healthz", handle_healthz)
     app.router.add_post("/update-peers", handle_update_peers)
     runner = web.AppRunner(app)
     await runner.setup()

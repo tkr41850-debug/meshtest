@@ -115,11 +115,11 @@ class TestCheckExecutionIntegration:
 class TestSemaphoreIntegration:
     async def test_semaphore_limits_concurrent(self):
         sem = asyncio.Semaphore(10)
-        peers = [f"10.0.0.{i}" for i in range(1, 16)]
+        peers = [{"ip": f"10.0.0.{i}", "port": 58080} for i in range(1, 16)]
         active = set()
         max_active = [0]
 
-        async def mock_check(ip, timeout=5.0):
+        async def mock_check(ip, port, timeout=5.0):
             active.add(ip)
             max_active[0] = max(max_active[0], len(active))
             await asyncio.sleep(0.02)
@@ -134,11 +134,11 @@ class TestSemaphoreIntegration:
 
     async def test_semaphore_caps_at_10_with_15_peers(self):
         sem = asyncio.Semaphore(10)
-        peers = [f"10.0.0.{i}" for i in range(1, 16)]
+        peers = [{"ip": f"10.0.0.{i}", "port": 58080} for i in range(1, 16)]
         active = set()
         max_active = [0]
 
-        async def mock_check(ip, timeout=5.0):
+        async def mock_check(ip, port, timeout=5.0):
             active.add(ip)
             max_active[0] = max(max_active[0], len(active))
             await asyncio.sleep(0.02)
@@ -152,9 +152,9 @@ class TestSemaphoreIntegration:
 
     async def test_semaphore_releases_after_completion(self):
         sem = asyncio.Semaphore(10)
-        peers = [f"10.0.0.{i}" for i in range(1, 16)]
+        peers = [{"ip": f"10.0.0.{i}", "port": 58080} for i in range(1, 16)]
 
-        async def mock_check(ip, timeout=5.0):
+        async def mock_check(ip, port, timeout=5.0):
             await asyncio.sleep(0.01)
             return {"target_ip": ip, "ping_ok": True}
 
@@ -240,7 +240,7 @@ class TestRegistrationHttpIntegration:
             mock_cls.return_value.__aenter__.return_value = mock_inst
             mock_resp = AsyncMock()
             mock_resp.is_success = True
-            mock_resp.json = Mock(return_value={"peers": ["10.0.0.1"]})
+            mock_resp.json = Mock(return_value={"peers": [{"ip": "10.0.0.1", "port": 58080}]})
             mock_inst.post = AsyncMock(return_value=mock_resp)
 
             url = f"http://10.0.0.1:58080/register"
@@ -259,7 +259,7 @@ class TestRegistrationHttpIntegration:
             mock_cls.return_value.__aenter__.return_value = mock_inst
             mock_resp = AsyncMock()
             mock_resp.is_success = True
-            mock_resp.json = Mock(return_value={"peers": ["10.0.0.1", "10.0.0.3"]})
+            mock_resp.json = Mock(return_value={"peers": [{"ip": "10.0.0.1", "port": 58080}, {"ip": "10.0.0.3", "port": 58080}]})
             mock_inst.post = AsyncMock(return_value=mock_resp)
 
             async with mock_cls(timeout=10.0) as client:
@@ -270,7 +270,9 @@ class TestRegistrationHttpIntegration:
                 data = resp.json()
                 peers = data.get("peers", [])
 
-            assert peers == ["10.0.0.1", "10.0.0.3"]
+            assert len(peers) == 2
+            assert peers[0]["ip"] == "10.0.0.1"
+            assert peers[0]["port"] == 58080
 
     async def test_handles_error_response_gracefully(self):
         with patch("node.httpx.AsyncClient") as mock_cls:
@@ -305,11 +307,11 @@ class TestCycleIntegration:
 
                 mock_reg_resp = AsyncMock()
                 mock_reg_resp.is_success = True
-                mock_reg_resp.json = Mock(return_value={"peers": ["10.0.0.1"]})
+                mock_reg_resp.json = Mock(return_value={"peers": [{"ip": "10.0.0.1", "port": 58080}]})
 
                 mock_list_resp = AsyncMock()
                 mock_list_resp.is_success = True
-                mock_list_resp.json = Mock(return_value={"nodes": ["10.0.0.1", "10.0.0.3"]})
+                mock_list_resp.json = Mock(return_value={"nodes": [{"ip": "10.0.0.1", "port": 58080}, {"ip": "10.0.0.3", "port": 58080}]})
 
                 mock_inst.post = AsyncMock(return_value=mock_reg_resp)
                 mock_inst.get = AsyncMock(return_value=mock_list_resp)
@@ -333,7 +335,7 @@ class TestCycleIntegration:
 
                             mock_check.assert_called_once()
                             call_peers = mock_check.call_args[0][1]
-                            assert "10.0.0.1" in call_peers
+                            assert any(p["ip"] == "10.0.0.1" for p in call_peers)
 
     async def test_full_cycle_with_buffer_retry(self):
         with patch("node.parse_args") as mock_args:
@@ -347,11 +349,11 @@ class TestCycleIntegration:
 
                 mock_reg_resp = AsyncMock()
                 mock_reg_resp.is_success = True
-                mock_reg_resp.json = Mock(return_value={"peers": ["10.0.0.1"]})
+                mock_reg_resp.json = Mock(return_value={"peers": [{"ip": "10.0.0.1", "port": 58080}]})
 
                 mock_list_resp = AsyncMock()
                 mock_list_resp.is_success = True
-                mock_list_resp.json = Mock(return_value={"nodes": ["10.0.0.3"]})
+                mock_list_resp.json = Mock(return_value={"nodes": [{"ip": "10.0.0.3", "port": 58080}]})
 
                 mock_inst.post = AsyncMock(return_value=mock_reg_resp)
                 mock_inst.get = AsyncMock(return_value=mock_list_resp)

@@ -86,14 +86,14 @@ async def register():
 
     await _push_peer_list_to_all()
 
-    peers = list(_registry.keys())
+    peers = _peer_dicts()
     return {"status": "registered", "peers": peers}, 200
 
 
 @app.route("/node-list", methods=["GET"])
 async def node_list():
     async with _registry_lock:
-        nodes = list(_registry.keys())
+        nodes = _peer_dicts()
     return {"nodes": nodes, "count": len(nodes)}, 200
 
 
@@ -215,7 +215,14 @@ def _node_peer_push_url(node: NodeInfo) -> str:
     return f"http://{node.node_ip}:{node.listen_port}/update-peers"
 
 
-async def _notify_node(node_ip: str, peers: list[str]):
+def _peer_dicts() -> list[dict]:
+    return [
+        {"ip": ip, "port": info.listen_port}
+        for ip, info in _registry.items()
+    ]
+
+
+async def _notify_node(node_ip: str, peers: list[dict]):
     node = _registry.get(node_ip)
     if not node:
         return
@@ -235,18 +242,18 @@ async def _notify_node(node_ip: str, peers: list[str]):
 
 async def _push_peer_list_to_all():
     async with _registry_lock:
-        all_peers = list(_registry.keys())
-        tasks = [_notify_node(ip, all_peers) for ip in all_peers]
+        all_ips = list(_registry.keys())
+        peer_dicts = _peer_dicts()
+        tasks = [_notify_node(ip, peer_dicts) for ip in all_ips]
     if tasks:
         await asyncio.gather(*tasks, return_exceptions=True)
 
 
 async def _push_config_to_all():
     async with _registry_lock:
-        all_peers = list(_registry.keys())
-        tasks = []
-        for ip in all_peers:
-            tasks.append(_notify_node(ip, list(_registry.keys())))
+        all_ips = list(_registry.keys())
+        peer_dicts = _peer_dicts()
+        tasks = [_notify_node(ip, peer_dicts) for ip in all_ips]
     if tasks:
         await asyncio.gather(*tasks, return_exceptions=True)
 
