@@ -6,74 +6,68 @@ A distributed mesh connectivity testing tool for monitoring network health acros
 
 ## Milestones
 
-### v0.1 — mesh-status initial release (Complete ✅)
+- ✅ **v0.1** — mesh-status initial release (5 phases)
+- ✅ **v0.2** — Containerize mesh-status (4 phases)
+- ✅ **v0.3** — Dashboard Fixes (2 phases)
+- ✅ **v0.4** — Dashboard UI Polish (2 phases)
 
-All 5 phases delivered: Leader Core & Registration, Node Agent, Persistence & Data API, Integration Tests, Streamlit Dashboard + cross-phase integration fixes.
+## Phases
+
+<details>
+<summary>✅ v0.1 — mesh-status initial release (Phases 1-4, 3.1, 4.1)</summary>
+
+- [x] Phase 1: Leader Core & Registration
+- [x] Phase 2: Node Agent
+- [x] Phase 3: Persistence & Data API
+- [x] Phase 3.1: Integration Tests (inserted)
+- [x] Phase 4: Streamlit Dashboard
+- [x] Phase 4.1: Cross-phase Integration Fix (inserted)
 
 See archived roadmap: `.planning/milestones/v0.1-ROADMAP.md`
-See archived requirements: `.planning/milestones/v0.1-REQUIREMENTS.md`
+</details>
 
-### v0.2 — Containerize mesh-status (Complete ✅)
+<details>
+<summary>✅ v0.2 — Containerize mesh-status</summary>
 
-Dockerized leader+dashboard and node components with CI/CD pipeline and multi-arch support.
+- [x] Phase 5: Dockerfile leader+dashboard
+- [x] Phase 6: Dockerfile node agent
+- [x] Phase 7: Docker Compose + Deployment Docs
+- [x] Phase 8: GitHub Actions CI/CD
 
 See archived roadmap: `.planning/milestones/v0.2-ROADMAP.md`
-See archived requirements: `.planning/milestones/v0.2-REQUIREMENTS.md`
+</details>
 
-### v0.3 — Dashboard Fixes (Complete ✓)
+<details>
+<summary>✅ v0.3 — Dashboard Fixes</summary>
 
-Fixed dashboard bugs, added data latency grace period, and enhanced per-node-pair detail views with UptimeRobot-style cards.
+- [x] Phase 5: Backend — Data Latency Grace Period
+- [x] Phase 6: Frontend — Dashboard Bug Fix + UptimeRobot-style Details
 
-### v0.4 — Dashboard UI Polish (In Progress)
+See archived roadmap: `.planning/milestones/v0.3-phases/`
+</details>
 
-Tuned refresh rate, added inline per-check-type uptime display, fixed matrix labels, and resolved HTML rendering in expander cards.
+<details>
+<summary>✅ v0.4 — Dashboard UI Polish (SHIPPED 2026-06-18)</summary>
 
-## Phase Structure
+- [x] Phase 7a: Display & Refresh Tuning
+- [x] Phase 7b: HTML Rendering Fix
 
-### Phase 5: Backend — Data Latency Grace Period (Complete ✓)
+See archived roadmap: `.planning/milestones/v0.4-ROADMAP.md`
+</details>
 
-**Goal:** Prevent premature "NotAvailable" status when node data arrives with up to 2-minute skew
+## Progress
 
-**Requirements:** DASHD-01
-
-**Success criteria:**
-- [x] Status calculation accepts data arriving up to 120s after the expected interval without marking "NotAvailable"
-- [x] Existing OK/Pending/NotAvailable status values are preserved for genuinely stale data
-- [x] All existing tests pass (no regression in status logic)
-
-### Phase 6: Frontend — Dashboard Bug Fix + UptimeRobot-style Details (Complete ✓)
-
-**Goal:** Fix auto-refresh crash and replace row-based expander details with rich summary cards
-
-**Requirements:** DASHF-01, DASHU-01
-
-**Success criteria:**
-- [x] Dashboard auto-refreshes without `StreamlitAPIException`
-- [x] Each node-pair expander shows an UptimeRobot-style summary card with: status badge, uptime %, latest ping/HTTP latency, last check timestamp
-- [x] Cards are visually distinct from the current flat table layout
-- [x] All existing dashboard views (30m matrix, 30d view) remain functional
-
-### Phase 7a: Display & Refresh Tuning
-
-**Goal:** Improve dashboard responsiveness and info density
-
-**Requirements:** v0.4 items 2-4
-
-**Success criteria:**
-- [x] Auto-refresh interval reduced from 30s to 10s with cache TTL adjusted to 8s
-- [x] Refresh indicator text updated to reflect new interval
-- [x] Card shows per-check-type uptime inline with latencies (Ping: Xms (Y%), HTTP: Xms (Y%))
-- [x] Matrix column headers show short numeric labels (e.g., "1" instead of "ai") with full hostname on hover
-- [x] All existing tests continue to pass
-
-### Phase 7b: HTML Rendering Fix
-
-**Goal:** Fix raw HTML code display in expander cards
-
-**Requirements:** v0.4 item 1
-
-**Success criteria:**
-- [x] Uptime info renders as styled text, not raw HTML code
-- [x] No `</div>` or other HTML tags visible in rendered output
-- [x] Card visual appearance preserved
-- [x] All existing tests pass
+| Phase | Milestone | Status | Completed |
+|-------|-----------|--------|-----------|
+| 1 | v0.1 | Complete | 2026-06-18 |
+| 2 | v0.1 | Complete | 2026-06-18 |
+| 3 | v0.1 | Complete | 2026-06-18 |
+| 3.1 | v0.1 | Complete | 2026-06-18 |
+| 4 | v0.1 | Complete | 2026-06-18 |
+| 4.1 | v0.1 | Complete | 2026-06-18 |
+| 5 | v0.2/v0.3 | Complete | 2026-06-18 |
+| 6 | v0.2/v0.3 | Complete | 2026-06-18 |
+| 7 | v0.2 | Complete | 2026-06-18 |
+| 8 | v0.2 | Complete | 2026-06-18 |
+| 7a | v0.4 | Complete | 2026-06-18 |
+| 7b | v0.4 | Complete | 2026-06-18 |
