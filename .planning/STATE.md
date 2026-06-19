@@ -5,36 +5,41 @@
 See: .planning/PROJECT.md (updated 2026-06-17)
 
 **Core value:** A node must be able to detect and report whether it can reach every other node in the mesh, and the leader must present an accurate, up-to-date connectivity view.
-**Current focus:** Phase 4 — Streamlit Dashboard
+**Current focus:** Phase 4.1 — Fix cross-phase integration gaps
 
 ## Current Position
 
-Phase: 4 phases + 1 inserted decimal
-Current: Phase 4 (Streamlit Dashboard)
+Phase: 5 phases + 2 inserted decimals
+Current: Phase 4.1 (Fix cross-phase integration gaps)
 Status: Complete
-Last activity: 2026-06-18 — Phase 4 executed (Streamlit dashboard with 30m and 30d views)
+Last activity: 2026-06-18 — Phase 4.1 complete (node HTTP server, /healthz, 30m retention)
 
 Progress: [██████████] 100%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 2
-- Average duration: 32 min
-- Total execution time: 65 min
+- Total plans completed: 3
+- Average duration: 23 min
+- Total execution time: 70 min
 
 **By Phase:**
 
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
 | 03.1 | 2 | 45 min | 22 min |
-| 04.1 | 1 | 20 min | 20 min |
+| 4.1 | 1 | 5 min | 5 min |
 
 **Recent Trend:** N/A
 
 ## Accumulated Context
 
 ### Decisions
+
+Phase 4.1 decisions:
+- aiohttp for node HTTP server (pure async, no threading)
+- Shared state dict pattern for cross-coroutine config updates
+- http_runner.cleanup() wrapped in try/except for test compatibility
 
 Phase 4 decisions:
 - Dashboard served standalone via `streamlit run` (port 58581), LEADER_URL env var
@@ -54,8 +59,11 @@ Phase 3 decisions:
 ### Roadmap Evolution
 
 - Phase **3.1** inserted after Phase **3** (URGENT) — Add mocked integration tests for Phase 1 and 2
+- Phase **4.1** inserted after Phase **4** (URGENT) — Fix cross-phase integration gaps (node HTTP server, /healthz, 30m data retention)
 
 ### Pending Todos
+
+- [x] Plan and execute Phase 4.1
 
 - [x] Plan Phase 3.1: `/gsd-plan-phase 3.1`
 - [x] Execute Phase 3.1: `/gsd-execute-phase 3.1`
@@ -69,5 +77,5 @@ None.
 ## Session Continuity
 
 Last session: 2026-06-18
-Stopped at: Phase 4 complete (Streamlit Dashboard) — DASH-01 through DASH-06 delivered
+Stopped at: Phase 4.1 complete — node HTTP server, leader /healthz, 30m retention
 Resume file: None
