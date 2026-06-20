@@ -9,7 +9,7 @@ from pathlib import Path
 
 logger = logging.getLogger("mesh-status-persistence")
 
-DATA_ROOT = Path("data")
+DATA_ROOT = Path(os.environ.get("DATA_DIR", "data"))
 
 
 def _ensure_data_dir(d: date) -> Path:
