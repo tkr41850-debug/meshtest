@@ -129,7 +129,10 @@ async def submit_results():
     if not isinstance(timestamp, (int, float)):
         return {"error": "Invalid payload: timestamp must be a number", "status": 400}, 400
 
-    _results[node_ip] = checks
+    if node_ip in _results:
+        _results[node_ip].extend(checks)
+    else:
+        _results[node_ip] = list(checks)
     logger.info("Results submitted from %s: %d checks", node_ip, len(checks))
 
     async with _registry_lock:

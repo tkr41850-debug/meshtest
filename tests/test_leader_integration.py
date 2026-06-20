@@ -197,6 +197,30 @@ class TestDataApiIntegration:
         data = await resp.get_json()
         assert data["days"] == []
 
+    async def test_data_30m_accumulates_across_submissions(self, client):
+        import time
+        now = time.time()
+        ts1 = now - 120
+        ts2 = now - 60
+        await client.post("/submit", json={
+            "node_ip": "10.0.0.1",
+            "checks": [{"target_ip": "10.0.0.2", "ping_ok": True, "http_ok": True, "timestamp": ts1}],
+            "timestamp": ts1,
+        })
+        await client.post("/submit", json={
+            "node_ip": "10.0.0.1",
+            "checks": [{"target_ip": "10.0.0.2", "ping_ok": False, "http_ok": True, "timestamp": ts2}],
+            "timestamp": ts2,
+        })
+        resp = await client.get("/data?window=30m")
+        assert resp.status_code == 200
+        data = await resp.get_json()
+        assert len(data["checks"]) >= 2, (
+            "Expected checks from both submissions (accumulated history), "
+            "got only %d. If this fails, `_results[node_ip] = checks` "
+            "is still replacing instead of appending." % len(data["checks"])
+        )
+
     async def test_data_without_window_returns_400(self, client):
         resp = await client.get("/data")
         assert resp.status_code == 400
