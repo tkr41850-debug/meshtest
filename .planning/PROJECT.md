@@ -92,10 +92,31 @@ Now part of validated requirements — see v0.5 validated section.
 
 ### v0.8 Active
 
-- [ ] **INST-01**: `deploy/install.sh` installs mesh-status from GitHub (prereqs: uv + git)
-- [ ] **INST-02**: `start.sh` starts leader or node based on `--leader` / `--node` flag
-- [ ] **INST-03**: Interactive config setup with CLI flag override for non-interactive mode
-- [ ] **INST-04**: Docker-based CI test verifies install flow in fresh container
+- [ ] **INST-01**: `deploy/install.sh` installs mesh-status to `~/.local/meshtest`
+- [ ] **INST-02**: Prerequisite checks for `uv` and `git` with actionable messages
+- [ ] **INST-03**: Version-pinned git clone via `MESH_STATUS_VERSION` env var
+- [ ] **INST-04**: `uv sync` installs Python dependencies
+- [ ] **INST-05**: Frontend build during install (npm ci + npm run build)
+- [ ] **INST-06**: Idempotent reinstall — git pull in existing clone on re-run
+- [ ] **INST-07**: Success banner with install path, start commands, dashboard URL
+- [ ] **INST-08**: `-y` / `--yes` flag for non-interactive mode
+- [ ] **INST-09**: `--help` flag for install.sh
+- [ ] **START-01**: `start.sh --leader` starts the leader via `uv run`
+- [ ] **START-02**: `start.sh --node` starts the node agent
+- [ ] **START-03**: Log output redirected to `$INSTALL_DIR/var/*.log`
+- [ ] **START-04**: PID file management for process tracking
+- [ ] **START-05**: Signal handling (SIGTERM/SIGINT traps for graceful shutdown)
+- [ ] **START-06**: `start.sh --help` flag
+- [ ] **START-07**: `start.sh --version` flag
+- [ ] **START-08**: `start.sh --uninstall` removes install and prints PATH cleanup
+- [ ] **CONF-01**: `.env` config file generation with defaults during install
+- [ ] **CONF-02**: Interactive config wizard for first-run setup
+- [ ] **CONF-03**: `MESH_STATUS_HOME` env var to override install directory
+- [ ] **CONF-04**: CLI flag override for non-interactive config
+- [ ] **TEST-01**: Docker-based CI test verifies full install flow in fresh container
+- [ ] **TEST-02**: CI test runs `install.sh -y` with env vars for non-interactive mode
+- [ ] **TEST-03**: CI test verifies `start.sh` launches and process is healthy
+- [ ] **FIX-05**: Fix `persistence.py` to respect `DATA_DIR` env var instead of hardcoded `Path("data")`
 
 ### Out of Scope
 
@@ -104,6 +125,11 @@ Now part of validated requirements — see v0.5 validated section.
 - Real-time push/WebSocket — Frontend polls the data endpoint
 - Encryption of data in transit or at rest — prototype
 - Kubernetes / orchestration — Docker Compose sufficient for prototype
+- Systemd service units — v0.8 uses start.sh directly; systemd deferred
+- Package manager (apt/brew) — curl-pipe-bash is the primary install path
+- Auto-update mechanism — requires background process, future milestone
+- Windows/Git Bash support — separate concern, not in scope
+- Pre-built frontend artifact — build from source in v0.8
 
 ## Context
 
