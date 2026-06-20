@@ -9,11 +9,11 @@ See: .planning/PROJECT.md (updated 2026-06-19)
 
 ## Current Position
 
-Milestone: v0.8 (Non-Docker Install & Start Scripts) — Phase 18 complete
-Current Phase: Phase 19 (Start Script & Config Integration) — Not started
-Plan: Phase 18 complete (install.sh created), Phase 19 pending
-Status: Executing Phase 19
-Last activity: 2026-06-20 — Phase 18 complete: deploy/install.sh created
+Milestone: v0.8 (Non-Docker Install & Start Scripts) — MILESTONE COMPLETE
+Current Phase: Phase 20 (Docker CI Testing) — Complete
+Plan: Phase 18-20 complete — install.sh + start.sh + CI workflow
+Status: v0.8 milestone audit PASSED — all 25 requirements satisfied
+Last activity: 2026-06-20 — v0.8 milestone audit: passed
 
 ## Performance Metrics
 
@@ -106,10 +106,9 @@ Phase 4 (CI/CD) decisions:
 
 ### Milestone v0.8 Status
 
-- [ ] Phase 18: Install Script Core — Not started
 - [x] Phase 18: Install Script Core — Complete
-- [ ] Phase 19: Start Script & Config Integration — Not started
-- [ ] Phase 20: Docker CI Testing — Not started
+- [x] Phase 19: Start Script & Config Integration — Complete
+- [x] Phase 20: Docker CI Testing — Complete
 
 ### Decisions (v0.8 — roadmap creation)
 
@@ -130,6 +129,6 @@ None.
 ## Session Continuity
 
 Last session: 2026-06-20
-Stopped at: Phase 18 complete, Phase 19 in progress
+Stopped at: v0.8 milestone audit passed
 Resume file: None
-Next action: Execute Phase 19 (Start Script & Config Integration)
+Next action: Complete milestone via /gsd-complete-milestone v0.8
