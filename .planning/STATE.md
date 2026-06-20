@@ -9,11 +9,11 @@ See: .planning/PROJECT.md (updated 2026-06-19)
 
 ## Current Position
 
-Milestone: v0.8 (Non-Docker Install & Start Scripts) — Planning
-Current Phase: Not started (defining requirements)
-Plan: —
-Status: Defining requirements
-Last activity: 2026-06-19 — Milestone v0.8 started
+Milestone: v0.8 (Non-Docker Install & Start Scripts) — Roadmap created
+Current Phase: Phase 18 (Install Script Core) — Not started
+Plan: Not yet planned
+Status: Roadmap created, awaiting Phase 18 planning
+Last activity: 2026-06-20 — v0.8 roadmap created (Phases 18-20)
 
 ## Performance Metrics
 
@@ -104,12 +104,31 @@ Phase 4 (CI/CD) decisions:
 - [x] Phase 16: UI integration — flat 30d, dual rows, gap (TDD) — Complete
 - [x] Phase 17: Fix history bars showing only most recent check (TDD) — Complete
 
+### Milestone v0.8 Status
+
+- [ ] Phase 18: Install Script Core — Not started
+- [ ] Phase 19: Start Script & Config Integration — Not started
+- [ ] Phase 20: Docker CI Testing — Not started
+
+### Decisions (v0.8 — roadmap creation)
+
+- **Phase numbering**: v0.8 starts at Phase 18 (continuing from v0.7's Phase 17)
+- **Granularity**: Coarse — 3 phases for 25 requirements (INST, START, CONF, TEST, FIX)
+- **Install directory**: `~/.local/meshtest` per INST-01 (not `~/.local/opt/mesh-status` from research)
+- **install.sh must work without stdin**: No interactive prompts in pipe mode; config wizard uses env var fallback and `/dev/tty` for prompts
+- **Start script pattern**: `exec`/foreground by default (not daemonize), PID file for tracking, signal traps for cleanup
+- **persistence.py fix**: Must read `DATA_DIR` env var with `Path(os.environ.get("DATA_DIR", "data"))` fallback — preserves backward compat with Docker
+- **Test framework**: bats-core for shell script testing
+- **Script shebangs**: `deploy/install.sh` uses `#!/bin/sh` (POSIX), `start.sh` uses `#!/usr/bin/env bash`
+- **Config approach**: Env vars only (no TOML/YAML), consistent with existing `config.py` pattern; `.env` file generated during install
+
 ### Blockers/Concerns
 
 None.
 
 ## Session Continuity
 
-Last session: 2026-06-19
-Stopped at: Milestone v0.8 planning started
+Last session: 2026-06-20
+Stopped at: v0.8 roadmap created (Phases 18-20)
 Resume file: None
+Next action: Plan Phase 18 (Install Script Core) — `/gsd-plan-phase 18`

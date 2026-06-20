@@ -64,36 +64,36 @@ None deferred.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| INST-01 | | Pending |
-| INST-02 | | Pending |
-| INST-03 | | Pending |
-| INST-04 | | Pending |
-| INST-05 | | Pending |
-| INST-06 | | Pending |
-| INST-07 | | Pending |
-| INST-08 | | Pending |
-| INST-09 | | Pending |
-| START-01 | | Pending |
-| START-02 | | Pending |
-| START-03 | | Pending |
-| START-04 | | Pending |
-| START-05 | | Pending |
-| START-06 | | Pending |
-| START-07 | | Pending |
-| START-08 | | Pending |
-| CONF-01 | | Pending |
-| CONF-02 | | Pending |
-| CONF-03 | | Pending |
-| CONF-04 | | Pending |
-| TEST-01 | | Pending |
-| TEST-02 | | Pending |
-| TEST-03 | | Pending |
-| FIX-05 | | Pending |
+| INST-01 | Phase 18 | Pending |
+| INST-02 | Phase 18 | Pending |
+| INST-03 | Phase 18 | Pending |
+| INST-04 | Phase 18 | Pending |
+| INST-05 | Phase 18 | Pending |
+| INST-06 | Phase 18 | Pending |
+| INST-07 | Phase 18 | Pending |
+| INST-08 | Phase 18 | Pending |
+| INST-09 | Phase 18 | Pending |
+| START-01 | Phase 19 | Pending |
+| START-02 | Phase 19 | Pending |
+| START-03 | Phase 19 | Pending |
+| START-04 | Phase 19 | Pending |
+| START-05 | Phase 19 | Pending |
+| START-06 | Phase 19 | Pending |
+| START-07 | Phase 19 | Pending |
+| START-08 | Phase 19 | Pending |
+| CONF-01 | Phase 18 | Pending |
+| CONF-02 | Phase 19 | Pending |
+| CONF-03 | Phase 18 | Pending |
+| CONF-04 | Phase 19 | Pending |
+| TEST-01 | Phase 20 | Pending |
+| TEST-02 | Phase 20 | Pending |
+| TEST-03 | Phase 20 | Pending |
+| FIX-05 | Phase 19 | Pending |
 
 **Coverage:**
 - v0.8 requirements: 25 total
-- Mapped to phases: 0
-- Unmapped: 25
+- Mapped to phases: 25
+- Unmapped: 0
 
 ---
 *Requirements defined: 2026-06-20*
