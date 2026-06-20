@@ -5,15 +5,15 @@
 See: .planning/PROJECT.md (updated 2026-06-19)
 
 **Core value:** A node must be able to detect and report whether it can reach every other node in the mesh, and the leader must present an accurate, up-to-date connectivity view.
-**Current focus:** v0.7 Dashboard Bugfixes
+**Current focus:** v0.8 Non-Docker Install & Start Scripts
 
 ## Current Position
 
-Milestone: v0.7 (Dashboard Bugfixes) — In Progress
-Current Phase: Phase 17 (pending)
-Plan: 3 phases (15, 16, 17) — 15-16 complete, 17 pending
-Status: Phase 17 added for history bars fix
-Last activity: 2026-06-19 — Phase 17 added to v0.7
+Milestone: v0.8 (Non-Docker Install & Start Scripts) — Planning
+Current Phase: Not started (defining requirements)
+Plan: —
+Status: Defining requirements
+Last activity: 2026-06-19 — Milestone v0.8 started
 
 ## Performance Metrics
 
@@ -102,7 +102,7 @@ Phase 4 (CI/CD) decisions:
 
 - [x] Phase 15: Bar foundation + type fixes (TDD) — Complete
 - [x] Phase 16: UI integration — flat 30d, dual rows, gap (TDD) — Complete
-- [ ] Phase 17: Fix history bars showing only most recent check (TDD) — Pending
+- [x] Phase 17: Fix history bars showing only most recent check (TDD) — Complete
 
 ### Blockers/Concerns
 
@@ -111,5 +111,5 @@ None.
 ## Session Continuity
 
 Last session: 2026-06-19
-Stopped at: Phase 17 added to v0.7 — ready for planning
+Stopped at: Milestone v0.8 planning started
 Resume file: None

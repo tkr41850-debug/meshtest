@@ -8,17 +8,16 @@ A distributed mesh connectivity testing tool for monitoring network health acros
 
 A node must be able to detect and report whether it can reach every other node in the mesh, and the leader must present an accurate, up-to-date connectivity view.
 
-## Current Milestone: v0.7 Dashboard Bugfixes
+## Current Milestone: v0.8 Non-Docker Install & Start Scripts
 
-**Goal:** Fix history bar rendering (0% tooltips, single gradient bar, missing node_ip) and polish 30d view layout
+**Goal:** Provide a production-ready install experience — `curl ... | bash` installs mesh-status, `start.sh --leader` runs the leader, `start.sh --node` runs the node.
 
 **Target features:**
-- Shared `renderBars` utility with HSB-interpolated color (hue 0° red → 120° green)
-- Two separate history bar rows per pair (ICMP + HTTP) instead of one gradient bar
-- Flat 30-day view (no `<details>` expanders)
-- Gap between matrix table and cards in 30m tab
-- Backend infers `node_ip` from `_results` when disk data has empty `node_ip`
-- All frontend TDD: tests written first for every change
+- `deploy/install.sh` — curl-pipe-bash installer (prereqs: uv + git)
+- `start.sh` — unified runner with `--leader` / `--node` roles
+- Interactive config setup (CLI flags for non-interactive mode, CI-friendly)
+- Docker-based CI testing of the full install flow
+- Works both inside and outside Docker
 
 
 
@@ -76,9 +75,11 @@ Now part of validated requirements — see v0.5 validated section.
 
 ### v0.7 Active
 
-- [ ] **FIX-04**: History bars show rolling 30-minute/30-day history instead of only the most recent check
+(none — all shipped)
 
 ### v0.7 Validated
+
+- ✓ **FIX-04**: History bars show rolling 30-minute/30-day history instead of only the most recent check
 
 - ✓ **FIX-01**: Fix `CheckResult` interface — use `ping_ok: boolean` / `http_ok: boolean` to match real API
 - ✓ **FIX-02**: Fix `aggregateByMinute` checks `c.ping_status` (not in API data) → use `c.ping_ok`
@@ -88,6 +89,13 @@ Now part of validated requirements — see v0.5 validated section.
 - ✓ **DASH-15**: Two separate history bar rows per pair (ICMP + HTTP) in both views
 - ✓ **DASH-16**: HSB-interpolated bar colors via shared `bars.ts` (`renderBars(bars: {percent, tooltip}[])`)
 - ✓ **TEST-04**: Update all frontend test fixtures for new `CheckResult` type and bar format
+
+### v0.8 Active
+
+- [ ] **INST-01**: `deploy/install.sh` installs mesh-status from GitHub (prereqs: uv + git)
+- [ ] **INST-02**: `start.sh` starts leader or node based on `--leader` / `--node` flag
+- [ ] **INST-03**: Interactive config setup with CLI flag override for non-interactive mode
+- [ ] **INST-04**: Docker-based CI test verifies install flow in fresh container
 
 ### Out of Scope
 
@@ -144,4 +152,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-06-19 after v0.7 milestone start*
+*Last updated: 2026-06-19 after v0.8 milestone start*
