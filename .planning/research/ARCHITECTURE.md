@@ -1,455 +1,467 @@
-# Architecture Research
+# Architecture Research: Install & Start Scripts
 
-**Domain:** Distributed mesh connectivity testing (leader-node push model)
-**Researched:** 2026-06-18
-**Confidence:** HIGH
+**Domain:** Distributed mesh connectivity tool — install/start script integration
+**Researched:** 2026-06-20
+**Confidence:** HIGH (verified against existing codebase)
 
 ## Standard Architecture
 
-### System Overview
-
-The system follows a **centralized leader with distributed probing nodes** pattern. This is distinct from Prometheus Blackbox Exporter's pull model (leader scrapes targets). Instead, nodes proactively push results to the leader — analogous to Celery/Airflow worker heartbeats but for mesh connectivity health.
+### System Overview — Install & Start Flow
 
 ```
-┌──────────────────────────────────────────────────────────────────────┐
-│                          Leader (Quart Server)                         │
-│                                                                        │
-│  ┌──────────────────┐  ┌──────────────────┐  ┌────────────────────┐  │
-│  │  Registration    │  │  Result Ingestion │  │  Data API /        │  │
-│  │  Handler         │  │  Handler          │  │  Frontend          │  │
-│  │  POST /register  │  │  POST /submit     │  │  GET /data         │  │
-│  └────────┬─────────┘  └────────┬─────────┘  │  Streamlit         │  │
-│           │                     │             └────────────────────┘  │
-│           │                     │                                      │
-│  ┌────────▼─────────────────────▼──────────────────────────────────┐  │
-│  │                    State Manager (in-memory)                      │  │
-│  │  ┌────────────┐  ┌────────────┐  ┌────────────┐  ┌───────────┐  │  │
-│  │  │ Node       │  │ Node IP    │  │ Check      │  │ Metrics   │  │  │
-│  │  │ Registry   │  │ List Cache │  │ Results    │  │ Accumul.  │  │  │
-│  │  └────────────┘  └────────────┘  └────────────┘  └───────────┘  │  │
-│  └──────────────────────────────────────────────────────────────────┘  │
-│           │                                                           │
-│  ┌────────▼──────────────────────────────────────────────────────────┐│
-│  │                    Persistence Layer (hourly)                       ││
-│  │    data/[yyyy]/[mm]/[dd].json  ←  Append hourly batch             ││
-│  └──────────────────────────────────────────────────────────────────┘│
-└──────────────────────────────────────────────────────────────────────┘
-           │                          ▲
-           │ POST /register          │ POST /submit
-           │ GET /node-list           │ { results }
-           ▼                          │
-┌──────────────────────────────────────────────────────────────────────┐
-│                          Node (Python script)                          │
-│                                                                        │
-│  ┌──────────────────────────────────────────────────────────────┐     │
-│  │                    Check Scheduler (loop)                       │     │
-│  │  Every N seconds (configurable, default 10s):                 │     │
-│  │  1. Fetch latest node-list from leader                         │     │
-│  │  2. For each peer:                                             │     │
-│  │     a. ICMP ping (system `ping` binary, timeout)               │     │
-│  │     b. HTTP GET /healthz (aiohttp, timeout)                    │     │
-│  │  3. Submit results to leader                                   │     │
-│  │  4. If submit fails: buffer in memory, retry next cycle        │     │
-│  └──────────────────────────────────────────────────────────────┘     │
-│                                                                        │
-│  ┌──────────────────────────────────────────────────────────────┐     │
-│  │                    Result Buffer                                │     │
-│  │  In-memory list of failed submissions; retried each cycle      │     │
-│  └──────────────────────────────────────────────────────────────┘     │
-└──────────────────────────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────────────────┐
+│                        USER INTERACTION                               │
+│  ┌──────────────────────┐     ┌──────────────────────────────┐       │
+│  │  curl ... | bash      │     │  start.sh --leader / --node  │       │
+│  │  (one-time install)   │     │  (daily operation)           │       │
+│  └──────────┬───────────┘     └──────────────┬───────────────┘       │
+│             │                                 │                       │
+├─────────────┴─────────────────────────────────┴──────────────────────┤
+│                        INSTALL SCRIPTS                                 │
+│  ┌──────────────────────┐     ┌──────────────────────────────┐       │
+│  │  deploy/install.sh    │     │  start.sh                    │       │
+│  │  ┌──────────────────┐ │     │  ┌────────────────────────┐ │       │
+│  │  │ clone repo       │ │     │  │ detect install dir     │ │       │
+│  │  │ uv sync          │ │     │  │ parse --leader/--node  │ │       │
+│  │  │ build frontend   │ │     │  │ load config file       │ │       │
+│  │  │ create config    │ │     │  │ exec uv run ...        │ │       │
+│  │  └──────────────────┘ │     │  └────────────────────────┘ │       │
+│  └──────────────────────┘     └──────────────────────────────┘       │
+├─────────────────────────────────────────────────────────────────────┤
+│                          APPLICATION LAYER                             │
+│  ┌──────────────────────┐     ┌──────────────────────────────┐       │
+│  │  mesh_status.leader   │     │  node.py                     │       │
+│  │  (Quart + Hypercorn)  │     │  (asyncio check agent)      │       │
+│  └──────────┬───────────┘     └──────────────┬───────────────┘       │
+│             │                                 │                       │
+│  ┌──────────┴─────────────────────────────────┴───────────────┐      │
+│  │  mesh_status/ (config.py, persistence.py, models.py, ...)  │      │
+│  └──────────────────────────┬──────────────────────────────────┘      │
+├─────────────────────────────┴────────────────────────────────────────┤
+│                         DATA LAYER                                      │
+│  ┌──────────────────────┐     ┌──────────────────────────────┐       │
+│  │  config.json          │     │  data/ (JSON Lines files)    │       │
+│  │  (~/.config/mesh-     │     │  (~/.local/share/mesh-      │       │
+│  │   status/config.json) │     │   status/data/)             │       │
+│  └──────────────────────┘     └──────────────────────────────┘       │
+└─────────────────────────────────────────────────────────────────────┘
 ```
 
-### Comparison to Established Patterns
+### Existing Component Boundaries
 
-| Pattern | Example | Our Model | Key Difference |
-|---------|---------|-----------|----------------|
-| **Multi-target exporter** | Prometheus Blackbox | Node-initiated push | Blackbox is pull (Prometheus scrapes); our nodes push results |
-| **Worker heartbeat** | Celery, Airflow | Similar (push) | Our payload is per-peer check results, not just liveness |
-| **Gossip protocol** | Consul, Serf | N/A (centralized) | Gossip is peer-to-peer; we have a central leader |
-| **Centralized metrics** | StatsD, Telegraf | Similar (push) | Our nodes are also the probe origin — they measure TO peers |
+| Component | Responsibility | Entry Point |
+|-----------|---------------|-------------|
+| `mesh_status.leader:app` | Quart app with Hypercorn ASGI server | `entrypoint.sh` (Docker) or `python -m mesh_status.leader` |
+| `node.py` | Node agent — periodic connectivity checks | `python node.py --leader-url ...` |
+| `register.py` | CLI registration helper | Direct invocation |
+| `entrypoint.sh` | Docker entrypoint (leader only) | `exec hypercorn mesh_status.leader:app` |
+| `mesh_status/config.py` | Defaults overridden by env vars | Imported by leader + node |
+| `mesh_status/persistence.py` | Appends check results to JSON Lines files | Uses `Path("data")` (CWD-relative) |
 
-## Recommended Project Structure
+### New Component Boundaries (v0.8)
+
+| Component | Responsibility | Entry Point |
+|-----------|---------------|-------------|
+| `deploy/install.sh` | Clone repo, `uv sync`, build frontend, create config | `curl ... | bash` or direct |
+| `start.sh` | Unified runner: detect role, load config, exec app | `start.sh --leader` / `start.sh --node` |
+| config.json | User config file (overrides env var defaults) | Read by `start.sh`, exposed as env vars |
+
+## Recommended Project Structure (after install)
+
+### Install Target Layout
 
 ```
-mesh-status/
-├── leader/                    # Server-side application
+~/.local/share/mesh-status/          # MESH_STATUS_HOME
+├── .venv/                           # uv virtual environment
+├── mesh_status/                     # Python package
 │   ├── __init__.py
-│   ├── app.py                 # Quart app creation, main entry point
-│   ├── config.py              # Configuration (port, defaults)
-│   ├── routes/
-│   │   ├── __init__.py
-│   │   ├── registration.py    # POST /register, node management
-│   │   ├── submission.py      # POST /submit, result ingestion
-│   │   └── data.py            # GET /data, GET /health, data API
-│   ├── services/
-│   │   ├── __init__.py
-│   │   ├── registry.py        # In-memory node registry (thread-safe)
-│   │   ├── results.py         # Result aggregation, status calculation
-│   │   └── persistence.py     # Hourly JSON file writer (background task)
-│   └── templates/             # If Streamlit is separate, otherwise not needed
-│       └── dashboard.py       # Streamlit app (runs as separate process)
-├── node/                      # Node-side client
-│   ├── __init__.py
-│   ├── runner.py              # Main loop, orchestration
-│   ├── checker.py             # ICMP ping + HTTP health check logic
-│   ├── client.py              # HTTP client for leader communication
-│   └── config.py              # CLI args, node-id, leader-ip, interval
-├── register.py                # Registration script (argv/stdin)
-├── requirements.txt
-└── README.md
+│   ├── __main__.py
+│   ├── leader.py
+│   ├── node.py                      # (copied from root)
+│   ├── config.py
+│   ├── persistence.py
+│   ├── models.py
+│   └── status.py
+├── frontend/dist/                   # Pre-built frontend assets
+├── start.sh                         # Unified runner
+├── entrypoint.sh                    # Docker entrypoint (kept for Docker compat)
+├── pyproject.toml
+└── .python-version
+
+~/.config/mesh-status/               # XDG_CONFIG_HOME
+└── config.json                      # User configuration
+
+~/.local/share/mesh-status/data/     # Runtime data (JSON Lines)
+
+~/.local/bin/start.sh                # Symlink → ~/.local/share/mesh-status/start.sh
 ```
 
 ### Structure Rationale
 
-- **`leader/` separate from `node/`:** These are completely different deployment targets with different dependency profiles. The leader has Quart + Streamlit; the node only needs `aiohttp` and standard library. Clean separation prevents accidental cross-contamination.
-- **`leader/routes/`:** Quart route handlers are thin — they validate input, call services, return responses. This keeps HTTP concerns separate from business logic.
-- **`leader/services/`:** Pure business logic with no HTTP awareness. Testable independently. The `registry` and `results` services are in-memory dicts protected by `asyncio.Lock`.
-- **`node/checker.py`:** Houses the two probe types (ping, HTTP) as isolated async functions. Easy to add more probe types later (TCP port check, DNS resolve, etc.).
+- **`~/.local/share/mesh-status/`**: Follows XDG Base Directory spec. This is the install root (`MESH_STATUS_HOME`). Contains everything needed to run — the cloned repo, venv, built frontend.
+- **`~/.config/mesh-status/config.json`**: XDG_CONFIG_HOME location for config. Separate from install directory so config survives reinstall.
+- **`~/.local/share/mesh-status/data/`**: Runtime data (check results) in XDG_DATA_HOME. Separate from config.
+- **`~/.local/bin/start.sh`**: Symlink to the real script. `~/.local/bin` is typically on PATH.
+- **`frontend/` lives inside install dir**: Leader serves frontend from the same port (port 58080). The leader expects `dist/` relative to the install directory.
+- **`node.py` lives inside `mesh_status/`**: Node.py currently lives at root. For installed layout, copy/move it into the mesh_status package so `python -m mesh_status.node` works. This avoids CWD assumptions.
+
+### Why This Layout
+
+1. **XDG compliance**: Standard, portable, respects user's existing conventions
+2. **Self-contained**: The install directory has everything — clone the repo and `uv sync` once, run forever
+3. **Config/data separation**: Config is user-editable, data is runtime, install dir is immutably versioned
+4. **Symlink entry point**: `~/.local/bin/start.sh` is a symlink, so `start.sh --leader` works from any CWD
+5. **Docker compatibility**: Inside Docker, the layout is `/app/...` (same structure, different root). The existing Dockerfiles use `WORKDIR /app` — the start.sh can detect this and adapt.
+
+## Integration Points
+
+### How `start.sh` Finds and Invokes Python Modules
+
+The script MUST determine its install directory first — it lives at the root of the install:
+
+```bash
+# start.sh — self-locating pattern
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+MESH_STATUS_HOME="$SCRIPT_DIR"  # The script is at the install root
+```
+
+From there, it invokes:
+
+| Role | Command | Why |
+|------|---------|-----|
+| `--leader` | `cd "$MESH_STATUS_HOME" && exec uv run python -m mesh_status.leader` | Uses `uv run` to activate venv, `-m mesh_status.leader` to invoke the ASGI entry point. `cd` ensures `Path("data")` in persistence.py resolves to install root. |
+| `--node` | `cd "$MESH_STATUS_HOME" && exec uv run python -m mesh_status.node --leader-url "$LEADER_URL" --node-url "$NODE_URL"` | Same pattern, but for node.py as a module. |
+
+**Alternative (direct venv):** If `.venv/bin/python` exists and uv is not installed:
+```bash
+exec "$MESH_STATUS_HOME/.venv/bin/python" -m mesh_status.leader
+```
+
+This is important because `uv run` is the primary mechanism but we should fall back to direct venv if uv is not available (though install pre-reqs require uv).
+
+### Config File Location and Format
+
+**Path:** `~/.config/mesh-status/config.json` (resolved via `$XDG_CONFIG_HOME` with fallback to `~/.config`)
+
+**Format:** JSON — consistent with the rest of the project (JSON Lines for data, JSON for registration payloads).
+
+```json
+{
+  "leader_url": "http://0.0.0.0:58080",
+  "node_url": "",
+  "check_interval": 10,
+  "log_level": "INFO",
+  "data_dir": "~/.local/share/mesh-status/data"
+}
+```
+
+**How it's consumed by `start.sh`:**
+
+```bash
+# In start.sh — config is read and exported as env vars
+CONFIG_FILE="${XDG_CONFIG_HOME:-$HOME/.config}/mesh-status/config.json"
+if [ -f "$CONFIG_FILE" ]; then
+    LEADER_URL=$(jq -r '.leader_url // "http://0.0.0.0:58080"' "$CONFIG_FILE")
+    LOG_LEVEL=$(jq -r '.log_level // "INFO"' "$CONFIG_FILE")
+    DATA_DIR=$(jq -r '.data_dir // ""' "$CONFIG_FILE")
+    # ... export all as environment variables
+fi
+
+# CLI flags override config file values (order: defaults → config file → CLI flags)
+```
+
+**Why JSON not TOML/YAML:** The project already speaks JSON everywhere — registration payloads, submit payloads, peer push, JSON Lines data storage. Using JSON for config is consistent and avoids pulling in a TOML/YAML parser (jq is ubiquitous). If YAML were needed, Python can read it, but `start.sh` is shell and `jq` is the most portable structured data tool.
+
+**Env var mapping** (what config.py already expects):
+
+| Config Key | Env Var | Default |
+|------------|---------|---------|
+| `leader_url` | `LEADER_URL` | `http://0.0.0.0:58080` |
+| `check_interval` | `MESH_STATUS_INTERVAL` | `10` |
+| `log_level` | `MESH_STATUS_LOG_LEVEL` | `INFO` |
+| `data_dir` | `DATA_DIR` | `~/.local/share/mesh-status/data` |
+| `buffer_size` | `MESH_STATUS_BUFFER_SIZE` | `20000` |
+| `peer_push_timeout` | `MESH_STATUS_PEER_PUSH_TIMEOUT` | `5` |
+| `grace_period` | `MESH_STATUS_GRACE_PERIOD` | `120` |
+
+### Relationship Between Docker `entrypoint.sh` and New `start.sh`
+
+| Aspect | `entrypoint.sh` (Docker) | `start.sh` (Unified) |
+|--------|--------------------------|----------------------|
+| **Role** | Leader only | Leader OR Node |
+| **Environment** | Assumes venv on PATH (`/app/.venv/bin`) | Locates install dir, uses `uv run` |
+| **Config source** | Env vars only | Config file → Env vars → CLI flags |
+| **Data directory** | `$DATA_DIR` (env) | Configurable via config file |
+| **Execution style** | `exec hypercorn ...` (direct) | `exec uv run python -m ...` |
+| **PID 1 behavior** | Yes (Docker CMD) | Yes (general process) |
+| **CWD handling** | None needed (WORKDIR /app) | `cd` to install dir |
+
+**Shared patterns:**
+- Both use `exec` to replace the shell process with the Python process
+- Both set `LEADER_URL` as an env var before exec
+- Both respect `DATA_DIR` env var (though persistence.py currently doesn't read it — see Critical Integration Issue below)
+- Both use `set -e` for fail-fast behavior
+
+**Key difference:** `entrypoint.sh` is intentionally minimal — just env parsing + exec. `start.sh` is richer — config file loading, role selection, interactive config setup. This is appropriate: Docker containers get config via environment (the Docker way), while bare-metal installs benefit from a config file.
+
+### How `start.sh` Works Both Inside and Outside Docker
+
+**Detection logic:**
+```bash
+# If /app exists and contains mesh-status, we're inside Docker
+if [ -d "/app/mesh_status" ] && [ -f "/app/pyproject.toml" ]; then
+    MESH_STATUS_HOME="/app"
+else
+    # Self-locate: start.sh lives at install root
+    SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+    MESH_STATUS_HOME="$SCRIPT_DIR"
+fi
+```
+
+**Inside Docker:** The existing `Dockerfile.node` already uses `CMD exec uv run python node.py ...`. When migrating to `start.sh`, it would become `CMD ["/app/start.sh", "--node"]` or equivalent. The `entrypoint.sh` remains for backward compatibility but `start.sh` could eventually replace it.
+
+**Outside Docker:** `start.sh` does its self-location dance, loads config from `~/.config/mesh-status/config.json`, and execs the right Python module.
+
+### What Existing Code Paths Need Modification
+
+| File | Change Required | Why | Risk |
+|------|----------------|------|------|
+| `mesh_status/persistence.py` | **READ `DATA_DIR` env var** | Currently uses `Path("data")` (CWD-relative). The start.sh works around this by `cd`-ing to install dir, but the proper fix is to check `os.environ.get("DATA_DIR", ...)` to respect the env var that `entrypoint.sh` already sets. Without this fix, non-Docker runs could write data to unexpected locations. | **Low** — env var with fallback to current behavior |
+| `node.py` location | **Move into `mesh_status/` package OR copy in install.sh** | Currently at root (`root/node.py`). For `python -m mesh_status.node` to work, node.py must be a module. Either move it OR have `install.sh` copy it into the install dir. Moving it (and adding `if __name__ == "__main__"` back) is cleaner long-term. | **Low** — mechanical change |
+| `leader.py` `dist_dir` | **Verify path resolution** | `Path(__file__).resolve().parent.parent / "dist"` resolves to `root/dist/` when run from root, but under install layout it becomes `mesh_status/../../dist/` which also resolves to the install root. This actually works correctly already. | **None** — already correct |
+| `entrypoint.sh` | **No change needed** | Remains the Docker entrypoint. `start.sh` is additive. | **None** |
+| `Dockerfile.node` | **Optional: switch to start.sh** | Could use `CMD ["/app/start.sh", "--node"]` for consistency. Not required. | **Low** — pure refactor |
+
+**Critical Integration Issue — DATA_DIR in persistence.py:**
+
+```python
+# Current (bug): ignores DATA_DIR env var
+DATA_ROOT = Path("data")
+
+# Fix: respect DATA_DIR env var
+DATA_ROOT = Path(os.environ.get("DATA_DIR", "data"))
+```
+
+This is the single most important code change. Without it:
+- Docker already sets `DATA_DIR=/app/data` (but persistence ignores it)
+- start.sh must `cd` to install dir for relative `Path("data")` to work
+- Users who run from a different CWD lose data
+
+### Repository Cloning vs Direct Download
+
+**Recommendation: Clone with git.**
+
+| Approach | Pros | Cons |
+|----------|------|------|
+| **Clone** (git clone) | - Prereq git already installed<br>- Easy updates (`git pull`)<br>- User can inspect full source<br>- Version pinning via tags | - Larger download<br>- Requires git |
+| **Direct download** (curl tarball) | - Smaller initial download | - No easy update path<br>- Harder to verify integrity<br>- Need to handle tarball extraction |
+| **Git archive / tarball** | - Smaller than full clone | - No update path<br>- Still need to download |
+
+Since git is already a prerequisite, **clone is the clear winner**. The install.sh workflow:
+
+```bash
+git clone --depth 1 --branch <tag> https://github.com/<org>/mesh-status.git "$MESH_STATUS_HOME"
+uv sync --directory "$MESH_STATUS_HOME"
+uv run --directory "$MESH_STATUS_HOME" node frontend/build.js  # or npm run build
+```
 
 ## Architectural Patterns
 
-### Pattern 1: Push-Based Result Collection
+### Pattern 1: Self-Locating Shell Script
 
-**What:** Nodes initiate all communication. They register with the leader, periodically fetch the peer list, run checks, and POST results. The leader never initiates connections to nodes.
+**What:** The shell script determines its own install directory at runtime, so it can find sibling files (venv, Python modules) regardless of the user's CWD.
 
-**When to use:** When nodes are behind NAT/VPN, have dynamic IPs, or the leader shouldn't need inbound connectivity to every node. This is the correct fit for mesh-status (VMs across geographies over VPN WAN).
-
-**Trade-offs:**
-- + Leader is simpler (no connection management, no reverse-connect)
-- + Works through firewalls (outbound HTTP from nodes only)
-- - Leader cannot detect node failure instantly (must infer from absence of submissions)
-- - Node must poll for peer list changes (eventual consistency)
-
-**Example (node check loop):**
-```python
-async def check_loop():
-    """Node main loop: fetch peers, check, submit, sleep."""
-    while True:
-        try:
-            peers = await client.fetch_node_list()
-            results = await checker.run_all_checks(peers)
-            await client.submit_results(results)
-            # Clear any buffered failures from previous cycles
-            client.clear_buffer()
-        except SubmissionError:
-            # Buffer results for retry
-            client.buffer_results(results)
-        await asyncio.sleep(interval)
+```bash
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 ```
 
-### Pattern 2: In-Memory State with Periodic Snapshot Persistence
+**When to use:** Any script that needs to reference files relative to its own location. Critical for `start.sh` — users may run it from any directory.
 
-**What:** The leader holds all state (node registry, latest results) in memory. A background asyncio task snapshots the state to JSON files every hour. On leader restart, state starts fresh — only the persisted JSON history survives.
+**Trade-offs:** Resolving symlinks requires `readlink -f` (Linux) or `-f` flag which isn't POSIX. For the symlink case (`~/.local/bin/start.sh` → `~/.local/share/mesh-status/start.sh`), we follow the link:
 
-**When to use:** When state is ephemeral by nature (current connectivity status) and persistence is for audit/history, not for recovery. The "source of truth" is each node's current report, not the on-disk archive.
-
-**Trade-offs:**
-- + Extremely simple — no database, no migrations, no connection pools
-- + JSON files are human-readable and debuggable
-- + Writes are batched (hourly), so no per-submission disk I/O
-- - Leader restart = lost in-memory state (nodes must re-register and re-report)
-- - JSON file grows unbounded if no rotation/retention policy
-- - Not suitable for high-write-volume or strong durability requirements
-
-**Example (background persistence task in Quart):**
-```python
-@app.before_serving
-async def start_persistence_task():
-    """Start hourly persistence as a background asyncio task."""
-    async def persist_loop():
-        while True:
-            await asyncio.sleep(3600)
-            await persistence.write_snapshot(
-                registry=app.registry,
-                results=app.results_accumulator
-            )
-    app.bg_tasks.append(asyncio.create_task(persist_loop()))
+```bash
+# Follow symlink to real location
+if [ -L "$0" ]; then
+    SCRIPT_DIR="$(cd "$(dirname "$(readlink -f "$0")")" && pwd)"
+else
+    SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+fi
 ```
 
-### Pattern 3: Concurrent Semaphore-Limited Probe Execution
+### Pattern 2: Config Layering (Defaults → File → Env → CLI)
 
-**What:** On the node, checks against all peers run concurrently but with a semaphore cap to prevent overwhelming the node's network stack or CPU with too many simultaneous `ping` subprocesses.
+**What:** Configuration is resolved in a precedence chain where each layer overrides the previous.
 
-**When to use:** When the number of peers can be large (10+), and running 50+ concurrent subprocesses could degrade node performance or skew timing measurements.
-
-**Trade-offs:**
-- + Prevents resource exhaustion (too many subprocesses, socket buffers)
-- + Still takes advantage of concurrency for latency hiding
-- - Semaphore adds a small scheduling overhead
-- - If semaphore is too small, check cycle takes too long
-
-**Example:**
-```python
-async def run_all_checks(peers: list[str], max_concurrent: int = 10) -> list[CheckResult]:
-    """Run ping + HTTP health checks against all peers concurrently, 
-    limited by semaphore."""
-    sem = asyncio.Semaphore(max_concurrent)
-    
-    async def check_one(peer_ip: str) -> CheckResult:
-        async with sem:
-            ping_ok, ping_ms = await run_ping(peer_ip)
-            http_ok, http_ms = await run_healthz(peer_ip)
-            return CheckResult(
-                target=peer_ip,
-                ping_success=ping_ok,
-                ping_latency_ms=ping_ms,
-                http_success=http_ok,
-                http_latency_ms=http_ms,
-                timestamp=time.time()
-            )
-    
-    return await asyncio.gather(*[check_one(p) for p in peers])
 ```
+Defaults (hardcoded in config.py)
+    ↓ (overridden by)
+Config file (~/.config/mesh-status/config.json)
+    ↓ (overridden by)
+Environment variables (set by user or Docker)
+    ↓ (overridden by)
+CLI flags (--leader-url, etc.)
+```
+
+**When to use:** Any application that needs to support multiple deployment modes (Docker, bare-metal, dev).
+
+**Trade-offs:** More complex than a single config source, but necessary for this project's hybrid deployment model (Docker env vars + bare-metal config files).
+
+### Pattern 3: Config File → Env Var Bridge
+
+**What:** The shell script reads a JSON config file and exports the values as environment variables before exec'ing the Python process. The Python code reads env vars (as it already does in `config.py`).
+
+```bash
+# start.sh — bridge config file to env vars
+CONFIG_FILE="${XDG_CONFIG_HOME:-$HOME/.config}/mesh-status/config.json"
+if command -v jq &>/dev/null && [ -f "$CONFIG_FILE" ]; then
+    export MESH_STATUS_INTERVAL=$(jq -r '.check_interval // 10' "$CONFIG_FILE")
+    export MESH_STATUS_LOG_LEVEL=$(jq -r '.log_level // "INFO"' "$CONFIG_FILE")
+    export DATA_DIR=$(jq -r '.data_dir // ""' "$CONFIG_FILE")
+fi
+```
+
+**When to use:** When the Python app already uses env vars for config (as `mesh_status/config.py` does), and you want to add config file support without rewriting the Python config layer.
+
+**Trade-offs:** Requires `jq` for JSON parsing in shell. If jq is not available, fall back to env-only. For minimal-footprint installs, consider shipping a tiny JSON parser or using Python itself to parse the config file (but that's chicken-and-egg for `start.sh`).
 
 ## Data Flow
 
-### Registration Flow
+### Install Flow
 
 ```
-Node Starts
-    │
-    ▼
-Read CLI args: --node-ip=<IP> --leader-ip=<IP>
-    │
-    ▼
-POST /register  {"node_id": "<hostname>", "node_ip": "<IP>"}
-    │
-    ▼
-Leader Handler:
-    1. Validate IP format
-    2. Add/update entry in Node Registry (in-memory dict)
-    3. Set status = "Pending" (no results yet, future data expected)
-    4. Return 200 + full peer list
-         │
-         ▼
-Node receives peer list → begins check loop
+User runs: curl https://raw.githubusercontent.com/.../deploy/install.sh | bash
+    ↓
+install.sh:
+  1. Parse MESH_STATUS_HOME (default: ~/.local/share/mesh-status)
+  2. Verify prerequisites: uv, git
+  3. Clone repo: git clone --depth 1 <url> "$MESH_STATUS_HOME"
+  4. Create venv + install deps: uv sync
+  5. Build frontend: cd frontend && npm ci && npm run build
+  6. Create config dir: mkdir -p ~/.config/mesh-status
+  7. Interactive config prompt (or --non-interactive with flags)
+  8. Write config.json
+  9. Create data dir: mkdir -p "$DATA_DIR"
+  10. Install start.sh symlink: ln -s "$MESH_STATUS_HOME/start.sh" ~/.local/bin/start.sh
+  11. Print success message with usage instructions
 ```
 
-### Check + Submit Flow (per cycle)
+### Runtime Flow (Leader)
 
 ```
-Node Check Cycle (every N seconds, default 10s):
-    │
-    ├── 1. GET /node-list (fetch updated peer list from leader)
-    │         Returns: {"nodes": [{"id": "vm1", "ip": "10.x.x.1"}, ...]}
-    │
-    ├── 2. For each peer (concurrent, semaphore-limited):
-    │         │
-    │         ├── a. system ping -c 1 -W <timeout> <peer_ip>
-    │         │       → success(bool), latency_ms(float|None)
-    │         │
-    │         ├── b. HTTP GET http://<peer_ip>:58080/healthz
-    │         │       → success(bool), latency_ms(float|None)
-    │         │
-    │         └── c. Produce CheckResult object
-    │
-    ├── 3. POST /submit {"node_id": "vm1", "checks": [...], "timestamp": ...}
-    │         │
-    │         ├── Success → clear in-memory retry buffer ✓
-    │         └── Failure → append checks to retry buffer ✗
-    │
-    └── 4. Sleep for remaining interval time
+User runs: start.sh --leader [--port 58080]
+    ↓
+start.sh:
+  1. Resolve install directory (self-locate)
+  2. Parse --leader flag + optional args
+  3. Load config file → export env vars
+  4. CLI flags override env vars
+  5. cd to MESH_STATUS_HOME
+  6. exec uv run python -m mesh_status.leader
+    ↓
+mesh_status.leader.main():
+  7. Reads LEADER_URL from env → determines port
+  8. Starts Quart app on Hypercorn
+  9. Serves API + frontend from port 58080
+  10. Persists data to DATA_DIR/data/
 ```
 
-### Data Retrieval Flow
+### Runtime Flow (Node)
 
 ```
-Streamlit Frontend (or any HTTP client)
-    │
-    ▼
-GET /data?window=30m
-    │
-    ▼
-Leader:
-    1. Read in-memory results accumulator (last ~30 min worth)
-    2. For each node, calculate status:
-         - If result exists → OK (with latency stats)
-         - If no result, but node registered → Pending
-         - If node not registered → NotAvailable
-    3. Return JSON response
-         │
-         ▼
-Streamlit renders connectivity matrix:
-    - Green/red cells for each node→node pair
-    - Latency tooltips
-    - Aggregated uptime for 30-day view
+User runs: start.sh --node --leader-url http://leader:58080 --node-url http://node1:58081
+    ↓
+start.sh:
+  1. Resolve install directory
+  2. Parse --node flag + --leader-url, --node-url
+  3. Load config file → export env vars
+  4. CLI flags override env vars
+  5. cd to MESH_STATUS_HOME
+  6. exec uv run python -m mesh_status.node --leader-url "$LEADER_URL" --node-url "$NODE_URL"
+    ↓
+node.py (as module):
+  7. Parses --leader-url and --node-url
+  8. Registers with leader
+  9. Begins periodic check cycles
+  10. Buffers results, submits to leader
 ```
-
-### State Management
-
-```
-┌─────────────────────────────────────────────────────────┐
-│              Leader In-Memory State                       │
-│                                                           │
-│  node_registry: dict[str, NodeInfo]                       │
-│    {"vm1": {"ip": "10.0.0.1", "registered_at": ...,       │
-│             "last_seen": ..., "status": "Pending"}}        │
-│                                                           │
-│  check_results: dict[str, list[CheckResult]]              │
-│    {"vm1": [CheckResult, ...], "vm2": [CheckResult, ...]} │
-│    Keyed by source node_id. Each list ordered by time.    │
-│    Retained in memory for the data API window.            │
-│                                                           │
-│  On-disk: data/2026/06/18.json                          │
-│    Hourly snapshot of accumulated results.                │
-│    Format: timestamped array of CheckResults.             │
-└─────────────────────────────────────────────────────────┘
-```
-
-### Key Data Flows
-
-1. **Node Registration:** Node → POST /register → Leader adds to in-memory registry → Returns peer list. Only happens once per node process start (unless leader restarts and cache is lost).
-
-2. **Periodic Check Cycle:** Node fetches peer list → Runs N concurrent checks → POSTs results → Leader accumulates in memory → Background task persists to JSON hourly.
-
-3. **Frontend Query:** Streamlit → GET /data → Leader reads in-memory results → Computes statuses → Returns JSON → Streamlit renders matrix.
-
-4. **Node Failure Detection (implied):** Leader marks node as `NotAvailable` if no submission received within (3 × check_interval). This is a soft detection — no explicit health check from leader to node. The threshold is computed at query time based on `last_seen` vs current time.
-
-## Threading / Async Model
-
-### Leader (Quart)
-
-- **Single process, single event loop.** Quart is fully async (ASGI). All request handlers are `async def`.
-- **Background tasks are asyncio Tasks.** The hourly persistence writer runs as a `create_task` started in `@app.before_serving`. No threading needed.
-- **Shared state protected by `asyncio.Lock`.** The node registry dict and results accumulator are accessed from multiple coroutines (registration, submission, data query, persistence). Use `async with lock:` for any write and for read+write operations.
-- **Streamlit runs as a separate process.** Streamlit is synchronous and blocks its own process. It runs as a subprocess or separate systemd unit, calling the leader's HTTP API. Do NOT embed Streamlit in the Quart process.
-
-### Node (Python script)
-
-- **Primarily async with some sync bits.** The main loop is async (uses `aiohttp` for HTTP), but `ping` subprocesses are spawned via `asyncio.create_subprocess_exec` (which is async).
-- **Concurrent checks via `asyncio.gather`.** All peer checks run concurrently in a single event loop iteration, not sequentially. This is the key performance design decision — for a 10-peer mesh, checks complete in ~max(ping_timeout) not ~10×ping_timeout.
-- **Subprocess timeout via `asyncio.wait_for`.** Each `ping` subprocess is wrapped in `asyncio.wait_for(proc.communicate(), timeout=5)` to prevent hung pings from blocking the cycle.
-- **No threading, no multiprocessing.** The node is lightweight — async handles I/O concurrency (HTTP to leader, subprocess I/O for ping). Threading would add complexity without benefit for I/O-bound probing.
-
-### Async Model Trade-offs
-
-| Concern | Decision | Rationale |
-|---------|----------|-----------|
-| Node check concurrency | `asyncio.gather` + semaphore | Maximizes latency hiding; semaphore prevents subprocess overload |
-| Ping subprocess | `asyncio.create_subprocess_exec` | Non-blocking; event loop continues while ping runs |
-| Subprocess timeout | `asyncio.wait_for` | Prevents stuck pings from accumulating; mandatory for robustness |
-| Leader state locking | `asyncio.Lock` | Simple, sufficient for single-process leader |
-| Background I/O (disk) | `aiofiles` or run in executor | `aiofiles` for async file writes; fallback to `run_in_executor` for sync JSON serialization |
-| Streamlit integration | Separate process + HTTP | Streamlit is synchronous; embedding would block Quart's event loop |
 
 ## Scaling Considerations
 
-| Scale | Architecture Adjustments |
-|-------|--------------------------|
-| 1–20 nodes (prototype) | Single leader process, in-memory state, hourly JSON writes. No changes needed. |
-| 20–200 nodes | Add result retention policy (delete daily files older than X days). Potential memory pressure from in-memory results — cap rings per node. |
-| 200+ nodes | Move to SQLite or PostgreSQL for persistence. Consider partitioning the leader into separate ingestion and query services. |
+| Concern | Single VM (current) | Multi-VM with install script | Notes |
+|---------|---------------------|------------------------------|-------|
+| **Config distribution** | Manual per-VM | Install.sh per-VM is the distribution mechanism | Each VM runs its own install; config connects them |
+| **Data directory** | CWD-relative | Absolute path in config | Must fix DATA_DIR in persistence.py |
+| **Updates** | git pull in install dir | git pull in MESH_STATUS_HOME | Consider adding --update flag to start.sh |
+| **Multiple instances** | Not supported | Not supported | Each VM runs one leader or one node |
+| **Config file conflicts** | N/A | Single config.json | Simple JSON, no merge complexity |
 
 ### Scaling Priorities
 
-1. **First bottleneck: Node check cycle length.** As peers grow, `asyncio.gather` with semaphore keeps cycle time bounded by `max(ping_timeout)`, not `N * ping_timeout`. The semaphore's max_concurrent may need tuning upward. At extreme scale (500+ nodes), consider staggered check cycles or sampling only a subset of peers per cycle.
-
-2. **Second bottleneck: Leader result ingestion.** At high submission frequency (many nodes, short intervals), the leader's `POST /submit` handler and `asyncio.Lock` contention could become a bottleneck. Mitigation: batch results in-memory and use lock-free structures (e.g., `deque` per node with atomic append).
-
-3. **Third bottleneck: JSON persistence.** Hourly writes of accumulated results could become large. Mitigation: split per-node files or per-hour files. At prototype scale this is irrelevant.
+1. **First bottleneck: Data directory confusion** — persistence.py's `Path("data")` breaks when run from wrong CWD. Fix before v0.8 ships.
+2. **Second bottleneck: Non-interactive install** — CI/testing needs `--non-interactive` mode from day one. Include in install.sh.
 
 ## Anti-Patterns
 
-### Anti-Pattern 1: Leader Polls Nodes
+### Anti-Pattern 1: Requiring CWD to Be Install Directory
 
-**What people do:** Having the leader send health checks to every node (pull model).
+**What people do:** Assuming the user runs `start.sh` from the install directory, so relative paths work.
 
-**Why it's wrong:** Requires the leader to have inbound connectivity to all nodes. In a VPN WAN with dynamic IPs, this adds complexity (reverse tunnel, dynamic DNS) and a single point of network failure. If the leader is behind NAT, it flat-out doesn't work.
+**Why it's wrong:** Users symlink `start.sh` to `~/.local/bin/` and run it from anywhere (`/tmp`, home directory, etc.). Relative paths break.
 
-**Do this instead:** Push model — nodes initiate all contact. The leader is a passive collector. Node failure is inferred from absence of reports.
+**Do this instead:** Self-locate the script directory, `cd` to it before running, or use absolute paths resolved from the script location.
 
-### Anti-Pattern 2: Synchronous Sequential Checks
+### Anti-Pattern 2: Hardcoding Data Path in Persistence
 
-**What people do:** Looping through peers one at a time: `for peer in peers: ping(peer)`.
+**What people do:** Using a hardcoded relative path like `Path("data")` in persistence code.
 
-**Why it's wrong:** For a 10-peer mesh with 5-second ping timeout, the check cycle takes 50+ seconds. The node barely finishes one cycle before the next is due. This makes the check interval meaningless and misses the point of distributed probing.
+**Why it's wrong:** The existing `entrypoint.sh` already sets `DATA_DIR` env var, but `persistence.py` ignores it. This creates an invisible coupling between the shell script's `cd` and the Python module's behavior.
 
-**Do this instead:** Run all peer checks concurrently via `asyncio.gather` with a semaphore. The cycle time becomes `max(ping_timeout)` plus HTTP overhead, which is typically 5–10 seconds regardless of peer count.
+**Do this instead:** Read `DATA_DIR` from env var with fallback to `Path("data")`. This makes the behavior explicit and overridable.
 
-### Anti-Pattern 3: Too Much State on Nodes
+### Anti-Pattern 3: Config File in Install Directory
 
-**What people do:** Having nodes buffer hours of results, implement their own persistence, or maintain complex retry queues.
+**What people do:** Writing config.json inside the cloned repo directory.
 
-**Why it's wrong:** Nodes should be stateless probes — they ping, report, forget. The leader owns state and history. If a node crashes, the leader detects the absence and marks it `NotAvailable`. Buffering only the current cycle's results for retry is sufficient.
+**Why it's wrong:** A `git pull` update could overwrite user config. User edits to config are lost on reinstall.
 
-**Do this instead:** In-memory buffer on the node for failed submissions (one cycle's worth). Discard on successful submission. No disk persistence on nodes.
+**Do this instead:** Use XDG config path (`~/.config/mesh-status/config.json`). Config lives outside the install directory so it survives reinstalls.
 
-### Anti-Pattern 4: JSON Write Per Submission
+### Anti-Pattern 4: Shell Script Doing Too Much
 
-**What people do:** Opening and writing to the JSON file on every `POST /submit`.
+**What people do:** Putting complex logic (validation, networking, parsing) in the shell script.
 
-**Why it's wrong:** Disk I/O is orders of magnitude slower than in-memory operations. With frequent submissions (every 10s × N nodes), this causes thundering-herd writes, filesystem contention, and leader slowdown. JSON serialization is CPU-bound and blocks the event loop.
+**Why it's wrong:** Shell is fragile, hard to test, and error messages are cryptic. Complex logic belongs in Python.
 
-**Do this instead:** Accumulate results in memory for the duration of the write window (1 hour). Write once per hour in a background asyncio task. The in-memory structures serve the data API; the JSON files are a historical archive.
+**Do this instead:** Shell script handles: directory detection, config loading, env var export, exec. Python handles: validation, networking, complex config logic. The line between `start.sh` and `mesh_status/` is: shell = platform integration + exec; Python = everything else.
 
 ## Integration Points
 
 ### External Services
 
-| Service | Integration Pattern | Notes |
-|---------|---------------------|-------|
-| System `ping` binary | Subprocess (`asyncio.create_subprocess_exec`) | Use `-c 1 -W <timeout>` flags. Parse stdout for latency. Handle missing binary gracefully. |
-| Node `/healthz` endpoint | HTTP GET via `aiohttp` | Lightweight HTTP server on each node (could be a trivial Python one-liner or just Quart's health route). Timeout is critical. |
-| Leader HTTP API | HTTP POST/GET via `aiohttp` (node side), Quart routes (server side) | Both sides use JSON payloads. Use `aiohttp.ClientSession` with connection pooling on the node. |
+| Service | Integration | Notes |
+|---------|-------------|-------|
+| GitHub (repo clone) | `git clone` in install.sh | Shallow clone (`--depth 1`) minimizes download |
+| **Existing Dockerfiles** | `CMD` can use start.sh or stay as-is | No migration needed; start.sh is additive |
+| **Existing entrypoint.sh** | Unchanged | Docker-specific; start.sh is for bare-metal |
 
 ### Internal Boundaries
 
 | Boundary | Communication | Notes |
 |----------|---------------|-------|
-| Routes → Services | Direct async function call within same process | Routes import service functions, await them. No RPC or message bus needed for single-process leader. |
-| Services → State | In-memory dicts + `asyncio.Lock` | Keep locks fine-grained. A single global lock hurts concurrency; prefer per-structure locks. |
-| State → Persistence | Background asyncio task reads state, writes file | Persistence task accesses state dicts (with lock guard). Writes via `aiofiles.open()` or `loop.run_in_executor()`. |
-| Leader → Streamlit | HTTP (leader serves data API, Streamlit calls it) | Streamlit runs as separate process. Leader exposes `GET /data?window=30m` and `GET /data?window=30d`. |
-
-## Build Order Implications
-
-Because components have clear dependency relationships, the build order matters:
-
-```
-Phase 1: Leader Core (Foundation)
-  ├── app.py (Quart scaffold) — nothing works without this
-  ├── config.py
-  ├── routes/registration.py — POST /register
-  ├── services/registry.py — in-memory node registry
-  └── routes/submission.py — POST /submit
-  → Can verify: curl register → curl submit → see in-memory state
-
-Phase 2: Node Core (Foundation)
-  ├── config.py (CLI args)
-  ├── client.py (HTTP to leader)
-  ├── checker.py (ping + healthz probes)
-  └── runner.py (main loop)
-  → Can verify: register node → see checks submitted to leader
-
-Phase 3: Persistence + Data API
-  ├── services/persistence.py (hourly JSON writer)
-  ├── services/results.py (aggregation, status calc)
-  └── routes/data.py (GET /data endpoint)
-  → Can verify: data flows from node → leader memory → JSON file
-
-Phase 4: Frontend
-  ├── templates/dashboard.py (Streamlit app)
-  → Can verify: dashboard queries /data, renders matrix
-
-Phase 5: Hardening
-  ├── Node result buffer + retry logic
-  ├── Leader NotAvailable detection
-  ├── Error handling, logging, timeouts
-  → Can verify: kill node → see NotAvailable; kill leader → node re-registers
-```
-
-**Key dependency:** Phase 1 must be complete before Phase 2 can be tested end-to-end (node needs leader to POST to). Phase 1 and Phase 2 could be built in parallel if stubs are used, but the first integration test requires both.
+| `start.sh` → `mesh_status` module | Env vars + CLI args | The bridge pattern: shell sets env vars, Python reads them |
+| `start.sh` → `config.json` | Shell reads with `jq` (if available) | Falls back to env-only if `jq` not present |
+| `install.sh` → filesystem | Creates directories, clones repo | Non-interactive mode uses CLI flags instead of prompts |
+| `deploy/install.sh` ↔ `start.sh` | Shared install directory convention | Both know about `MESH_STATUS_HOME` |
 
 ## Sources
 
-- [Prometheus Blackbox Exporter architecture](https://github.com/prometheus/blackbox_exporter) — multi-target probe pattern (HIGH confidence)
-- [Heartbeats in Distributed Systems](https://arpitbhayani.me/blogs/heartbeats-in-distributed-systems) — push vs pull heartbeat models (MEDIUM confidence, blog source)
-- [Python asyncio subprocess docs](https://docs.python.org/3/library/asyncio-subprocess.html) — async subprocess.create_subprocess_exec for ping (HIGH confidence)
-- [Python asyncio task docs](https://docs.python.org/3/library/asyncio-task.html) — asyncio.gather, asyncio.timeout, TaskGroup (HIGH confidence)
-- [Simon Willison — subprocess time limit with asyncio](https://til.simonwillison.net/python/subprocess-time-limit) — async subprocess timeout pattern (MEDIUM confidence, blog)
-- [Quart docs](https://quart.palletsprojects.com/en/latest/) — async request handlers, background tasks (HIGH confidence)
+- **Existing codebase**: Verified against `entrypoint.sh`, `Dockerfile.leader`, `Dockerfile.node`, `node.py`, `leader.py`, `persistence.py`, `config.py`, `compose.yml`
+- **XDG Base Directory Specification**: `~/.config/`, `~/.local/share/`, `~/.local/bin/` — standard for Linux user-level installs
+- **uv documentation**: `uv run` activates project venv automatically — used as primary runner mechanism; `uv sync --directory` for non-CWD projects
+- **uv run patterns**: Projects like Homebrew, Rustup, Tailscale use curl|bash for initial install + a binary/script for daily use
+- **jq ubiquity**: jq is the de-facto standard for JSON in shell scripts (pre-installed on Ubuntu, Debian, Fedora, RHEL, macOS)
 
 ---
-*Architecture research for: mesh-status distributed connectivity testing*
-*Researched: 2026-06-18*
+
+*Architecture research for: mesh-status v0.8 install/start scripts*
+*Researched: 2026-06-20*

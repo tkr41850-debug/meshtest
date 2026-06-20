@@ -1,473 +1,710 @@
 # Pitfalls Research
 
-**Domain:** Distributed mesh connectivity testing over VPN WAN
-**Researched:** 2026-06-18
-**Confidence:** HIGH (research cross-referenced with official docs, real issue trackers, and production post-mortems)
+**Domain:** Adding curl-pipe-bash install scripts, start.sh runner, and interactive config to existing Python (Quart) application
+**Researched:** 2026-06-20
+**Confidence:** HIGH (research cross-referenced with official docs, real issue trackers, production post-mortems, and project-specific codebase analysis)
 
 ## Critical Pitfalls
 
-### Pitfall 1: Concurrent JSON File Writes Without Locking (Read-Modify-Write Race)
+### Pitfall 1: Missing `pipefail` in curl-pipe-bash Pipeline Causes Silent Install Failure
 
 **What goes wrong:**
-Multiple nodes submit check results concurrently. The leader's hourly write handler reads the day's JSON file, appends new results, and writes it back. Without synchronization, two concurrent writes interleave: Writer A reads state S₀, Writer B reads the same S₀, both modify, both write. One write silently overwrites the other. Data is lost — no error, no log, no indication. In the worst case, the file ends up truncated or contains interleaved JSON fragments (`{"checks":[...]}{"checks":[...]`), causing `JSONDecodeError` on every subsequent read.
+`curl -fsSL https://example.com/install.sh | bash` succeeds (exit 0) even when `curl` fails with an HTTP 403, 429, or transient network error. The user sees no error message — `bash` receives an empty or partial stdin, does nothing useful, and exits 0. The install "completes" silently, leaving the system in an inconsistent state with no installed software and no indication anything went wrong.
 
 **Why it happens:**
-JSON persistence to a single file is a classic read-modify-write pattern. Python's `json.load()` then `json.dump()` is not atomic. The OS provides no inter-process coordination by default. Developers assume "Python's GIL protects me" — but the GIL protects in-memory operations, not file I/O between processes or between async tasks in the same process that yield at `await`.
-
-This is exactly the bug Netflix Metaflow found in their JSON state files (PR #3006), the P0 session state corruption in QwenPaw (PR #3278), and the silent data loss in Hive's state.json (Issue #6696). All are variations of the same pattern: non-atomic read-modify-write on shared JSON files.
+In a bash pipe, the exit code is from the **last** command (`bash`), not the first (`curl`). Without `set -o pipefail`, the pipeline exits 0 as long as `bash` (receiving empty stdin) exits 0. This is exactly the bug that hit the `claude-code-action` installer (issue #1136) — curl 429 rate limit → empty pipe → bash exits 0 → GitHub Action reported "Claude Code installed successfully" → subsequent `which claude` failed. Three-attempt retry logic never triggered because every attempt silently succeeded.
 
 **How to avoid:**
-1. **Atomic write pattern (minimum):** Write to a temporary file in the same directory, `os.fsync()`, then `os.replace()` to atomically swap. This prevents readers from seeing a half-written file but does NOT prevent lost writes from concurrent writers.
-2. **File locking for writer exclusion (recommended):** Acquire an exclusive `fcntl.flock()` (POSIX) on a dedicated `.lock` file (NOT the data file, because `os.replace` changes the inode) around the entire read-modify-write cycle. The lock file has a stable inode; the data file can be atomically replaced underneath it.
-3. **Separate lock + atomic write (best):** Use a `.lock` file for `flock` serialization AND write to a temp file + `os.replace` for crash safety. This provides both writer exclusion and crash durability.
-4. **Simpler alternative for this project:** Write each check result as an **append-only JSON line** (one JSON object per line) instead of rewriting the full file. Each writer just appends. The daily aggregation can read the whole file after rotation. This avoids the read-modify-write problem entirely.
+1. **Never use bare `curl ... | bash`** — always prepend `set -o pipefail`:
+   ```bash
+   set -o pipefail
+   curl -fsSL https://github.com/user/repo/releases/latest/download/install.sh | bash
+   ```
+2. **Even better: download-then-execute** (decouples fetch errors from execution):
+   ```bash
+   curl -fsSL -o /tmp/mesh-install.sh https://github.com/user/repo/releases/latest/download/install.sh
+   bash /tmp/mesh-install.sh
+   rm -f /tmp/mesh-install.sh
+   ```
+3. **Post-install verification** — always verify the binary exists:
+   ```bash
+   command -v mesh-status || { echo "Install failed"; exit 1; }
+   ```
 
 **Warning signs:**
-- Intermittent "missing" check results in the dashboard that don't correlate with actual node failures
-- `JSONDecodeError: Extra data` or `JSONDecodeError: Expecting value` on the leader when reading day files
-- Files that start with valid JSON but have garbage at the end
-- File size not matching expected data volume
+- CI logs show "Installation complete" but `which mesh-status` fails in subsequent steps
+- Empty `/tmp/` download artifacts when debugging
+- curl exit codes masked in CI pipeline output
 
 **Phase to address:**
-Phase 1 (Core Leader Implementation) — the file writing path must be correct from the first commit. Retrofitting atomic writes is harder once data accumulates.
+Phase 1 (`deploy/install.sh`) — the curl-pipe-bash line itself must be hardened at creation. Retrofitting pipefail is trivial but easy to forget.
 
 ---
 
-### Pitfall 2: Synchronous `ping` Subprocess Blocking the Quart Event Loop
+### Pitfall 2: Interactive `read` Stdin Theft in Piped Install Script
 
 **What goes wrong:**
-The node check loop shells out to `ping` using `subprocess.run()` or `subprocess.Popen().communicate()` (both blocking calls). While the ping runs, the entire asyncio event loop is blocked — no HTTP requests are served, no registrations processed, no health checks answered. With 10+ nodes and 10-second check intervals, the node becomes unresponsive for seconds at a time. The leader sees the node as unhealthy because its `/healthz` endpoint doesn't respond. The node is marked down and removed from the mesh, even though the node itself is fine — it was just busy pinging.
+When `install.sh` is invoked via `curl -fsSL ... | bash`, bash reads the script incrementally from stdin. Any interactive prompt (`read -p`, `gum input`, `select`) or child process that also reads stdin **steals bytes from the script stream**. This causes:
+- Truncated function names: `warn_shell_path_missing_di` instead of `warn_shell_path_missing_dir`
+- "command not found" errors from corrupted function names
+- Indefinite hangs where bash blocks waiting for more script input
+- Silent corruption of subsequent script lines
+
+This is not theoretical — the OpenClaw project (PR #82918) documented this exact failure. Their pipe guard attempt was rejected as too risky (it broke `bash -c` invocation), but the underlying stdin-steal bug was confirmed real.
 
 **Why it happens:**
-Quart runs on a single-threaded asyncio event loop. Any blocking call (synchronous `subprocess.run()`, `time.sleep()`, `requests.get()` without `await`) pauses the entire loop. The official Quart docs explicitly warn: *"If a task does not need to wait on IO it will instead block the event loop and Quart could become unresponsive."*
-
-Developers default to `subprocess.run()` because it's simpler than `asyncio.create_subprocess_exec()`. The `ping` command is particularly dangerous because even with `-c 1`, a non-responsive host can cause `ping` to hang for its full timeout (often 5-10 seconds by default).
+Bash reads piped scripts lazily from stdin, not as an atomic read. When a `read` call in the script body consumes stdin, it eats bytes intended for the shell parser. The script stream and interactive input share the same file descriptor. This only affects `curl ... | bash` — direct execution (`bash install.sh`) and process substitution (`bash <(curl ...)`) are safe because `BASH_SOURCE[0]` is set.
 
 **How to avoid:**
-1. **Always use `asyncio.create_subprocess_exec()`** for shelling out to `ping`, never `subprocess.run()`.
-2. **Wrap with `asyncio.wait_for()`** to enforce a per-ping timeout (e.g., 3 seconds max).
-3. **Crucially: in the timeout handler, call `process.kill()` AND `await process.wait()`** — otherwise the zombie ping process leaks. Python's asyncio subprocess docs confirm that `communicate()` and `wait()` have no built-in timeout parameter; you must use `wait_for()` and handle cleanup yourself.
-4. **Consider `asyncio.to_thread(subprocess.run, ...)` as a simpler escape hatch** for teams not comfortable with the asyncio subprocess API — but this adds thread overhead and should be avoided for frequent (every 10s) operations.
+1. **Delay all interactive prompts until after the script body is fully parsed.** Structure the script: define all functions first, then call a `main` function at the very bottom. Parse errors from stolen stdin hit function bodies, not definitions.
+2. **If interactive prompts are unavoidable, use `/dev/tty` for input**:
+   ```bash
+   read -p "Enter value: " value < /dev/tty
+   ```
+3. **Or buffer the script first** — download to file, then execute:
+   ```bash
+   curl -fsSL -o /tmp/install.sh https://.../install.sh
+   bash /tmp/install.sh
+   ```
+   This bypasses the piped-stdin problem entirely.
+4. **Detect piped execution and refuse** if interactive input is needed:
+   ```bash
+   if [[ -p /dev/stdin && ! -t 0 ]]; then
+       echo "This installer needs interactive input. Download and run directly:"
+       echo "  curl -fsSL -o install.sh https://.../install.sh && bash install.sh"
+       exit 1
+   fi
+   ```
 
 **Warning signs:**
-- Node `/healthz` endpoint intermittently slow or unresponsive
-- "Event loop blocked" warnings in logs
-- `ping` processes accumulating in `ps aux` on the node
-- Check intervals taking longer than the configured period (10s check running for 15s)
+- Install script produces "command not found" errors for internal function names
+- User is prompted but input appears corrupted or causes hangs
+- Works in CI/Docker (no TTY) but fails in interactive terminal
 
 **Phase to address:**
-Phase 2 (Node Agent Implementation) — must be correct from the start. The node's entire value is checking reachability without becoming unreachable itself.
+Phase 2 (Config bootstrapping + `start.sh`) — interactive prompts are in the config setup, and must use `/dev/tty` if stdin is piped. Phase 1 should already structure `install.sh` with the `main`-function-at-bottom pattern.
 
 ---
 
-### Pitfall 3: Subprocess Cleanup After Ping Timeout (Zombie Processes and Lost Output)
+### Pitfall 3: Shell Script Doesn't Use `set -euo pipefail` — Silent Failures Cascade
 
 **What goes wrong:**
-When `asyncio.wait_for(process.communicate(), timeout=3)` times out, `wait_for` cancels the `communicate()` coroutine. But the subprocess (ping) continues running in the OS. The process is orphaned — it's still sending ICMP packets, still consuming a PID, and if enough accumulate, the process table fills up. Worse, because `communicate()` was cancelled mid-stream, any partial output already read from stdout is lost. When the next check cycle tries to `kill()` the PID, it may get `ProcessLookupError` or kill an unrelated process that reused the PID.
+Without strict mode, a failed `mkdir`, `cd`, or `cp` in the install script silently continues. The script creates a broken installation — directories exist but are empty, permissions are wrong, files are missing. The user runs `start.sh` and gets a Python import error or file-not-found. They assume the software is buggy, not that the install was incomplete.
 
-This is a known Python bug/limitation (cpython issues #139373, #103847). The asyncio subprocess implementation is explicitly *not cancellation-safe*. `communicate()`'s cancellation means the transport buffer has already been drained but `process.wait()` hasn't run — you get neither the output nor a clean process exit.
+Specific disaster scenarios with defaults:
+- **`set -u` missing**: `rm -rf "$INSTALL_DIR/"` with unset `$INSTALL_DIR` → `rm -rf /` (the space after the trailing slash is stripped)
+- **`set -e` missing**: `cd /non/existent && rm -rf *` — cd fails silently, `rm -rf *` runs in **current working directory**
+- **`pipefail` missing**: `curl https://broken.link | tar xz` — curl fails, empty tar stream extracts successfully, script continues
+
+**How to avoid:**
+1. **Every script entrypoint gets this immediately after the shebang**:
+   ```bash
+   #!/usr/bin/env bash
+   set -euo pipefail
+   IFS=$'\n\t'
+   ```
+2. **But understand the caveats** (see Greg's Wiki BashFAQ/105):
+   - `set -e` does NOT trigger inside `if`, `while`, `&&`, `||`, or `!`
+   - `set -e` does NOT propagate from functions called in those contexts
+   - For critical operations (rm, mv, critical cp), check return codes **explicitly**
+   - `head` in a pipeline with `pipefail` causes false-positive SIGPIPE failures; guard with `|| true`
+3. **Use `${VAR:-fallback}` for optional variables** to avoid `set -u` aborting on intentionally-unset vars
+4. **Add a trap for debug output** so silent failures leave evidence:
+   ```bash
+   trap 'echo "ERROR at line $LINENO (exit code $?)"' ERR
+   ```
+
+**Warning signs:**
+- Install "succeeds" but `start.sh` immediately fails with missing files
+- Random directories created in the CWD when cd fails
+- CI install step passes but subsequent verification fails
+
+**Phase to address:**
+Phase 1 (`deploy/install.sh`) and Phase 2 (`start.sh`, config setup) — every shell script entrypoint must have strict mode from the first commit.
+
+---
+
+### Pitfall 4: Orphaned Processes When Script Is Killed (No Signal Propagation)
+
+**What goes wrong:**
+When `start.sh` launches the Python backend and Hypercorn as background processes (`&`), a SIGTERM or SIGINT to `start.sh` kills the script but NOT the child processes. The Python processes become orphans, re-parented to init, and continue running. The user:
+1. Runs `start.sh --leader` again → port 58080 is still in use → "Address already in use" error
+2. Kills `start.sh` with Ctrl+C → terminal returns but process continues running on port 58080
+3. Starts a new `start.sh` → finds no PID file → launches another instance → port conflict → silent failure
+
+This is a **process group** problem, documented extensively in Unix StackExchange (#806014). The default behavior: killing a script via `kill -TERM $script_pid` kills only the script process, not its children. Only Ctrl+C in an interactive shell propagates properly because the kernel sends the signal to the process group.
 
 **Why it happens:**
-Python's `asyncio.subprocess.Process.communicate()` reads stdout and stderr internally. When cancelled via `wait_for`, it stops mid-stream. The standard cleanup pattern:
+Bash does not set process group IDs for background jobs by default (`set -m` must be enabled). When the parent script dies, orphaned child processes are adopted by init. No trap or cleanup handler fires because the parent never set up signal propagation. The `entrypoint.sh` already uses `set -e` but has no process group management.
 
-```python
-try:
-    stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=3)
-except asyncio.TimeoutError:
-    proc.kill()
+**How to avoid:**
+1. **Always set a trap in `start.sh`** to propagate signals to children:
+   ```bash
+   #!/usr/bin/env bash
+   set -euo pipefail
+   
+   _cleanup() {
+       echo "Shutting down..."
+       # Kill all children in the process group (negative PID = PGID)
+       kill -- -$(ps -o pgid= -p $$ | tr -d ' ') 2>/dev/null || true
+       wait
+   }
+   trap _cleanup EXIT SIGTERM SIGINT SIGHUP
+   ```
+2. **Enable job control** (`set -m`) to create proper process groups for background jobs
+3. **PID file as fallback** — write the main process PID to a known location, read it on restart:
+   ```bash
+   PIDFILE="${MESH_STATUS_HOME:-$HOME/.mesh-status}/leader.pid"
+   echo $$ > "$PIDFILE"
+   # On cleanup:
+   rm -f "$PIDFILE"
+   ```
+4. **Port-liveness pre-check** before starting to detect orphaned processes:
+   ```bash
+   if lsof -i :58080 >/dev/null 2>&1; then
+       echo "Port 58080 is already in use. Is mesh-status already running?"
+       exit 1
+   fi
+   ```
+
+**Warning signs:**
+- "Address already in use" when re-running `start.sh`
+- `ps aux | grep hypercorn` shows multiple processes
+- Port stays occupied after expected shutdown
+
+**Phase to address:**
+Phase 2 (`start.sh` runner) — signal propagation and cleanup must be designed into the startup script, not added after orphan processes cause port conflicts.
+
+---
+
+### Pitfall 5: Partial or Interleaved Config File Writes from Concurrent Starts
+
+**What goes wrong:**
+`start.sh --leader` runs interactive config setup that writes config to a file. Two scenarios:
+1. **Concurrent launches**: User runs two `start.sh` in parallel → both write to the same config file → interleaved writes → corrupted YAML/JSON → Python parse error on startup
+2. **Crash during write**: User Ctrl+C's during config write → truncated config file → on next start, `start.sh` sees existing config → skips interactive setup → Python fails to parse truncated file → user is stuck with no way to reconfigure
+
+**Why it happens:**
+Writing config files with raw `echo` or `cat > file << EOF` is not atomic. There's no write-lock mechanism. The config "exists" check (`[ -f config.json ]`) doesn't verify the file is well-formed. Once a truncated file exists, the skip-logic prevents regeneration.
+
+**How to avoid:**
+1. **Use atomic write pattern for config files**:
+   ```bash
+   cat > /tmp/config.tmp << EOF
+   {...}
+   EOF
+   mv /tmp/config.tmp "$CONFIG_FILE"  # atomic on same filesystem
+   ```
+2. **Validate config after writing** before marking config as complete:
+   ```bash
+   if python3 -c "import json; json.load(open('${CONFIG_FILE}'))" 2>/dev/null; then
+       echo "Config valid."
+   else
+       echo "Config invalid — re-running setup..."
+       rm -f "$CONFIG_FILE"
+       # re-run interactive setup
+   fi
+   ```
+3. **Use a file lock for write exclusion** (`flock`) to prevent concurrent writes
+4. **Interactive + non-interactive mode flag confusion guard** — if `--non-interactive` is passed, config MUST be provided via env/CLI flags. If neither env/CLI nor existing config is available, exit with clear instructions instead of silently generating partial config.
+
+**Warning signs:**
+- `start.sh` fails with JSON/YAML parse errors at startup
+- Config file exists but is smaller than expected
+- Two users report the same config corruption after parallel operation
+
+**Phase to address:**
+Phase 2 (Config bootstrapping in `start.sh`) — atomic writes and validation must be designed in from the start. Retrofitting after users have corrupted configs is painful.
+
+---
+
+### Pitfall 6: Docker CI Tests Use Cached Images, Miss Install Flow Bugs
+
+**What goes wrong:**
+The CI test for install.sh uses a pre-built Docker image that already has Python, git, and dependencies installed. The install script passes in CI because all prereqs are present. But on a fresh Ubuntu VM, the user doesn't have `uv` and the install script's `curl ... | sh` for uv silently fails (pipefail not set — see Pitfall 1). The test never caught this because the Docker base image had uv cached in a previous layer.
+
+This exact pattern killed the worthless project's CI install tests (see GitHub Actions workflow `install-docker.yml`) — they had to force `DOCKER_BUILDKIT=1` and use `--no-cache` to get reliable install flow tests.
+
+**Why it happens:**
+Docker build layer caching is aggressive. If `apt-get`, `uv install`, or `git clone` happen in cached layers, they're not re-executed. The install script's error handling is never actually exercised. The test passes, but the install script is broken.
+
+**How to avoid:**
+1. **Use a minimal base image** for CI install tests — `scratch` or `alpine` with just `bash` and `curl`. Force every dependency to be installed via the script itself.
+2. **Explicitly disable Docker layer cache** in CI install test jobs:
+   ```yaml
+   - name: Build test image
+     run: docker build --no-cache -t mesh-install-test .
+   ```
+3. **Use `docker pull python:3.12-slim` fresh each time** (no local cache) as the starting image, then run the install.sh inside it
+4. **Test against the actual user experience** — start from a container that matches the user's environment:
+   - Ubuntu 22.04 / 24.04 (most likely target)
+   - No `uv` pre-installed
+   - No `git` pre-installed
+   - Verify prereq-check logic actually fires
+5. **Test from scratch in ephemeral containers** as separate CI jobs, not as a build step in the main image pipeline
+
+**Warning signs:**
+- Install tests pass in CI but fail when run on a fresh VM
+- CI test image has dependencies that the script claims to install
+- "Already installed" messages dominate CI log instead of "Installing X"
+
+**Phase to address:**
+Phase 3 (Docker CI test) — the CI test design must explicitly account for cache busting. This is the phase that validates Phases 1 and 2, so it must be rigorous.
+
+---
+
+### Pitfall 7: Hardcoded Version / Git SHA in Install Script Causes Version Mismatch
+
+**What goes wrong:**
+The install script clones a specific git tag or branch. Three weeks later, the same `curl ... | bash` installs a different version than the user expects. Or the install script was updated but the application code wasn't — the script references features that don't exist in the installed version.
+
+Specific failure:
+- `install.sh` installs from `main` branch → later `main` has breaking API changes → old `start.sh` doesn't work with new Python code
+- Or: `install.sh` pins to tag `v0.8.0` → user installs → reads docs about features in `v0.8.1` → `start.sh` references flags that don't exist
+- Or: the user already has mesh-status installed (from apt/pip) and runs `start.sh` → `start.sh` from PATH is older version → launches newer Python code from git clone → interface mismatch
+
+**Why it happens:**
+The install script and the application code have independent versioning. The script is distributed via curl URL; the code is distributed via `git clone` or pip. They can drift. The existing `pyproject.toml` declares version `0.1.0` but the actual code has evolved significantly.
+
+**How to avoid:**
+1. **Version lock-step**: The install script URL should include the version tag:
+   ```
+   curl -fsSL https://github.com/user/repo/releases/download/v0.8.0/install.sh | bash
+   ```
+   The script then checks out that same tag: `git checkout v0.8.0`
+2. **Self-version check**: At the top of `install.sh`, define `INSTALLER_VERSION` and verify against the repo:
+   ```bash
+   SCRIPT_VERSION="0.8.0"
+   REPO_VERSION=$(curl -fsSL https://api.github.com/repos/user/repo/releases/latest | ...)
+   # Warn if mismatch
+   ```
+3. **`start.sh` checks Python package version** against its own version:
+   ```bash
+   INSTALLED_VER=$(python3 -c "import mesh_status; print(mesh_status.__version__)" 2>/dev/null || echo "unknown")
+   EXPECTED_VER="0.8.0"
+   if [ "$INSTALLED_VER" != "$EXPECTED_VER" ]; then
+       echo "Warning: installed version ($INSTALLED_VER) != expected ($EXPECTED_VER)"
+   fi
+   ```
+4. **Keep `pyproject.toml` version current** — bump on every release. Currently at `0.1.0` but code is v0.8 milestone. This discrepancy will cause confusion.
+
+**Warning signs:**
+- `start.sh --leader` throws errors about missing functions/classes
+- Install script was updated but old users get stale behavior
+- Docs describe flag `--foo` but `start.sh --foo` says "unrecognized argument"
+
+**Phase to address:**
+Phase 1 (install.sh) — the version pinning strategy must be designed upfront. Version drift between installer and application is a "fix it later" trap that rarely gets fixed.
+
+---
+
+### Pitfall 8: Prerequisite Checks Not Done First — Destructive Operations Before Validation
+
+**What goes wrong:**
+The install script starts cloning the repo or creating directories before checking that `uv` and `git` are available. The clone partially succeeds, then the script fails because `uv` isn't installed. The user is left with a half-populated directory. On retry, the script sees the directory exists and skips creation, but files are missing from the partial clone. The install is permanently broken — `git pull` in the partial directory also fails.
+
+Specific pattern from the existing project:
+- `install.sh` needs `uv` and `git`
+- If `git` is not installed → `git clone` fails → script continues (no `set -e`) → creates broken directory
+- If `uv` is not installed → `uv sync` fails → script errors after already modifying filesystem
+
+**How to avoid:**
+1. **Prerequisite check block at the very top of the script**, before any filesystem operations:
+   ```bash
+   REQS=(git curl python3 uv)
+   MISSING=()
+   for cmd in "${REQS[@]}"; do
+       if ! command -v "$cmd" &>/dev/null; then
+           MISSING+=("$cmd")
+       fi
+   done
+   if [ ${#MISSING[@]} -gt 0 ]; then
+       echo "Missing prerequisites: ${MISSING[*]}"
+       echo "Install them and re-run this installer."
+       exit 1
+   fi
+   ```
+2. **Idempotent directory creation** — check `[ -d "$DIR" ] && [ -f "$DIR/sentinel.file" ]` before assuming previous install succeeded:
+   ```bash
+   if [ -d "$INSTALL_DIR" ]; then
+       if [ ! -f "$INSTALL_DIR/.mesh-installed" ]; then
+           echo "Directory exists but appears to be incomplete. Removing..."
+           rm -rf "$INSTALL_DIR"
+       fi
+   fi
+   ```
+3. **Use a sentinel file** (`.mesh-installed`) written as the **last** step of install, indicating completion
+4. **Never clone into an existing non-empty directory** — always start fresh or verify
+
+**Warning signs:**
+- Install fails midway but directory exists on retry
+- `uv sync` fails with "missing pyproject.toml" even though directory exists
+- User reports "I ran the install script twice and it works the second time"
+
+**Phase to address:**
+Phase 1 (install.sh) — prerequisite validation before destructive operations is a structural choice, not a polish detail.
+
+---
+
+### Pitfall 9: macOS vs Linux Shell Incompatibilities
+
+**What goes wrong:**
+The install script works perfectly on Ubuntu but fails on macOS with:
+- `sed -i` requires different syntax (`sed -i ''` on BSD, `sed -i` on GNU)
+- `readlink -f` doesn't exist on macOS (use `realpath` or `greadlink` from coreutils)
+- `lsof` requires different flags to check port usage (`sudo lsof -i :58080` vs standard)
+- `ping` has different flags (macOS uses `-c 1 -t 5`, Linux uses `-c 1 -W 5`)
+- `/tmp` cleanup behavior varies (macOS clears `/tmp` on reboot, not guaranteed on Linux)
+- `python3` vs `python` naming — macOS may alias python3 or require full path
+
+The existing node.py already handles `ping` via `asyncio.create_subprocess_exec` with Linux-style args. The install/start scripts need similar care.
+
+**Why it happens:**
+Developers primarily test on one platform (Linux) and assume POSIX compatibility. BSD userland (macOS) deviates from GNU userland (Linux) in subtle but breaking ways. Shell scripts are particularly vulnerable because they invoke system utilities directly.
+
+**How to avoid:**
+1. **Use POSIX-specified utilities** where possible — avoid GNU extensions
+2. **Abstract platform-specific commands into functions** at the top of the script:
+   ```bash
+   get_script_dir() {
+       # Works on both macOS (realpath from coreutils) and Linux
+       if command -v realpath &>/dev/null; then
+           dirname "$(realpath "$0")"
+       elif command -v greadlink &>/dev/null; then
+           dirname "$(greadlink -f "$0")"
+       else
+           # Fallback that works for simple cases
+           cd "$(dirname "$0")" && pwd
+       fi
+   }
+   ```
+3. **Use `uname -s` to branch** when needed:
+   ```bash
+   case "$(uname -s)" in
+       Darwin*)
+           PING_ARGS="-c 1 -t 5"
+           ;;
+       Linux*)
+           PING_ARGS="-c 1 -W 5"
+           ;;
+       *)
+           echo "Unsupported OS: $(uname -s)"
+           exit 1
+           ;;
+   esac
+   ```
+4. **Test on both platforms** in CI — matrix across `ubuntu-latest` and `macos-latest`
+
+**Warning signs:**
+- Install works on dev's Ubuntu machine but fails on team member's MacBook
+- "Illegal option" errors from `sed`, `readlink`, or other utilities
+- CI passes but users report failures
+
+**Phase to address:**
+Phase 1 (install.sh) and Phase 2 (start.sh) — cross-platform awareness must be built in from the first line. Retrofitting platform detection is tedious.
+
+---
+
+### Pitfall 10: Upgrade/Downgrade Path Not Tested — Fresh Install Only
+
+**What goes wrong:**
+The `install.sh` works perfectly for a fresh install. But when a user who installed v0.7 runs the v0.8 install script:
+1. The script clones over the existing directory → old config is preserved (good) or overwritten (bad) unpredictably
+2. `uv sync` might downgrade packages → v0.8 requires `quart>=0.21.0` but v0.7 pinned `quart>=0.20.0` → conflict
+3. Old data files in `/app/data` are incompatible with new format → leader crashes on startup
+4. `start.sh` has new flags → old user's muscle memory or automation breaks
+
+**Why it happens:**
+Install scripts are almost exclusively tested on clean systems. The upgrade path is an afterthought because developers test in disposable environments. The existing project's Docker files already do clean installs every build — there's no upgrade scenario tested.
+
+**How to avoid:**
+1. **Version detection before install**:
+   ```bash
+   if [ -f "$INSTALL_DIR/mesh_status/__init__.py" ]; then
+       OLD_VER=$(python3 -c "import sys; sys.path.insert(0,'$INSTALL_DIR'); import mesh_status; print(getattr(mesh_status, '__version__', 'unknown'))" 2>/dev/null || echo "unknown")
+       echo "Existing installation detected: $OLD_VER"
+       echo "Upgrading to $NEW_VER..."
+   fi
+   ```
+2. **Backup config before upgrade**:
+   ```bash
+   if [ -f "$INSTALL_DIR/config.json" ]; then
+       cp "$INSTALL_DIR/config.json" "$INSTALL_DIR/config.json.bak.$(date +%Y%m%d%H%M%S)"
+   fi
+   ```
+3. **Run `uv sync` with upgrade strategy** — not just `uv sync` but `uv sync --upgrade` to respect new dependency ranges
+4. **Data migration guard** — if data format changed, detect old format and either migrate or refuse:
+   ```bash
+   if [ -f "$DATA_DIR/checks.json" ]; then
+       FIRST_LINE=$(head -1 "$DATA_DIR/checks.json")
+       if echo "$FIRST_LINE" | python3 -c "import json,sys; d=json.load(sys.stdin); assert 'version' in d" 2>/dev/null; then
+           : # new format, ok
+       else
+           echo "Old data format detected. Starting fresh..."
+           mv "$DATA_DIR" "${DATA_DIR}.bak.$(date +%Y%m%d%H%M%S)"
+       fi
+   fi
+   ```
+5. **Document breaking changes** in a `RELEASE_NOTES.md` that `start.sh` can display on first run after upgrade
+
+**Warning signs:**
+- Upgrade "succeeds" but leader crashes with format errors
+- Users report "it worked before upgrading"
+- Only fresh-install scenarios tested in CI
+
+**Phase to address:**
+Phase 2 (start.sh) — upgrade detection logic belongs in the runner. Phase 1 (install.sh) should handle the backup. Phase 3 (Docker CI) must include an upgrade-from-previous test case.
+
+---
+
+### Pitfall 11: Hardcoded Paths That Break in Non-Default Environments
+
+**What goes wrong:**
+The install script hardcodes paths like `/opt/mesh-status` or `~/mesh-status` and the user has no control to change them. When:
+- User doesn't have sudo access → can't write to `/opt/`
+- User wants to install it in their home directory → forced to edit the script
+- User runs multiple instances → path collision
+- System uses a different home directory structure (NixOS, macOS)
+
+**Why it happens:**
+It's convenient to hardcode paths. The installer doesn't expose `--prefix` or `--install-dir` flags. The existing Docker build hardcodes `/app` but that's fine because Docker is a controlled environment. Non-Docker install needs flexibility.
+
+**How to avoid:**
+1. **Make install directory configurable** — `INSTALL_DIR="${1:-$HOME/.mesh-status}"`
+2. **Use XDG Base Directory spec** for config and data:
+   ```bash
+   INSTALL_DIR="${MESH_STATUS_HOME:-$HOME/.local/share/mesh-status}"
+   CONFIG_DIR="${MESH_STATUS_CONFIG:-$XDG_CONFIG_HOME/mesh-status}"
+   DATA_DIR="${MESH_STATUS_DATA:-$XDG_DATA_HOME/mesh-status}"
+   ```
+3. **`start.sh` discovers its own location** rather than using hardcoded paths:
+   ```bash
+   SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+   PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
+   ```
+4. **Default should work without `sudo`** — install to user home by default, `--system` flag for system-wide
+
+**Warning signs:**
+- "Permission denied" on install
+- Users ask "how do I change where it's installed?"
+- Install script needs `sudo` for default operation
+
+**Phase to address:**
+Phase 1 (install.sh) — path configurability is a structural API decision, hard to change later.
+
+---
+
+### Pitfall 12: No Graceful Degradation for Missing `uv` or Corrupted Virtual Environment
+
+**What goes wrong:**
+The existing project relies on `uv` for dependency management. If `uv` is installed but the virtual environment (`/app/.venv`) is corrupted, missing, or has wrong Python version:
+- `uv sync` fails with cryptic errors about "conflicting dependencies"
+- `start.sh` tries to run `uv run python ...` but `.venv` doesn't exist → uv auto-creates it → but with wrong interpreter
+- Or: system Python is 3.11 (not 3.12+) → `uv sync` creates env with 3.11 → some async features fail at runtime
+
+The existing `Dockerfile.leader` already has a pattern for this (using `--no-dev`), but the non-Docker install script needs similar care.
+
+**How to avoid:**
+1. **Python version check before `uv sync`**:
+   ```bash
+   PYTHON_VERSION=$(python3 --version 2>&1 | grep -oP '\d+\.\d+')
+   REQUIRED="3.12"
+   if [ "$(echo "$PYTHON_VERSION >= $REQUIRED" | bc)" != "1" ]; then
+       echo "Python $REQUIRED+ required, found $PYTHON_VERSION"
+       exit 1
+   fi
+   ```
+2. **Validate `.venv` before use** — check sentinel file created by `uv sync`:
+   ```bash
+   if [ -f "$INSTALL_DIR/.venv/pyvenv.cfg" ]; then
+       VENV_PYTHON=$(head -1 "$INSTALL_DIR/.venv/pyvenv.cfg")
+       # Verify matches expected
+   fi
+   ```
+3. **`start.sh` should recreate `.venv` if `uv sync` fails** rather than using a broken env:
+   ```bash
+   cd "$PROJECT_ROOT"
+   if ! uv sync --no-dev --frozen 2>/dev/null; then
+       echo "Dependency sync failed. Recreating environment..."
+       rm -rf .venv
+       uv sync --no-dev
+   fi
+   ```
+4. **Use `uv run` consistently** (not raw `python3`) so uv handles env activation automatically
+
+**Warning signs:**
+- `ModuleNotFoundError` on startup despite successful install
+- `start.sh` runs system Python instead of venv Python
+- `uv sync` succeeds but `uv run` fails with "script not found in venv"
+
+**Phase to address:**
+Phase 1 (install.sh) and Phase 2 (start.sh) — uv/venv validation must be in both install (initial setup) and start (runtime validation).
+
+---
+
+### Pitfall 13: Logging Configuration Collision Between `start.sh` and Python Backend
+
+**What goes wrong:**
+The current `mesh_status/config.py` reads `MESH_STATUS_LOG_LEVEL` and the Python code configures logging at startup. The `start.sh` runner also writes to stdout/stderr. When the user runs:
+```bash
+start.sh --leader 2>&1 | tee -a /var/log/mesh-status.log
 ```
-
-...kills the process but the already-read-but-not-returned stdout data is gone inside the cancelled coroutine. Calling `proc.communicate()` again after killing returns nothing because the transport buffer was already drained.
-
-**How to avoid:**
-Use the cancellation-safe pattern (from cpython issue #139373 discussion):
-
-```python
-async def ping_with_timeout(host, timeout=3):
-    proc = await asyncio.create_subprocess_exec(
-        'ping', '-c', '1', host,
-        stdout=asyncio.subprocess.PIPE,
-        stderr=asyncio.subprocess.PIPE
-    )
-    io_task = asyncio.create_task(proc.communicate())
-    try:
-        await asyncio.wait_for(proc.wait(), timeout=timeout)
-    except asyncio.TimeoutError:
-        proc.kill()
-        await proc.wait()  # Must wait after kill to avoid PID leak
-    stdout, stderr = await io_task  # Retrieve partial output safely
-    return stdout.decode() if stdout else None
-```
-
-This pattern uses `process.wait()` for timeout detection (not `communicate()`), so if the timeout fires, `communicate()` is NOT cancelled and can finish after the process is killed. No data loss, no zombie processes.
-
-**Warning signs:**
-- Growing number of `ping` processes in `ps aux` over time
-- `OSError: [Errno 24] Too many open files` (PIDs are a limited resource)
-- Intermittent `ProcessLookupError` when trying to kill PIDs
-
-**Phase to address:**
-Phase 2 (Node Agent Implementation) — the ping handler must use the cancellation-safe pattern from day one.
-
----
-
-### Pitfall 4: Streamlit Full-Script Rerun With Unbounded JSON Data Loading
-
-**What goes wrong:**
-The Streamlit dashboard reads all JSON result files for the selected time window on every page interaction (button click, slider move, dropdown change). With 30-day data and frequent checks, the JSON file accumulates millions of entries. Every single user interaction triggers: (1) reading 10-50 MB of JSON from disk, (2) parsing it into Python dicts, (3) transforming into a DataFrame, (4) rendering. The dashboard becomes unusable — 5-15 second lag on every click.
+- Both shell output and Python logs go to the same stream
+- Shell output (INFO lines, startup messages, timestamps) and Python JSON logs mix
+- If start.sh redirects stderr (e.g., `2>/dev/null`), Python errors disappear because Hypercorn inherits start.sh's stderr
+- If start.sh daemonizes, all logging disappears entirely
 
 **Why it happens:**
-Streamlit reruns the entire script from top to bottom on every widget interaction (this is by design — it's Streamlit's core execution model). Without `@st.cache_data`, every rerun reloads and reparses all the data. The Streamlit docs and community guidance are explicit: "Without caching and fragments, your app reruns everything on every interaction."
-
-JSON is particularly expensive here because `json.load()` deserializes every single entry, even if you only need summary statistics (uptime percentages, not every ping result).
+Shell scripts and Python processes share the same stdout/stderr by default. The `start.sh` runner is a thin wrapper that inherits the terminal's file descriptors and passes them to the child process. Without explicit log separation, mixing is inevitable.
 
 **How to avoid:**
-1. **Use `@st.cache_data(ttl=60)` on the data loading function** — the file is read and parsed once, cached, and only refreshed when the TTL expires or the file changes.
-2. **Pre-aggregate at write time** — When the leader writes the hourly file, also write a pre-aggregated summary (e.g., `summary_30min.json`, `summary_30d.json`) so the dashboard only needs to load small aggregations, not raw check data.
-3. **Use `st.fragment(run_every="10s")`** for auto-refreshing components so only the live metrics section reruns, not the entire page.
-4. **Use Arrow-native loading** — Streamlit's `st.dataframe` supports Arrow natively. Convert your cached DataFrame to Arrow format to reduce serialization overhead.
-5. **For very large datasets (>150k rows)**, Streamlit >= June 2026 adds automatic lazy row loading for `st.dataframe` — but you need to ensure the data is in a pandas/Polars DataFrame, not raw JSON.
+1. **`start.sh` does minimal logging itself** — let the Python process handle all structured logging
+2. **Use `exec` to replace the shell process** with the Python process so there's no wrapper process at all:
+   ```bash
+   exec uv run python -m mesh_status.leader "$@"
+   ```
+   This way, all signals go directly to Python, there's no orphan risk, and log streams are clean.
+3. **If startup logging is needed, use a dedicated log file**:
+   ```bash
+   exec uv run python -m mesh_status.leader "$@" >> "$LOG_FILE" 2>&1
+   ```
+4. **Apply consistent formatting** — if start.sh outputs startup info, match the Python log format (timestamp, level, message)
+5. **Document the log destination** — users should know where to find logs without guessing
 
 **Warning signs:**
-- Dashboard takes >2 seconds to respond after any widget interaction
-- Browser spinner appears on every click
-- High CPU usage on the leader during dashboard use
-- Streamlit warning about slow rerender
+- Mixed shell and Python output in logs
+- /dev/null applied by user breaks Python logging silently
+- "start.sh: line X: ..." messages mixed with asctime-format Python logs
 
 **Phase to address:**
-Phase 3 (Dashboard Implementation) — caching must be built in from the first dashboard commit. Retrofitting is possible but painful (users already have bad expectations).
-
----
-
-### Pitfall 5: Node Registration Race Condition (TOCTOU)
-
-**What goes wrong:**
-Two nodes register simultaneously. The leader checks "does node IP exist?" → no → assigns a node ID. Both nodes get the same ID, or the registry state file gets corrupted. The leader sends the node list to each, but they disagree on which nodes exist. Nodes appear and disappear from the mesh. Check results reference node IDs that don't exist in the registry. The entire connectivity map becomes unreliable.
-
-**Why it happens:**
-The registration handler follows a classic time-of-check-to-time-of-use (TOCTOU) pattern:
-
-```python
-# Handler A: reads registry → sees no node with IP X
-# Handler B: reads registry → sees no node with IP X
-# Handler A: "Registering node X..."
-# Handler B: "Registering node Y..." (or same node X again)
-# Handler A: writes registry with node X
-# Handler B: writes registry with node Y — but may overwrite A's write
-```
-
-This is the same pattern documented in the ICN identity registry race (Issue #397), Docker Swarm overlay network sync (Moby PR #52665), and the registry server concurrent publishing fix (PR #528).
-
-In a single-process Quart server, the handlers run as asyncio tasks. They interleave at every `await`. If the registration handler does any async I/O (file read, HTTP request to validate), it yields the event loop, and another registration can sneak in.
-
-**How to avoid:**
-1. **Use an `asyncio.Lock()` at the app level** — create a single lock in the app factory and acquire it in every registration handler before reading the registry state. This serializes registrations within a single process.
-2. **Use atomic file operations combined with locking** — the registry file write (if JSON) must use the same atomic+locked pattern as Pitfall 1.
-3. **Use unique constraints at the storage level** — if you store node IPs in a dict, ensure the dict itself enforces uniqueness. But this only protects in-memory; you need the lock for the file write.
-4. **Use registration tokens or idempotency keys** — nodes can send a unique registration token. If the registration is retried with the same token, the leader can safely no-op instead of duplicating.
-
-**MINIMUM VIABLE:**
-```python
-_app_registry_lock = asyncio.Lock()
-
-@app.route('/register', methods=['POST'])
-async def register():
-    async with _app_registry_lock:
-        data = await request.get_json()
-        node_ip = data['node_ip']
-        # read registry, check, modify, write — all inside the lock
-```
-
-**Warning signs:**
-- Two nodes with the same node ID appearing in the dashboard
-- "Node ID already exists" or key constraint errors
-- Intermittent registration failures under load
-- Nodes disappearing from the mesh shortly after registering
-
-**Phase to address:**
-Phase 1 (Core Leader Implementation) — the registration endpoint is the entry point for all nodes. Data races here cascade into every downstream component (check distribution, result collection, dashboard).
-
----
-
-### Pitfall 6: Hourly File Rotation Data Loss and Integrity Issues
-
-**What goes wrong:**
-At the top of every hour, the leader rotates the data file: renames `dd.json` to `dd.json.bak` (or similar) and creates a new `dd.json`. Between the rename and the new file being written, incoming check results are lost — they go to a file that's about to be closed or the new file that doesn't exist yet. In the worst case, a crash during rotation leaves the data file truncated (opened with `'w'` mode but never written), destroying the entire hour's data.
-
-**Why it happens:**
-Custom rotation logic often has exactly these failure modes:
-1. **Crash during write** — `open('w')` truncates the file before any data is written. Crash between truncation and write = empty file.
-2. **Rename race** — renaming the active log file while writers are appending to it. On Windows this can fail with file-lock errors. On POSIX, the rename succeeds silently and the old file descriptor continues writing to the now-unlinked file.
-3. **File overwrite collision** — Python's `TimedRotatingFileHandler` has a known bug (cpython Issue #88352) where files rotated at the same timestamp overwrite each other.
-
-The project spec says "writes aggregated data every hour." This means the rotation is both time-triggered AND data-aggregation-triggered — a window where data loss can occur.
-
-**How to avoid:**
-1. **Append-only, never rewrite the active file.** Write each check result as a new line in `dd.jsonl` (JSON Lines format). Each line is an independent JSON object. No rotation needed during the hour because there's no read-modify-write.
-2. **For hourly aggregation, read the complete file after it's been closed.** Once the hour boundary passes, close the current file, open the next hour's file. The old file is now immutable. Aggregate from the completed file.
-3. **If you must rotate, use atomic rename** — close the file, THEN rename it. Never rename an open file.
-4. **Use `os.replace()` (atomic on POSIX) instead of `os.rename()`** — on some systems `rename` fails if the target exists. `replace` overwrites atomically.
-
-**Recommended pattern for this project:**
-```
-data/2026/06/18/14.jsonl   ← current hour, append-only
-data/2026/06/18/13.jsonl   ← completed hour, immutable
-data/2026/06/18/13.aggregated.json  ← aggregation of completed hour
-```
-
-**Warning signs:**
-- Hourly files that are empty or smaller than expected
-- Check results that disappear at the top of each hour
-- Corrupted or truncated JSON at rotation boundaries
-- First few minutes of each hour showing no data
-
-**Phase to address:**
-Phase 1 (Core Leader Implementation) — the file storage design must be append-only from the start. Changing from rewriting to append-only is a storage migration that's painful to do after data has accumulated.
-
----
-
-### Pitfall 7: Healthz Endpoint Confusing Liveness With Readiness
-
-**What goes wrong:**
-The leader exposes `/healthz` which returns 200 if the process is running. Nodes use this endpoint to verify the leader is healthy. But the endpoint doesn't check critical dependencies: can the leader still write to disk? Is the event loop responsive? Has the background check-collection task crashed? The health endpoint returns 200 while the leader is silently failing to persist results. Nodes think everything is fine, but the dashboard shows stale data. Conversely, an overeager health check that checks disk I/O fails during a transient NFS hiccup, nodes think the leader is down and start buffering, creating a thundering herd on recovery.
-
-**Why it happens:**
-The project spec says "Node runs HTTP GET /healthz" as a connectivity check. It's tempting to make `/healthz` a trivial "return 200" endpoint. But this gives a false sense of safety — the mesh continues operating against a leader that's accumulating data in memory but can't persist it.
-
-The Kubernetes community has standardized on three separate probes for this exact reason:
-- **Liveness** (`/livez`): Is the process running and responsive? If no, restart.
-- **Readiness** (`/readyz`): Can this instance handle traffic? If no, drain connections.
-- **Startup** (`/startup`): Has initialization completed? If no, don't kill yet.
-
-A single `/healthz` endpoint mixes these concerns, and you can't tell if "healthy" means "responding to HTTP" or "fully operational."
-
-**How to avoid:**
-1. **Implement at least two endpoints:**
-   - `/livez` — shallow, returns 200 immediately on any HTTP response. Used by nodes to check leader reachability.
-   - `/readyz` — deep, checks disk writability, checks that the background collection task is running, checks that recent (within 5 minutes) data was persisted. Used by operators and for self-diagnosis.
-2. **Use separate HTTP status codes:** 200 = ready/healthy, 503 = not ready, never return 200 with error in body (monitoring systems route on status codes, not body content).
-3. **Background health check pattern:** For expensive checks (disk I/O), perform them in a background thread every 30 seconds and cache the result. The `/readyz` handler reads the cached status and responds quickly (<50ms).
-4. **Timebound all checks:** Each dependency check must have its own timeout (e.g., disk check: 500ms). Aggressive timeouts prevent cascading failures.
-
-**Warning signs:**
-- Leader `/healthz` returns 200 but dashboard data is hours old
-- Check results being accepted by the leader but not persisted
-- Nodes marking the leader as "down" based on the same `/healthz` that everyone else says is fine
-- Thundering herd on leader recovery (all nodes reconnect simultaneously)
-
-**Phase to address:**
-Phase 1 (Core Leader Implementation) — the `livez` endpoint is needed for basic operation. The `readyz` endpoint should be added before any real deployment to avoid false confidence.
-
----
-
-### Pitfall 8: VPN MTU Blackholes and Packet Loss Misinterpretation as "Node Down"
-
-**What goes wrong:**
-ICMP ping packets exceed the effective MTU of the VPN tunnel. The ping with DF (Don't Fragment) set is silently dropped because Path MTU Discovery (PMTUD) is broken — the VPN device or an intermediate firewall blocks ICMP "Fragmentation Needed" messages. The ping timeout is interpreted as "node is unreachable." The dashboard shows the node as DOWN. But the node is perfectly reachable for TCP traffic (which negotiates MSS and avoids the MTU issue). The false positive cascades: dependent nodes stop checking, operator gets paged, investigation shows "works fine, ping just times out."
-
-**Why it happens:**
-VPN tunnel encapsulation adds overhead (WireGuard: 60 bytes, IPsec: ~73 bytes, OpenVPN: ~60 bytes). Standard Ethernet MTU is 1500. After encapsulation, the effective payload MTU is 1500 - overhead = ~1420-1440. A standard ping with 1472 bytes of payload + 28 bytes ICMP header = 1500 bytes total — which exceeds the tunnel MTU. With DF set (default on modern systems), the packet is dropped. With PMTUD broken (ICMP blocked by firewall — extremely common, as documented in enterprise VPN guides), the sender never learns about the smaller MTU.
-
-The VPN community has endless post-mortems on this exact pattern: "ping fails, everything else works" (cr0x.net MTU guide, BigIron's MTU Mystery, Lineman's VPN MTU article).
-
-**How to avoid:**
-1. **Use smaller ping payloads:** `ping -s 1400 -M do <host>` to test within the tunnel MTU. Standard ping uses 56 or 64 bytes by default, which should fit, BUT the real problem is that ping with default size may work while ping with larger payload (or TCP with DF) doesn't. The fix is to test what you depend on.
-2. **Supplement ICMP ping with a TCP-based check:** HTTP GET to `/healthz` on the target port uses TCP, which negotiates MSS during the three-way handshake. TCP will automatically avoid MTU issues (assuming MSS clamping is in place). This is why the project already uses both ping + HTTP health check — but the ping results alone should never be the sole health indicator.
-3. **MTU baseline measurement:** Before deployment, run `ping -M do -s <size>` (binary search from 1500 down to 1200) through the VPN to find the actual path MTU. Configure nodes to use the known-safe MTU.
-4. **Expect asymmetric MTU:** The path MTU may differ by direction. Test both ways.
-5. **Document the "ping fails, HTTP works" scenario** in the runbook so operators don't page unnecessarily.
-
-**Warning signs:**
-- ICMP ping to a node fails but HTTP/healthz succeeds
-- Pings with default size work, pings with larger payloads fail
-- Large file transfers through the VPN stall while small web requests work fine
-- TCP retransmission rates >2% on VPN traffic
-- `Frag needed` ICMP messages being blocked (check firewall rules)
-
-**Phase to address:**
-Phase 2 (Node Agent Implementation) — the check logic must treat ping and HTTP as independent signals and not let a ping failure alone mark a node as DOWN. Phase 5 (Operational Readiness) — MTU baseline testing before production deployment.
-
----
-
-### Pitfall 9: Ping Check Loop Thundering Herd and Self-Inflicted Congestion Collapse
-
-**What goes wrong:**
-All N nodes check all other N-1 nodes simultaneously every 10 seconds. At 10 nodes, that's 90 ping + 90 HTTP checks every 10 seconds = 18 concurrent outbound checks per node. The VPN link becomes saturated with control traffic. Real application traffic gets pushed out. The VPN concentrator's CPU spikes due to the ICMP and HTTP load. Latency increases for legitimate traffic. The checks start timing out because the VPN itself is congested. Nodes report each other as DOWN — a self-inflicted false positive.
-
-**Why it happens:**
-The check interval is global and synchronized. If all nodes start their checks at time T, they all finish at approximately the same time and reschedule for T+10s. The pattern repeats. The result is a traffic pattern that alternates between idle and burst — the worst possible pattern for a VPN link with limited bandwidth.
-
-This is the same phenomenon that causes "monitoring storm" or "alert fatigue cascade" in distributed systems: the monitoring itself becomes the cause of the failure it's trying to detect.
-
-**How to avoid:**
-1. **Jitter the check interval:** Add a random offset (0-N seconds) to each node's initial start time so they don't synchronize. Even better: add ±20% jitter to every check interval so the pattern is never periodic.
-2. **Stagger per-node checks:** Instead of checking all nodes at once, use a per-node async loop that pings one node at a time. This spreads the load evenly across the interval.
-3. **Cap total concurrent outbound checks per node:** Use an `asyncio.Semaphore(N)` to limit simultaneous checks (e.g., max 3 concurrent pings). This also prevents the node from overwhelming its own outbound bandwidth.
-4. **Use an adaptive check interval:** If the last check timed out, back off the next check (exponential backoff with cap). If the node is flaky, don't hammer it.
-5. **Independent check for "up/down" vs. "latency":** Use frequent lightweight checks (single ping, short timeout) for liveness, and less frequent full checks (multiple pings, latency measurement) for performance data.
-
-**Warning signs:**
-- VPN link utilization spikes every 10 seconds
-- Check timeouts correlate with times when many checks run simultaneously
-- Node CPU spikes matching the check interval
-- False positive "node down" detections during normal operation
-- Improving after reducing the number of nodes (fewer checks = less congestion)
-
-**Phase to address:**
-Phase 2 (Node Agent Implementation) — jitter and concurrency control must be in the initial check loop design. Adding them later means adjusting every node's configuration.
-
----
-
-### Pitfall 10: Leader Memory Growth From Unbounded In-Memory Buffers
-
-**What goes wrong:**
-Nodes buffer check results in memory when they can't reach the leader. The leader also buffers incoming results before the hourly file write. Over days of operation (or during a prolonged network partition), these buffers grow without bound. The leader runs out of memory and is OOM-killed. The node OOM-killed. All buffered results are lost. After restart, the leader has no historical data. The dashboard shows empty. The hourly aggregation files are missing chunks of history — and nobody knows which hours are complete and which have gaps.
-
-**Why it happens:**
-The project spec explicitly says: "On submission failure, node buffers results in memory and retries next cycle." And "Leader writes JSON files hourly to avoid memory/disk pressure" — but "hourly" only protects disk, not memory. If the leader accumulates results in memory for the full hour, a node with 20 peers checking every 10 seconds produces 6 results/minute × 60 minutes × 20 peers = 7,200 entries in memory. For N nodes, multiply by N. At 100 nodes, that's 720,000 entries.
-
-The spec doesn't define a maximum buffer size or a buffer eviction policy. Without one, the buffer is O(n) in time.
-
-**How to avoid:**
-1. **Bounded write-behind buffer:** Use a fixed-size queue (e.g., `asyncio.Queue(maxsize=5000)`) for check results. If the queue is full, drop old results (not new ones). Log a warning.
-2. **Write every check result immediately (append-only), don't batch in memory:** If using append-only JSON Lines (Pitfall 1), there's no reason to batch — just `fsync` periodically (every 100 writes or every 30 seconds). This eliminates the in-memory buffer entirely.
-3. **Bounded node-side buffer:** Node-side buffer must have a max size (e.g., 10,000 entries). On overflow, drop oldest first. The node should also implement exponential backoff for retries, not retry every cycle.
-4. **Memory usage monitoring:** Add a background task that logs buffer sizes and memory usage every minute. Set an alert if memory exceeds 70% of available RAM.
-
-**Warning signs:**
-- Leader memory usage increasing monotonically
-- Node buffer size growing without bound during network partitions
-- OOM kills on the leader or nodes
-- Dashboard data gaps that correspond to leader restart events
-
-**Phase to address:**
-Phase 1 (Core Leader Implementation) — buffer sizing limits must be part of the initial design. Phase 2 (Node Agent Implementation) — node-side buffer limits.
-
----
+Phase 2 (start.sh) — the logging architecture (shell wrapper vs exec replacement) is a design decision for the runner.
 
 ## Technical Debt Patterns
 
-Shortcuts that seem reasonable but create long-term problems.
-
 | Shortcut | Immediate Benefit | Long-term Cost | When Acceptable |
 |----------|-------------------|----------------|-----------------|
-| **Shelling out to system `ping`** | Avoids root/capabilities for raw ICMP sockets | Platform-dependent output parsing, zombie process risk, no way to set TTL/flags cleanly | MVP only. Replace with `icmplib` or `ping3` for Phase 4+ |
-| **JSON file storage with single-file rewrite** | Quick to implement, human-readable | Read-modify-write data loss, no concurrency, slow at scale | MVP only. Must use append-only or SQLite by Phase 4+ |
-| **Single `/healthz` endpoint** | Simple to implement, one less route | Cannot distinguish "process alive" from "ready to serve" | Never acceptable beyond local dev. Add `/livez` and `/readyz` in Phase 1 |
-| **No auth/access control** | Faster prototype, no key management | Anyone on VPN can register rogue nodes, inject fake results | Acceptable for trusted-VPN prototype only. Must add node authentication before multi-team deployment |
-| **Global polling with fixed interval** | Simple scheduling logic | Wastes bandwidth when nodes are idle, misses patterns during congestion | Acceptable for <=10 nodes. Need adaptive intervals by Phase 4 |
-| **Streamlit polling (no cache)** | Fast to build, always "fresh" | Scrapes parsing cost on every interaction. UI becomes unusable at scale. | Never acceptable beyond prototype. Must use `@st.cache_data` from Phase 3 |
-| **In-memory buffer without eviction** | Simple implementation, no data loss on leader reachable | OOM under partition, multi-hour data loss on crash | Never acceptable. Always use bounded buffer from Phase 1 |
+| Skip `set -euo pipefail` | Faster script writing | Silent failures, rm -rf / disasters, untrusted CI | Never. Add it from line 1. |
+| Hardcode install path | Simpler code, fewer flags | Users can't customize, sudo required, conflicts | First commit prototyping only; fix before tagging |
+| Pin to `main` branch in install.sh | Always get latest | Breaking changes surprise users, version drift | Never for production. Use tags/releases. |
+| Single-script monolithic install.sh | One file to distribute | Hard to test, review, or maintain | Acceptable for v0.8 MVP — but extract shared libs before v1.0 |
+| No pidfile / process tracking | Simpler start.sh | Orphans after kill, port conflicts, can't stop | Acceptable only if `exec` is used (no wrapper process), otherwise never |
+| Test install only in pre-built Docker | Fast CI, simple setup | Misses prereq failures, cached dependency bugs, real user conditions | Never for CI — test in fresh-from-scratch containers too |
+| Ignore upgrade path | Ship faster, test less | Stuck users on old versions, data format incompatibility | Acceptable for v0.8 alpha only; must be addressed before v1.0 |
+| No sentinel file for install completion | One fewer file to manage | Can't distinguish "never installed" from "broken install" | Acceptable short-term if `set -e` + atomic operations are used; add sentinel before v1.0 |
 
 ## Integration Gotchas
 
-Common mistakes when connecting to external services.
-
 | Integration | Common Mistake | Correct Approach |
 |-------------|----------------|------------------|
-| **System `ping` binary** | Parsing `ping` output with string splitting across platforms (Linux vs macOS vs Windows formats differ wildly) | Use `icmplib` (Python library) or parse with platform-aware regex. `ping` on macOS has different output format than Linux. `ping` on Windows has yet another format. |
-| **HTTP `/healthz` on nodes** | Expecting 200 from `/healthz` to mean "node can reach me." If the node's own server is down, it can't serve health checks — so you lose the ability to ping AND HTTP check simultaneously. | The HTTP health check tests the **target node's** HTTP server, not the checking node's. This is correct, but the node's HTTP server itself is a single point of failure for the HTTP check path. |
-| **VPN tunnel interface** | Using the public (tunnel endpoint) IP instead of the private (tunnel interface) IP for checks | Must use the tunnel-private IP. The public IP may not be routable from within the VPN, or may route through the internet instead of the tunnel (destroying the purpose of the mesh test). |
-| **File system for data persistence** | Assuming `os.rename` across filesystems is atomic | `os.rename` fails if source and target are on different filesystems (e.g., Docker overlay mount). Use `shutil.move` or explicitly write to same directory. |
-| **Multiple nodes reading leader state** | Each node independently reading the full node list from the leader on every check cycle | Leader should push changes (node list diff) as part of the check submission response, or nodes should cache the node list and only request updates on registration changes. |
+| `curl ... | bash` pipeline to `git clone` | Script clones into CWD, polishes installer output with no regards to where user ran the command | Always cd to a known absolute path (`INSTALL_DIR`) before git ops; never assume CWD |
+| `uv sync` in install.sh | Running `uv sync` in the cloned directory without creating a `.venv` first, or running it as root | Let `uv` create `.venv` automatically; run as non-root when possible; use `--no-dev` for production installs |
+| `start.sh` with `exec` vs `&` | Using `&` (background) then waiting — complex process management, signal handling fragile | Use `exec` to replace shell with Python process — simpler, reliable signal propagation, no orphans |
+| `start.sh` env vars with existing `config.py` | Hardcoding env vars in start.sh that differ from the existing `MESH_STATUS_*` convention | Reuse existing `MESH_STATUS_INTERVAL`, `MESH_STATUS_LOG_LEVEL` env vars from `config.py`. Don't introduce a parallel config system. |
+| Docker CI test with GitHub Actions socket | Mounting `/var/run/docker.sock` without proper group permissions, especially on Ubuntu 22.04+ | Ensure runner user is in `docker` group, check `_work` directory ownership, use `DOCKER_BUILDKIT=1` |
+| Config bootstrapping with existing `mesh_status/config.py` | Creating a new config file (config.yaml) alongside the existing Python-based `config.py` that reads env vars | Don't create parallel config systems. Either use env vars (existing pattern) or generate a `.env` file that `config.py` reads. |
+| `pip` vs `uv` | `start.sh` falls back to `pip install` if `uv` not found, but `uv` creates different `.venv` layouts | Have one package manager. The project chose `uv`. Don't add `pip` as a fallback — if `uv` is missing, fail with clear instructions. |
 
 ## Performance Traps
 
-Patterns that work at small scale but fail as usage grows.
-
 | Trap | Symptoms | Prevention | When It Breaks |
 |------|----------|------------|----------------|
-| **Loading full month of JSON into memory** | Dashboard load time >10s, leader OOM on data query | Pre-aggregate daily/hourly summaries. Dashboard loads aggregates, not raw data. | ~50 nodes, ~7 days of data |
-| **Check-all-nodes-in-parallel (N-1 concurrent checks)** | Node CPU 100%, network saturation, false negatives | Limit concurrent checks per node (asyncio.Semaphore). Stagger start times with jitter. | ~20+ nodes |
-| **No ping timeout limit** | One unresponsive node blocks the entire check cycle for all nodes | Set aggressive per-ping timeout (3s max). Wrap in `asyncio.wait_for()`. | Any number of nodes — one flaky peer can tank the mesh |
-| **Single-threaded JSON deserialization** | Leader request latency spikes during file write/read cycles | Write to temp file + replace. Use append-only JSON lines so reads can stream. | ~10 nodes, hourly file >5MB |
-| **Global check interval (synchronized)** | Traffic pattern alternates idle-spike-idle, VPN bandwidth wasted | Jitter each node's start time ±30%. Add per-node adaptive backoff. | ~5+ nodes (visible at any >1 node) |
-| **Streamlit rendering all raw data** | Browser freezes, huge WebSocket messages | Pass pre-aggregated data to Streamlit. Use `st.dataframe(lazy=True)` for large tables. | ~150k rows (Streamlit's lazy threshold) |
-| **Without `@st.cache_data` on Streamlit** | Every widget interaction triggers JSON reload+reparse | Use `@st.cache_data(ttl=60)` on data loading. Use `@st.fragment` for auto-refresh sections. | Any multi-page Streamlit app |
+| `start.sh` uses `&` + `wait` for process management | Orphaned hypercorn processes, "port in use" on restart, leak over time | Use `exec` instead of backgrounding, or use a PID file with signal trap | First time user kills start.sh with SIGTERM (not Ctrl+C) |
+| Interactive config prompt in piped install | "command not found" for function names, corrupted input, hangs | Structure script with main-at-bottom; use `/dev/tty` for prompts; or download-then-execute | First time user runs `curl ... | bash` interactively |
+| `curl | bash` without post-install verification | Silent install failure, user thinks it worked, subsequent commands fail | Add `command -v mesh-status \|\| exit 1` after install | First time curl gets a 429 or network blips |
+| `.venv` recreated on every `start.sh` run | 10-30 second startup delay while `uv sync` downloads packages | Cache `.venv` across runs; only re-sync if `pyproject.toml` changed; use `--frozen` for speed | Every non-cached startup |
+| Config file re-read on every start.sh invocation | Slow startup if config file is large | Config is tiny; not a real perf concern for this project |
+| `lsof -i :58080` port check on every start | ~100ms check; fine for this scale | N/A for this project scale | Never a real concern at <100 nodes |
 
 ## Security Mistakes
 
-Domain-specific security issues beyond general web security.
-
 | Mistake | Risk | Prevention |
 |---------|------|------------|
-| **Accepting registrations from any node without validation** | Rogue node registers, poisons the mesh with fake check results, causes network-wide misconfiguration | Add a registration token (shared secret) distributed out-of-band. The project spec says "no auth" — at minimum require a pre-shared token in the registration payload. |
-| **Exposing raw check file paths in API responses** | Attacker can read arbitrary files on the leader via path traversal in the data API endpoint | Validate path components (date parts) against expected values. Use `os.path.basename()` and check against a whitelist. Never concatenate user input into file paths. |
-| **ICMP-based DoS amplification** | All nodes ping each other simultaneously, creating an ICMP flood that can exceed VPN bandwidth | Rate-limit outbound pings per node. Cap concurrent checks. Jitter intervals. |
-| **Node injection via registration replay** | If registration is not idempotent, replaying a registration request can create duplicate nodes or overwrite legitimate nodes | Registration must be idempotent. Use `asyncio.Lock` (Pitfall 5) and design registration to be safe to replay (same IP → same node ID, no side effects). |
-| **Serving `/healthz` with detailed debug info** | Node health endpoint reveals system information (Python version, file paths, uptime) to any network peer | Health endpoint should return 200 or 503 with minimal body (e.g., `{"status":"ok"}`). Detailed diagnostics on a separate authenticated endpoint. |
-| **No validation of submitted check results** | A compromised or buggy node submits results with fabricated timestamps, IPs, or status values | Validate that: node ID exists in registry, timestamp is plausible (not >30 seconds in the future, not >1 hour in the past), reported IP matches the node's registered IP (or is a valid mesh IP). |
+| `curl ... | sudo bash` | Full root access to remote script without verification; MITM can deliver malicious payload | Never include `sudo` in the one-liner. Install to user space by default. If system install is needed, download, review, then execute. |
+| Unsafe PID file in world-writable directory | Unprivileged user writes malicious PID → root kills wrong process when stopping | Always use `$PIDFILE` in a root-owned directory when running as root, or use `exec` instead of PID files entirely |
+| Insecure temporary files (`/tmp/install.sh`) | Another user on shared system can replace the script between download and execution (TOCTOU) | Download to a random temp name (`mktemp`), verify checksum, keep 0700 perms |
+| Cloning repo via `git clone` over HTTP not HTTPS | Man-in-the-middle replaces repository content | Always use `https://` URLs for `git clone` |
+| Script stores config with secrets in world-readable file | API keys, tokens, or credentials exposed to other users on the system | `chmod 600` on config files; set `umask 077` before creating them |
+| Shell injection via user-supplied config values | User enters `$(rm -rf /)` as a config value → shell evaluates it | Validate/escape user input before using in shell context; use Python for config validation, not shell |
 
 ## UX Pitfalls
 
-Common user experience mistakes in this domain.
-
 | Pitfall | User Impact | Better Approach |
 |---------|-------------|-----------------|
-| **Showing raw ping RTT values without context** | "Why is latency 200ms? Is that bad?" — users panic about normal WAN latency | Show RTT relative to baseline (e.g., "within normal range: 180-220ms"). Show trends, not raw values. For VPN WAN, 100-300ms is normal inter-region. |
-| **Dashboard shows "DOWN" for nodes that just registered** | Operator thinks a node is failing. Node was registered 5 seconds ago and hasn't completed its first check cycle | Use the `Pending` status spec. Display nodes as "Initializing" for the first check interval. Don't show DOWN until at least one full interval has elapsed with no data. |
-| **Red/green color blindness for connectivity status** | ~8% of male operators can't distinguish red from green indicators | Use icons (checkmark/X/question mark) AND color. Use shape in addition to color (circle = OK, octagon = DOWN, diamond = Pending). |
-| **Same visualization for 30-min and 30-day views** | 30-day view is unreadable — too many data points, chart is a solid blob | For 30-day view, show daily aggregate (uptime % per day, not every check). Only show raw check events in the 30-min view. Use heatmaps or summary statistics for long windows. |
-| **No explanation of what "Ping" vs "HTTP" means** | "Ping shows FAIL but HTTP shows OK — is the node up or down?" | Display both metrics independently. Add tooltips explaining each. Present the combined assessment (e.g., "Unreachable via ICMP, but HTTP responds") rather than a single status. |
+| Install script outputs a wall of `git clone` and `uv sync` logs | User can't tell if install succeeded or what's happening | Use `set -x` for debug only; print clear progress messages: `[1/4] Checking prerequisites... ✓`, `[2/4] Cloning repository... ✓` |
+| No progress indication during long operations | User thinks the script hung | Print progress dots or "This may take a minute..." for network operations |
+| Interactive prompts don't explain what they're asking for | User guesses at config values, gets it wrong | Show default values clearly: `Leader port [58080]:` — show defaults in brackets, accept enter for defaults |
+| `--non-interactive` flag that still prompts | CI pipeline hangs waiting for input that never comes | `--non-interactive` must be strict: if required config is missing, exit with error listing what's needed (env vars or flags) |
+| Install succeeds but PATH not updated | User runs `mesh-status` command → "command not found" immediately after install | Print post-install instructions: `Add to your PATH: export PATH="$PATH:$HOME/.mesh-status/bin"` or offer `--add-to-path` flag |
+| Config error messages are Python tracebacks | User sees the `Quart` framework internals instead of a helpful message | Wrap Python execution; capture stderr; show user-friendly errors. Or don't wrap — let the Python process own its stderr output (consistent format) |
+| `start.sh` fails silently if another instance is running | User runs `start.sh --leader` a second time and sees no change, assumes first one crashed | Detect port conflict, print "mesh-status is already running (PID: 12345). Use start.sh --stop or kill 12345" |
 
 ## "Looks Done But Isn't" Checklist
 
-Things that appear complete but are missing critical pieces.
-
-- [ ] **Node registration:** Looks like it works with one node. Test with 3+ nodes registering simultaneously within 100ms. The race (Pitfall 5) won't show with sequential registrations.
-- [ ] **Ping check:** Looks like it works when the target responds. Test with a non-responsive target. Without a timeout (Pitfall 2), the blocking call freezes the entire node.
-- [ ] **Data persistence:** Looks like it works when writing normally. Test with simultaneous writes (Pitfall 1) or a crash during write (Pitfall 6). Without atomic writes, data loss is invisible but real.
-- [ ] **Node down detection:** Looks like it works when a node actually goes down. Verify the alert doesn't fire when just the ping fails but HTTP succeeds (Pitfall 8: MTU blackhole). Need to confirm the combined check logic handles this.
-- [ ] **Dashboard loading:** Looks fast on first load with no data. Test with 7+ days of accumulated data. Without caching (Pitfall 4), it will slow to a crawl.
-- [ ] **Leader recovery after crash:** Looks like it restarts fine. Check if in-flight check results from the last hour are lost. Verify the hourly file wasn't truncated by the crash.
-- [ ] **Network partition recovery:** Looks fine when all nodes restart together. Test: partition the network for 10 minutes, restore it. Do all nodes reconnect? Do they resume checking? Is buffered data replayed without duplication?
-- [ ] **Health endpoint:** Returns 200. Test it after the node's event loop is blocked by a long-running synchronous operation (Pitfall 2). Does it still return? If not, the health check is lying.
+- [ ] **install.sh**: Has `set -euo pipefail` at the top? Or uses download-then-execute to avoid pipe issues entirely?
+- [ ] **install.sh**: Checks prerequisites (`git`, `uv`, `python3.12+`) before any filesystem operations?
+- [ ] **install.sh**: Uses atomic writes (temp file + `mv`) for all file creation? Never writes directly to target path.
+- [ ] **install.sh**: Creates a sentinel file (`.mesh-installed`) as the absolute last step so broken installs are detectable?
+- [ ] **install.sh**: Has upgrade/backup logic if install directory already exists?
+- [ ] **start.sh**: Handles `SIGTERM`/`SIGINT` to kill child processes (or uses `exec` to avoid needing to)?
+- [ ] **start.sh**: Has a `--stop` or `stop.sh` companion that can cleanly shut down the process?
+- [ ] **start.sh**: Validates that `.venv` exists and `uv sync` ran successfully before starting Python?
+- [ ] **start.sh --non-interactive**: Truly non-interactive? Will it fail with a clear error instead of hanging on a prompt?
+- [ ] **Config bootstrapping**: Writes atomically? Validates format after write? Has `flock`-based concurrency guard?
+- [ ] **Cross-platform**: Tested on macOS? Handles `sed`, `readlink`, `ping` flags, `python3` binary differences?
+- [ ] **Docker CI test**: Starts from a fresh `python:3.12-slim` with no cached dependencies? Tests the actual install flow?
+- [ ] **Docker CI test**: Tests upgrade scenario (install old version, then install new)?
+- [ ] **All scripts**: Pass `shellcheck` with zero warnings?
+- [ ] **Version**: `pyproject.toml` version matches the install script's expected version?
+- [ ] **Failure messages**: All error messages tell the user what to do next, not just why it failed?
 
 ## Recovery Strategies
 
-When pitfalls occur despite prevention, how to recover.
-
 | Pitfall | Recovery Cost | Recovery Steps |
 |---------|---------------|----------------|
-| **Corrupted JSON data file** | MEDIUM (lose 1 hour of data max) | 1. Identify the corrupted file from the error. 2. If the file has garbage at the end: truncate to the last valid JSON object. 3. If the file is completely gone: data for that hour is lost. 4. Add a data-repair CLI command for future incidents. |
-| **Zombie ping processes** | LOW | 1. `pkill -f "ping.*-c 1"` to kill all orphaned pings. 2. Fix the timeout handler to use the cancellation-safe pattern. 3. Add `prlimit --pid=$PID --nproc=...` to limit max processes per user. |
-| **OOM from unbounded buffer** | HIGH (all in-memory data lost) | 1. Restart leader/node. 2. Accept data loss from the buffer. 3. Add explicit max buffer size. 4. Add memory monitoring with alerting. |
-| **False positive "node DOWN" from MTU blackhole** | MEDIUM (wasted investigation time) | 1. Verify: does HTTP health check also fail? If not, it's likely an MTU issue. 2. Run `ping -M do -s 1400 <target>` to confirm MTU. 3. Adjust tunnel MTU or add MSS clamping. |
-| **Registration state corruption** | HIGH (may need to re-register all nodes) | 1. Stop all nodes. 2. Clear the registry file. 3. Restart leader. 4. Re-register all nodes. 5. Add locking (Pitfall 5). |
-| **Leader disk full from unbounded JSON growth** | MEDIUM (archive/compress old data) | 1. Identify largest data files. 2. Compress/archive files older than 30 days. 3. Add retention policy (auto-delete after N days). 4. Add disk usage monitoring. |
-| **Dashboard unusably slow** | LOW (UX issue, no data loss) | 1. Add `@st.cache_data` with TTL. 2. Pre-aggregate data. 3. Limit displayed data to last 1000 rows. 4. Provide "reset to defaults" button. |
+| Silent install failure (missing pipefail) | LOW | Rerun with `curl -fsSL -o /tmp/install.sh ... && bash /tmp/install.sh` to decouple download from execution |
+| Orphaned process on port 58080 | LOW | `lsof -ti :58080 \| xargs kill` to find and kill the orphan |
+| Corrupted config file | LOW | `rm ~/.config/mesh-status/config.json && start.sh --leader` to regenerate config interactively |
+| Broken .venv after upgrade | MEDIUM | `rm -rf .venv && uv sync --no-dev` to recreate from scratch |
+| Partial install directory | MEDIUM | `rm -rf ~/.mesh-status && re-run install.sh` — sentinel file check would detect this automatically |
+| Data format incompatibility after upgrade | MEDIUM | Downgrade script: `git checkout v0.7 && uv sync --no-dev` — or restore from backup in `data.bak.*` |
+| Shell injection via config value | HIGH | Purge config, revoke any leaked secrets, reinstall from trusted source |
+| Compromised install script (MITM) | HIGH | Verify script checksum against published SHA-256, compare with known-good copy from GitHub releases |
 
 ## Pitfall-to-Phase Mapping
 
-How roadmap phases should address these pitfalls.
-
 | Pitfall | Prevention Phase | Verification |
 |---------|------------------|--------------|
-| **P1: Concurrent JSON file writes** | Phase 1 (Leader: file storage) | Write a test with 10 concurrent async tasks writing to the same file. Assert all 10 writes are preserved and file is valid JSON. |
-| **P2: Sync ping blocking event loop** | Phase 2 (Node Agent: ping loop) | Start Quart server, send a ping to a non-responsive IP with timeout. Verify the `/healthz` endpoint still responds within 100ms during the check. |
-| **P3: Zombie subprocesses on timeout** | Phase 2 (Node Agent: timeout handler) | Set ping timeout to 1ms. Verify `process.kill()` + `await process.wait()` is called. Assert no ping processes remain after the test. |
-| **P4: Streamlit unbounded data load** | Phase 3 (Dashboard: data loading) | Load 1M entries into the data file. Measure dashboard rerender time. Must be <500ms per interaction with caching. |
-| **P5: Node registration race** | Phase 1 (Leader: registration endpoint) | Send 10 concurrent registration requests for the same IP. Assert exactly 1 node is registered. All others return "already registered." |
-| **P6: Hourly file rotation data loss** | Phase 1 (Leader: file rotation logic) | 1. Kill the leader mid-write during rotation. Verify the old data file is intact. 2. Simulate rotation boundary: verify all 60 minutes of data exist, none lost. |
-| **P7: Healthz confusion (liveness vs readiness)** | Phase 1 (Leader: `/livez` and `/readyz`) | `/readyz` should fail when disk is full. `/livez` should succeed as long as the process responds. Unit test both scenarios. |
-| **P8: MTU blackhole misinterpretation** | Phase 2 (Node Agent: combined check logic) | Scenario test: simulate ping failure + HTTP success. Dashboard must NOT show node as DOWN — show "degraded" or "partial." |
-| **P9: Thundering herd / synchronized checks** | Phase 2 (Node Agent: check scheduling) | 10 nodes start simultaneously. Measure peak checks/second over 60 seconds. Must be evenly distributed, not bursty. |
-| **P10: Unbounded memory buffers** | Phase 1 (Leader: buffer design) + Phase 2 (Node: buffer design) | Fill buffer to max capacity. Assert oldest entries are dropped. Assert memory usage stabilizes, not grows. |
+| #1 Missing pipefail | Phase 1 (install.sh curl line) | `shellcheck` on install.sh; test with mock curl 429 response |
+| #2 Stdin theft in piped install | Phase 2 (interactive prompts use /dev/tty) | Run `curl .../install.sh \| bash` interactively with prompts; no corruption or hangs |
+| #3 No set -euo pipefail | Phase 1 (all script entrypoints) | `shellcheck` passes with zero warnings; `grep 'set -euo pipefail' *.sh` |
+| #4 Orphaned processes | Phase 2 (start.sh signal trap or exec) | Kill start.sh with SIGTERM, verify no hypercorn processes remain; `ps aux | grep -c hypercorn` |
+| #5 Partial config writes | Phase 2 (atomic write + validation) | Crash test: `kill -9` during config write; on restart, config is recreated not loaded partially |
+| #6 Docker CI cache masking bugs | Phase 3 (--no-cache, fresh base images) | Verify CI uses `--no-cache`; test with container that has no uv/git preinstalled |
+| #7 Version drift | Phase 1 (install from tag) + Phase 2 (version check) | Verify install.sh checks out specific tag; start.sh verifies `pyproject.toml` version matches |
+| #8 Prereqs checked after destructive ops | Phase 1 (prereq block first) | Ordering test: `mock` missing uv, verify script exits before creating any directories |
+| #9 macOS vs Linux | Phase 1 (install.sh) + Phase 2 (start.sh) | CI matrix on ubuntu-latest + macos-latest |
+| #10 Upgrade path not tested | Phase 2 (backup logic) + Phase 3 (CI upgrade test) | CI test: install v0.7, install v0.8, verify config preserved, app starts |
+| #11 Hardcoded paths | Phase 1 (configurable INSTALL_DIR) | Verify `MESH_STATUS_HOME` env var overrides default; verify XDG compliance |
+| #12 Missing uv/venv validation | Phase 1 (install validation) + Phase 2 (start.sh env check) | Remove `.venv`, run `start.sh`, verify it recreates env, not crashes |
+| #13 Logging collision | Phase 2 (exec vs background decision) | Verify Python logs and shell logs are distinguishable; verify `exec` pattern works |
 
 ## Sources
 
-- **Pitfall 1 (JSON file races):** Netflix Metaflow PR #3006 (atomic_json_update), QwenPaw PR #3278 (session state corruption), Hive Issue #6696 (state.json data loss), Aperant Issue #488 (implementation_plan.json races)
-- **Pitfall 2 (Sync ping blocking):** Quart official docs (background tasks warning), Quart sync code guide, Quart issue #700 scheduling periodic tasks
-- **Pitfall 3 (Subprocess cleanup):** Python cpython Issues #139373 and #103847 (communicate() cancellation safety), Python asyncio subprocess docs, runebook.dev asyncio subprocess deadlock guide
-- **Pitfall 4 (Streamlit performance):** Streamlit agent-skills optimizing-streamlit-performance, Streamlit PR #15189 (lazy loading), blog posts by Zachary Blackwood and Moncef Ajmani
-- **Pitfall 5 (Registration race):** ICN Identity Issue #397 (VUI registration race), Moby PR #52665 (networkdb bulkSyncNode race), registry PR #528 (concurrent server publishing)
-- **Pitfall 6 (File rotation):** cpython Issue #88352 (TimedRotatingFileHandler overwrite), D-SafeLogger append-only routing, Papyra rotation backend docs, safeatomic v2.0.3
-- **Pitfall 7 (Healthz design):** Azure Health Endpoint Monitoring pattern, AWS builders library health checks, RFC Health Check Response Format (inadarei), Velprove/Vercron blog health check guides
-- **Pitfall 8 (VPN MTU):** cr0x.net VPN MTU tuning guide, bigiron.cc MTU Mystery, thelineman.ca VPN MTU & MSS, cr0x.net VPN quality tests
-- **Pitfall 9 (Thundering herd):** cr0x.net VPN quality tests (jitter/loss), karpenter Issue #2920 (registration timeout race)
-- **Pitfall 10 (Memory buffers):** Hive Issue #6696 (buffer overflow pattern), general asyncio bounded queue patterns
+- **actsense.dev** — GitHub Actions Security Auditor: "curl | bash is unsafe because it bypasses review and integrity checks" (Accessed 2026-04-23)
+- **claude-code-action issue #1136** — Silent install failure on curl 429 due to missing pipefail (2026-04-01)
+- **OpenClaw PR #82918** — Pipe guard for stdin stealing prevention in install.sh (2026-05-17)
+- **Unix StackExchange #806014** — Killing bash script leaves orphan processes; set -m and process group signals (2026-05-16)
+- **Greg's Wiki BashFAQ/105** — `set -e` edge cases: what it does and doesn't catch
+- **Greg's Wiki ProcessManagement** — PID file risks, race conditions, and proper process management
+- **Wooledge Quotes** — Quoting rules for shell scripts: "When in doubt, double-quote every expansion"
+- **worthless project** — .github/workflows/install-docker.yml: Docker CI patterns for install testing with --no-cache, DOCKER_BUILDKIT=1
+- **The PipePunisher attack** (SNAKE Security) — Server-side detection of curl|bash via timing; delivers different content to shell vs browser
+- **start-stop-daemon(8)** — Debian manpage: PID file security, background flag, process matching
+- **mesh-status codebase analysis** — entrypoint.sh (no trap, no signal propagation), Dockerfile.leader/node (uv install pattern, user/gid configuration), config.py (MESH_STATUS_* env var pattern), pyproject.toml (version 0.1.0 vs actual code maturity)
+- **"Why My One-Line Installer Worked Everywhere Except WSL"** (Vineeth N K, 2026-05-15) — CRLF stripping, curl.exe vs curl on Windows, .gitattributes for line endings
+- **Bash Strict Mode Guide** (linuxize.com, 2026-04-20) — `set -euo pipefail` + IFS explained with examples
+- **"set -euo pipefail Is Not Enough"** (unixy.io, 2024-06-05) — The 40% of failure cases that strict mode misses; ERR trap for debug output
 
 ---
-
-*Pitfalls research for: distributed mesh connectivity testing*
-*Researched: 2026-06-18*
+*Pitfalls research for: mesh-status v0.8 install.sh, start.sh, and Docker CI testing*
+*Researched: 2026-06-20*
