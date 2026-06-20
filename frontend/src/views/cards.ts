@@ -75,8 +75,8 @@ function aggregateByMinute(
     }
     const b = buckets.get(minute)!;
     b.total++;
-    if (c.ping_status === "OK") b.pingOk++;
-    if (c.http_status === "OK") b.httpOk++;
+    if (c.ping_ok) b.pingOk++;
+    if (c.http_ok) b.httpOk++;
   }
   const result: Array<{ label: string; pingPct: number; httpPct: number }> =
     [];

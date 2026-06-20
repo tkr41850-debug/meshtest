@@ -1,11 +1,16 @@
 export interface CheckResult {
   node_ip: string;
   target_ip: string;
-  ping_status: string;
-  http_status: string;
+  ping_ok: boolean;
+  http_ok: boolean;
   ping_latency_ms: number | null;
   http_latency_ms: number | null;
   timestamp: number;
+}
+
+export interface BarEntry {
+  percent: number;
+  tooltip: string;
 }
 
 export interface StatusEntry {

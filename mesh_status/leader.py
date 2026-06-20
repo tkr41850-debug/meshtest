@@ -190,6 +190,16 @@ async def get_data():
         start = (datetime.now() - timedelta(days=30)).date()
         end = datetime.now().date()
         raw = persistence._read_results(start, end)
+        # Infer node_ip for disk records with empty node_ip (stored before Phase 12 fix)
+        target_to_source: dict[str, str] = {}
+        for src_ip, src_results in _results.items():
+            for sr in src_results:
+                tgt = sr.get("target_ip", "")
+                if tgt and tgt not in target_to_source:
+                    target_to_source[tgt] = src_ip
+        for r in raw:
+            if not r.get("node_ip"):
+                r["node_ip"] = target_to_source.get(r.get("target_ip", ""), "")
         # Include in-memory data that hasn't been flushed yet
         for node_ip, node_results in list(_results.items()):
             for r in node_results:

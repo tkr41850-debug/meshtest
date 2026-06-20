@@ -1,0 +1,54 @@
+import { describe, it, expect } from "vitest";
+import { barColor, renderBars } from "./bars";
+
+describe("barColor", () => {
+  it("returns red for 0%", () => {
+    expect(barColor(0)).toBe("hsl(0, 85%, 40%)");
+  });
+
+  it("returns green for 100%", () => {
+    expect(barColor(1)).toBe("hsl(120, 85%, 40%)");
+  });
+
+  it("returns yellow-green for 50%", () => {
+    expect(barColor(0.5)).toBe("hsl(60, 85%, 40%)");
+  });
+
+  it("returns gray for negative (no data)", () => {
+    expect(barColor(-1)).toBe("#e5e7eb");
+  });
+});
+
+describe("renderBars", () => {
+  it("renders correct number of bars", () => {
+    const bars = [
+      { percent: 1, tooltip: "100%" },
+      { percent: 0, tooltip: "0%" },
+    ];
+    const html = renderBars(bars);
+    const div = document.createElement("div");
+    div.innerHTML = html;
+    expect(div.querySelectorAll("[data-history-bar]").length).toBe(2);
+  });
+
+  it("renders no-data bars for negative percent", () => {
+    const bars = [
+      { percent: -1, tooltip: "" },
+      { percent: 0.5, tooltip: "50%" },
+    ];
+    const html = renderBars(bars);
+    const div = document.createElement("div");
+    div.innerHTML = html;
+    const allBars = div.querySelectorAll("[data-history-bar]");
+    expect(allBars[0].getAttribute("title")).toBe("No data");
+    expect(allBars[1].getAttribute("title")).toBe("50%");
+  });
+
+  it("renders inline-block spans with width 8px", () => {
+    const bars = [{ percent: 1, tooltip: "full" }];
+    const html = renderBars(bars);
+    expect(html).toContain("width:8px");
+    expect(html).toContain("height:20px");
+    expect(html).toContain("border-radius:1px");
+  });
+});

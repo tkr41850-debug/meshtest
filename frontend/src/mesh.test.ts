@@ -133,8 +133,8 @@ describe("renderCards", () => {
         {
           node_ip: "10.0.0.1",
           target_ip: "10.0.0.2",
-          ping_status: "OK",
-          http_status: "OK",
+          ping_ok: true,
+          http_ok: true,
           ping_latency_ms: 5.2,
           http_latency_ms: 12.1,
           timestamp: 1000000,
@@ -177,8 +177,8 @@ describe("renderCards", () => {
     const checks = Array.from({ length: 30 }, (_, i) => ({
       node_ip: "10.0.0.1",
       target_ip: "10.0.0.2",
-      ping_status: "OK",
-      http_status: "OK",
+      ping_ok: true,
+      http_ok: true,
       ping_latency_ms: 5,
       http_latency_ms: 10,
       timestamp: now - (29 - i) * 60,
@@ -200,6 +200,41 @@ describe("renderCards", () => {
     const bars = container.querySelectorAll("[data-history-bar]");
     expect(bars.length).toBeGreaterThanOrEqual(1);
     expect(bars[0].getAttribute("title")).toContain("Ping");
+  });
+
+  it("computes correct bar uptime percentages from ping_ok/http_ok", () => {
+    const container = document.createElement("div");
+    const now = 1000000;
+    const checks = Array.from({ length: 30 }, (_, i) => ({
+      node_ip: "10.0.0.1",
+      target_ip: "10.0.0.2",
+      ping_ok: true,
+      http_ok: true,
+      ping_latency_ms: 5,
+      http_latency_ms: 10,
+      timestamp: now - (29 - i) * 60,
+    }));
+    renderCards(
+      container,
+      ["10.0.0.1", "10.0.0.2"],
+      [
+        {
+          node_ip: "10.0.0.1",
+          target_ip: "10.0.0.2",
+          ping_status: "OK",
+          http_status: "OK",
+        },
+      ],
+      checks,
+      new Map([["10.0.0.1|10.0.0.2", [100, 100]]]),
+    );
+    const bars = container.querySelectorAll("[data-history-bar]");
+    const hasFullUptime = [...bars].some(
+      (b) =>
+        b.getAttribute("title")?.includes("Ping: 100.0%") &&
+        b.getAttribute("title")?.includes("HTTP: 100.0%"),
+    );
+    expect(hasFullUptime).toBe(true);
   });
 
   it("shows empty gray bars when no checks for a pair", () => {
@@ -234,8 +269,8 @@ describe("renderCards", () => {
         {
           node_ip: "10.0.0.1",
           target_ip: "10.0.0.2",
-          ping_status: "OK",
-          http_status: "OK",
+          ping_ok: true,
+          http_ok: true,
           ping_latency_ms: 5.2,
           http_latency_ms: 12.1,
           timestamp: 1000000,
