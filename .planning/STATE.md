@@ -9,11 +9,11 @@ See: .planning/PROJECT.md (updated 2026-06-19)
 
 ## Current Position
 
-Milestone: v0.7 (Dashboard Bugfixes) — Complete
-Current Phase: Lifecycle (audit → complete → cleanup)
-Plan: 2 phases (15, 16) — both done
-Status: All phases complete, running milestone closure
-Last activity: 2026-06-19 — Phases 15-16 implemented and committed
+Milestone: v0.7 (Dashboard Bugfixes) — Complete ✅
+Current Phase: Completed
+Plan: 2 phases (15, 16) — all complete
+Status: Shipped
+Last activity: 2026-06-19 — v0.7 archived and tagged
 
 ## Performance Metrics
 
@@ -109,5 +109,5 @@ None.
 ## Session Continuity
 
 Last session: 2026-06-19
-Stopped at: v0.7 milestone initialized — ready for Phase 15 planning
+Stopped at: v0.7 milestone complete — all phases finished and archived
 Resume file: None

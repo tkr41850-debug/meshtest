@@ -66,10 +66,14 @@ Completed 2026-06-19. See `.planning/milestones/v0.5-ROADMAP.md` for full detail
 - [x] Phase 13: Flat card layout + uptime % (frontend TDD)
 - [x] Phase 14: History bars in both tabs + remove old History tab (frontend TDD)
 
-### ✅ v0.7 — Dashboard Bugfixes
+<details>
+<summary>✅ v0.7 — Dashboard Bugfixes (Phases 15-16) — SHIPPED 2026-06-19</summary>
 
-- [x] Phase 15: Bar foundation + type fixes (TDD)
-- [x] Phase 16: UI integration — flat 30d, dual rows, gap (TDD)
+- [x] Phase 15: Bar foundation + type fixes (TDD) — completed 2026-06-19
+- [x] Phase 16: UI integration — flat 30d, dual rows, gap (TDD) — completed 2026-06-19
+
+See archived roadmap: `.planning/milestones/v0.7-ROADMAP.md`
+</details>
 
 ## Progress
 
