@@ -12,7 +12,7 @@ app.innerHTML = `
       <button id="tab-30m" class="tab-btn px-4 py-2 text-sm font-semibold text-mesh-dark border-b-2 border-mesh-green">30-Minute View</button>
       <button id="tab-30d" class="tab-btn px-4 py-2 text-sm font-semibold text-mesh-muted border-b-2 border-transparent">30-Day View</button>
     </div>
-    <div id="matrix-container"></div>
+    <div id="matrix-container" class="mb-6"></div>
     <div id="cards-container"></div>
     <div id="day30-container" class="hidden"></div>
     <p id="refresh-indicator" class="text-center text-xs text-mesh-muted mt-6">Loading mesh data...</p>

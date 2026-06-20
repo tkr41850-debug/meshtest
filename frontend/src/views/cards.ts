@@ -1,4 +1,5 @@
-import type { CheckResult, StatusEntry } from "../types";
+import type { BarEntry, CheckResult, StatusEntry } from "../types";
+import { renderBars } from "./bars";
 
 function summaryLabel(
   src: string,
@@ -33,30 +34,11 @@ const BADGE_MAP: Record<string, { color: string; label: string }> = {
   Pending: { color: "#9ca3af", label: "Pending" },
 };
 
-function historyBarHtml(
-  pingPct: number,
-  httpPct: number,
-  title: string,
-): string {
-  if (pingPct < 0) {
-    return `<span data-history-bar style="display:inline-block;width:8px;height:20px;border-radius:1px;background:#e5e7eb;border:1px solid #d1d5db;" title="No data"></span>`;
-  }
-  const pingColor = uptimeColor(pingPct);
-  const httpColor = uptimeColor(httpPct);
-  return [
-    `<span data-history-bar style="display:inline-block;width:8px;height:20px;border-radius:1px;`,
-    `background:linear-gradient(135deg,${pingColor} 50%,${httpColor} 50%);`,
-    `border:1px solid #d1d5db;"`,
-    ` title="${title} | Ping: ${pingPct.toFixed(1)}% | HTTP: ${httpPct.toFixed(1)}%"`,
-    `></span>`,
-  ].join("");
-}
-
 function aggregateByMinute(
   checks: CheckResult[],
   src: string,
   tgt: string,
-): Array<{ label: string; pingPct: number; httpPct: number }> {
+): { pingBars: BarEntry[]; httpBars: BarEntry[] } {
   const pairChecks = checks.filter(
     (c) => c.node_ip === src && c.target_ip === tgt,
   );
@@ -78,8 +60,8 @@ function aggregateByMinute(
     if (c.ping_ok) b.pingOk++;
     if (c.http_ok) b.httpOk++;
   }
-  const result: Array<{ label: string; pingPct: number; httpPct: number }> =
-    [];
+  const pingBars: BarEntry[] = [];
+  const httpBars: BarEntry[] = [];
   for (let i = 29; i >= 0; i--) {
     const minute = currentMinute - i * 60;
     const b = buckets.get(minute);
@@ -88,16 +70,22 @@ function aggregateByMinute(
         hour: "2-digit",
         minute: "2-digit",
       });
-      result.push({
-        label,
-        pingPct: (b.pingOk / b.total) * 100,
-        httpPct: (b.httpOk / b.total) * 100,
+      const pingPct = b.pingOk / b.total;
+      const httpPct = b.httpOk / b.total;
+      pingBars.push({
+        percent: pingPct,
+        tooltip: `${label} — ${(pingPct * 100).toFixed(1)}% ICMP`,
+      });
+      httpBars.push({
+        percent: httpPct,
+        tooltip: `${label} — ${(httpPct * 100).toFixed(1)}% HTTP`,
       });
     } else {
-      result.push({ label: "", pingPct: -1, httpPct: -1 });
+      pingBars.push({ percent: -1, tooltip: "" });
+      httpBars.push({ percent: -1, tooltip: "" });
     }
   }
-  return result;
+  return { pingBars, httpBars };
 }
 
 function cardHtml(
@@ -108,12 +96,12 @@ function cardHtml(
   lastSeen: string,
   pingUp: number | null,
   httpUp: number | null,
-  minuteBars: Array<{ label: string; pingPct: number; httpPct: number }>,
+  pingBars: BarEntry[],
+  httpBars: BarEntry[],
 ): string {
   const badge = BADGE_MAP[status] ?? BADGE_MAP.Pending;
-  const barsHtml = minuteBars
-    .map((b) => historyBarHtml(b.pingPct, b.httpPct, b.label))
-    .join("");
+  const pingBarHtml = renderBars(pingBars);
+  const httpBarHtml = renderBars(httpBars);
   return [
     `<div class="border border-mesh-border border-l-4 rounded-lg p-3 mb-2 bg-white" style="border-left-color:${badge.color}">`,
     `<div class="flex items-center gap-2 mb-1">`,
@@ -125,7 +113,8 @@ function cardHtml(
     `<span>HTTP: <strong class="text-mesh-dark">${httpLat}</strong> ${uptimeSpan(httpUp)}</span>`,
     `<span>Last: <strong class="text-mesh-dark">${lastSeen}</strong></span>`,
     `</div>`,
-    `<div class="flex items-end gap-0.5 mt-1.5">${barsHtml}</div>`,
+    `<div class="flex items-end gap-0.5 mt-1.5">${pingBarHtml}</div>`,
+    `<div class="flex items-end gap-0.5 mt-0.5">${httpBarHtml}</div>`,
     `</div>`,
   ].join("");
 }
@@ -190,7 +179,7 @@ export function renderCards(
         ? new Date(ck.timestamp * 1000).toLocaleTimeString()
         : "—";
       const uptime = uptimeMap.get(`${src}|${tgt}`) ?? [null, null];
-      const minuteBars = aggregateByMinute(checks, src, tgt);
+      const { pingBars, httpBars } = aggregateByMinute(checks, src, tgt);
       html += cardHtml(
         tgt,
         st,
@@ -199,7 +188,8 @@ export function renderCards(
         lastSeen,
         uptime[0],
         uptime[1],
-        minuteBars,
+        pingBars,
+        httpBars,
       );
     }
     html += "</div></div>";

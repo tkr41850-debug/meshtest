@@ -171,7 +171,7 @@ describe("renderCards", () => {
     expect(header?.className).toContain("sticky");
   });
 
-  it("renders 30 history bars per card with gradient colors", () => {
+  it("renders dual ICMP/HTTP history bar rows per card", () => {
     const container = document.createElement("div");
     const now = 1000000;
     const checks = Array.from({ length: 30 }, (_, i) => ({
@@ -198,8 +198,9 @@ describe("renderCards", () => {
       new Map([["10.0.0.1|10.0.0.2", [100, 100]]]),
     );
     const bars = container.querySelectorAll("[data-history-bar]");
-    expect(bars.length).toBeGreaterThanOrEqual(1);
-    expect(bars[0].getAttribute("title")).toContain("Ping");
+    expect(bars.length).toBe(120);
+    expect(bars[0].getAttribute("title")).toContain("ICMP");
+    expect(bars[30].getAttribute("title")).toContain("HTTP");
   });
 
   it("computes correct bar uptime percentages from ping_ok/http_ok", () => {
@@ -229,12 +230,14 @@ describe("renderCards", () => {
       new Map([["10.0.0.1|10.0.0.2", [100, 100]]]),
     );
     const bars = container.querySelectorAll("[data-history-bar]");
-    const hasFullUptime = [...bars].some(
-      (b) =>
-        b.getAttribute("title")?.includes("Ping: 100.0%") &&
-        b.getAttribute("title")?.includes("HTTP: 100.0%"),
+    const hasIcmp100 = [...bars].some(
+      (b) => b.getAttribute("title")?.includes("100.0% ICMP"),
     );
-    expect(hasFullUptime).toBe(true);
+    const hasHttp100 = [...bars].some(
+      (b) => b.getAttribute("title")?.includes("100.0% HTTP"),
+    );
+    expect(hasIcmp100).toBe(true);
+    expect(hasHttp100).toBe(true);
   });
 
   it("shows empty gray bars when no checks for a pair", () => {
@@ -247,8 +250,8 @@ describe("renderCards", () => {
       new Map(),
     );
     const bars = container.querySelectorAll("[data-history-bar]");
-    // 2 sources × 1 target each = 2 cards, each with 30 bars
-    expect(bars.length).toBe(60);
+    // 2 sources × 1 target each = 2 cards, each with 2 rows × 30 bars
+    expect(bars.length).toBe(120);
     expect(bars[0].getAttribute("title")).toBe("No data");
   });
 
@@ -288,7 +291,7 @@ describe("renderCards", () => {
 });
 
 describe("renderDay30", () => {
-  it("renders expanders per source node", () => {
+  it("renders source group divs instead of details expanders", () => {
     const container = document.createElement("div");
     renderDay30(container, ["10.0.0.1", "10.0.0.2"], [
       {
@@ -304,7 +307,9 @@ describe("renderDay30", () => {
         ],
       },
     ]);
-    expect(container.querySelectorAll("details").length).toBe(2);
+    expect(container.querySelectorAll("details").length).toBe(0);
+    const groups = container.querySelectorAll("[data-source-group]");
+    expect(groups.length).toBe(2);
   });
 
   it("shows no-data message for null days", () => {
@@ -367,7 +372,7 @@ describe("renderDay30", () => {
     expect(container.innerHTML).toContain("2026-06-01");
   });
 
-  it("renders daily history bars per pair with gradient colors", () => {
+  it("renders daily ICMP/HTTP bar rows per pair", () => {
     const container = document.createElement("div");
     renderDay30(container, ["10.0.0.1", "10.0.0.2"], [
       {
@@ -384,11 +389,11 @@ describe("renderDay30", () => {
       },
     ]);
     const bars = container.querySelectorAll("[data-history-bar]");
-    expect(bars.length).toBe(30);
-    // Bars are right-aligned — last bar has data
-    const lastBar = bars[bars.length - 1];
-    expect(lastBar.getAttribute("title")).toContain("Ping");
-    expect(lastBar.getAttribute("title")).toContain("HTTP");
+    expect(bars.length).toBe(60);
+    // Last bar of ICMP row
+    expect(bars[29].getAttribute("title")).toContain("ICMP");
+    // Last bar of HTTP row
+    expect(bars[59].getAttribute("title")).toContain("HTTP");
   });
 
   it("shows empty bars in day30 when no data for some days", () => {
@@ -411,6 +416,6 @@ describe("renderDay30", () => {
     const filledBars = [...bars].filter(
       (b) => b.getAttribute("title") !== "No data",
     );
-    expect(filledBars.length).toBe(1);
+    expect(filledBars.length).toBe(2);
   });
 });
