@@ -1,6 +1,6 @@
 # mesh-status
 
-[![Build & Push Docker Images](https://github.com/{{REPO_OWNER}}/mesh-status/actions/workflows/docker-publish.yml/badge.svg)](https://github.com/{{REPO_OWNER}}/mesh-status/actions/workflows/docker-publish.yml)
+[![Build & Push Docker Images](https://github.com/tkr41850-debug/meshtest/actions/workflows/docker-publish.yml/badge.svg)](https://github.com/tkr41850-debug/meshtest/actions/workflows/docker-publish.yml)
 
 A distributed mesh connectivity testing tool for monitoring network health across VMs connected via VPN WAN.
 
