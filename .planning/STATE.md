@@ -9,11 +9,11 @@ See: .planning/PROJECT.md (updated 2026-06-19)
 
 ## Current Position
 
-Milestone: v0.7 (Dashboard Bugfixes) — Complete ✅
-Current Phase: Completed
-Plan: 2 phases (15, 16) — all complete
-Status: Shipped
-Last activity: 2026-06-19 — v0.7 archived and tagged
+Milestone: v0.7 (Dashboard Bugfixes) — In Progress
+Current Phase: Phase 17 (pending)
+Plan: 3 phases (15, 16, 17) — 15-16 complete, 17 pending
+Status: Phase 17 added for history bars fix
+Last activity: 2026-06-19 — Phase 17 added to v0.7
 
 ## Performance Metrics
 
@@ -92,6 +92,7 @@ Phase 4 (CI/CD) decisions:
 
 ### Roadmap Evolution
 
+- Phase **17** added: Fix history bars showing only most recent check (TDD)
 - Phase **3.1** inserted after Phase **3** (URGENT) — Add mocked integration tests for Phase 1 and 2
 - Phase **4.1** inserted after Phase **4** (URGENT) — Fix cross-phase integration gaps (node HTTP server, /healthz, 30m data retention)
 - Phase **4** added to v0.2: GitHub Actions CI/CD — Build & Push to Docker Hub
@@ -101,6 +102,7 @@ Phase 4 (CI/CD) decisions:
 
 - [x] Phase 15: Bar foundation + type fixes (TDD) — Complete
 - [x] Phase 16: UI integration — flat 30d, dual rows, gap (TDD) — Complete
+- [ ] Phase 17: Fix history bars showing only most recent check (TDD) — Pending
 
 ### Blockers/Concerns
 
@@ -109,5 +111,5 @@ None.
 ## Session Continuity
 
 Last session: 2026-06-19
-Stopped at: v0.7 milestone complete — all phases finished and archived
+Stopped at: Phase 17 added to v0.7 — ready for planning
 Resume file: None

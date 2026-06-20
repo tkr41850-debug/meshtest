@@ -74,6 +74,10 @@ A node must be able to detect and report whether it can reach every other node i
 
 Now part of validated requirements — see v0.5 validated section.
 
+### v0.7 Active
+
+- [ ] **FIX-04**: History bars show rolling 30-minute/30-day history instead of only the most recent check
+
 ### v0.7 Validated
 
 - ✓ **FIX-01**: Fix `CheckResult` interface — use `ping_ok: boolean` / `http_ok: boolean` to match real API
