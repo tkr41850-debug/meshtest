@@ -9,11 +9,11 @@ See: .planning/PROJECT.md (updated 2026-06-19)
 
 ## Current Position
 
-Milestone: v0.7 (Dashboard Bugfixes) — Planning
-Current Phase: Not started
-Plan: 2 phases (15, 16)
-Status: Defining requirements
-Last activity: 2026-06-19 — Milestone v0.7 started
+Milestone: v0.7 (Dashboard Bugfixes) — Complete
+Current Phase: Lifecycle (audit → complete → cleanup)
+Plan: 2 phases (15, 16) — both done
+Status: All phases complete, running milestone closure
+Last activity: 2026-06-19 — Phases 15-16 implemented and committed
 
 ## Performance Metrics
 
@@ -99,8 +99,8 @@ Phase 4 (CI/CD) decisions:
 
 ### Milestone v0.7 Status
 
-- [ ] Phase 15: Bar foundation + type fixes (TDD) — Pending
-- [ ] Phase 16: UI integration — flat 30d, dual rows, gap (TDD) — Pending
+- [x] Phase 15: Bar foundation + type fixes (TDD) — Complete
+- [x] Phase 16: UI integration — flat 30d, dual rows, gap (TDD) — Complete
 
 ### Blockers/Concerns
 

@@ -74,16 +74,16 @@ A node must be able to detect and report whether it can reach every other node i
 
 Now part of validated requirements — see v0.5 validated section.
 
-### v0.7 Active
+### v0.7 Validated
 
-- [ ] **FIX-01**: Fix `CheckResult` interface — use `ping_ok: boolean` / `http_ok: boolean` to match real API
-- [ ] **FIX-02**: Fix `aggregateByMinute` checks `c.ping_status` (not in API data) → use `c.ping_ok`
-- [ ] **FIX-03**: Backend infers `node_ip` from `_results` when disk data has empty `node_ip`
-- [ ] **DASH-13**: Flat 30-day view — remove `<details>` expanders, use sticky headers
-- [ ] **DASH-14**: Gap between matrix table and cards in 30m tab
-- [ ] **DASH-15**: Two separate history bar rows per pair (ICMP + HTTP) in both views
-- [ ] **DASH-16**: HSB-interpolated bar colors via shared `bars.ts` (`renderBars(bars: {percent, tooltip}[])`)
-- [ ] **TEST-04**: Update all frontend test fixtures for new `CheckResult` type and bar format
+- ✓ **FIX-01**: Fix `CheckResult` interface — use `ping_ok: boolean` / `http_ok: boolean` to match real API
+- ✓ **FIX-02**: Fix `aggregateByMinute` checks `c.ping_status` (not in API data) → use `c.ping_ok`
+- ✓ **FIX-03**: Backend infers `node_ip` from `_results` when disk data has empty `node_ip`
+- ✓ **DASH-13**: Flat 30-day view — remove `<details>` expanders, use sticky headers
+- ✓ **DASH-14**: Gap between matrix table and cards in 30m tab
+- ✓ **DASH-15**: Two separate history bar rows per pair (ICMP + HTTP) in both views
+- ✓ **DASH-16**: HSB-interpolated bar colors via shared `bars.ts` (`renderBars(bars: {percent, tooltip}[])`)
+- ✓ **TEST-04**: Update all frontend test fixtures for new `CheckResult` type and bar format
 
 ### Out of Scope
 
