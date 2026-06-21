@@ -5,15 +5,15 @@
 See: .planning/PROJECT.md (updated 2026-06-19)
 
 **Core value:** A node must be able to detect and report whether it can reach every other node in the mesh, and the leader must present an accurate, up-to-date connectivity view.
-**Current focus:** v0.9 UI Consolidation — History Bars, Color & Windows
+**Current focus:** Planning next milestone
 
 ## Current Position
 
 Milestone: v0.9 (UI Consolidation — History Bars, Color & Windows)
-Phase: 21 (Color Consistency)
+Phase: 21-23
 Plan: —
-Status: Roadmap created — ready to plan Phase 21
-Last activity: 2026-06-20 — v0.9 roadmap created (Phases 21-23)
+Status: Shipped 2026-06-20
+Last activity: 2026-06-20 — v0.9 shipped (all 14 requirements satisfied)
 
 ## Performance Metrics
 
@@ -112,9 +112,9 @@ Phase 4 (CI/CD) decisions:
 
 ### Milestone v0.9 Status
 
-- [ ] Phase 21: Color Consistency — Not started
-- [ ] Phase 22: 90m/90h/90d Window Expansion — Not started
-- [ ] Phase 23: Unified Cards Layout — Not started
+- [x] Phase 21: Color Consistency — Complete
+- [x] Phase 22: 90m/90h/90d Window Expansion — Complete
+- [x] Phase 23: Unified Cards Layout — Complete
 
 ### Decisions (v0.9)
 
@@ -145,6 +145,6 @@ None.
 ## Session Continuity
 
 Last session: 2026-06-20
-Stopped at: v0.9 roadmap created (Phases 21-23)
+Stopped at: v0.9 shipped
 Resume file: None
-Next action: Plan Phase 21 (Color Consistency)
+Next action: Plan next milestone

@@ -79,11 +79,9 @@ Completed 2026-06-20.
 - [x] **Phase 19: Start Script & Config Integration** — `start.sh --leader/--node`, signal handling, PID management, log redirection, config wizard, and persistence.py DATA_DIR fix
 - [x] **Phase 20: Docker CI Testing** — CI pipeline tests full install flow in fresh container, non-interactive mode, and start.sh health check
 
-### 🔄 v0.9 — UI Consolidation: History Bars, Color & Windows
+### ✅ v0.9 — UI Consolidation: History Bars, Color & Windows
 
-- [ ] **Phase 21: Color Consistency (COLOR)** — Extract shared `uptimeColor()` to `views/colors.ts`, apply HSL gradient thresholds to bars and numbers, remove duplicated color logic
-- [ ] **Phase 22: 90m/90h/90d Window Expansion (WINDOW)** — Backend extends retention to 5400s, adds `/data?window=90h` endpoint; frontend increases all bars to 90, adds third tab for 90h
-- [ ] **Phase 23: Unified Cards Layout (UNIFY)** — Extract shared card template to `views/card.ts`, refactor all three views to use consistent card layout with split circle + total check count
+Completed 2026-06-20. See `.planning/milestones/v0.9-ROADMAP.md` for full details.
 
 ## Progress
 
@@ -114,9 +112,9 @@ Completed 2026-06-20.
 | 18 | v0.8 | Complete | 2026-06-20 |
 | 19 | v0.8 | Complete | 2026-06-20 |
 | 20 | v0.8 | Complete | 2026-06-20 |
-| 21 | v0.9 | Not started | — |
-| 22 | v0.9 | Not started | — |
-| 23 | v0.9 | Not started | — |
+| 21 | v0.9 | Complete | 2026-06-20 |
+| 22 | v0.9 | Complete | 2026-06-20 |
+| 23 | v0.9 | Complete | 2026-06-20 |
 
 ## v0.8 Phase Details
 

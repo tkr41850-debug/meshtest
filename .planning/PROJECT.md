@@ -8,17 +8,11 @@ A distributed mesh connectivity testing tool for monitoring network health acros
 
 A node must be able to detect and report whether it can reach every other node in the mesh, and the leader must present an accurate, up-to-date connectivity view.
 
-## Current Milestone: v0.9 UI Consolidation — History Bars, Color & Windows
+## Current State
 
-**Goal:** Unify the status history display across all time windows with consistent coloring, increase bar count from 30 to 90 per window, and add a 90-hour intermediate view.
+**Shipped:** v0.9 — UI Consolidation (2026-06-20)
 
-**Target features:**
-- HSL gradient coloring with <90% red, 90–99% amber ramp, ≥99.9% green — applied to bars AND numbers
-- Extract shared color function, remove duplicated color logic
-- Backend: extend retention to 5400s, add `/data?window=90h` endpoint with hourly aggregation
-- Frontend: 30→90 bars in all views, add types/api/view for 90h
-- Unified card layout: 30m cards get split circle + total check count; 90d and 90h use same card layout
-
+**Context:** Color scheme unified across all views, 90-bar windows (90m/90h/90d), shared card layout template. All 14 v0.9 requirements satisfied.
 
 ## Requirements
 
@@ -89,33 +83,50 @@ Now part of validated requirements — see v0.5 validated section.
 - ✓ **DASH-16**: HSB-interpolated bar colors via shared `bars.ts` (`renderBars(bars: {percent, tooltip}[])`)
 - ✓ **TEST-04**: Update all frontend test fixtures for new `CheckResult` type and bar format
 
-### v0.8 Active
+### v0.9 Validated
 
-- [x] **INST-01**: `deploy/install.sh` installs mesh-status to `~/.local/meshtest`
-- [x] **INST-02**: Prerequisite checks for `uv` and `git` with actionable messages
-- [x] **INST-03**: Version-pinned git clone via `MESH_STATUS_VERSION` env var
-- [x] **INST-04**: `uv sync` installs Python dependencies
-- [x] **INST-05**: Frontend build during install (npm ci + npm run build)
-- [x] **INST-06**: Idempotent reinstall — git pull in existing clone on re-run
-- [x] **INST-07**: Success banner with install path, start commands, dashboard URL
-- [x] **INST-08**: `-y` / `--yes` flag for non-interactive mode
-- [x] **INST-09**: `--help` flag for install.sh
-- [x] **START-01**: `start.sh --leader` starts the leader via `uv run`
-- [x] **START-02**: `start.sh --node` starts the node agent
-- [x] **START-03**: Log output redirected to `$INSTALL_DIR/var/*.log`
-- [x] **START-04**: PID file management for process tracking
-- [x] **START-05**: Signal handling (SIGTERM/SIGINT traps for graceful shutdown)
-- [x] **START-06**: `start.sh --help` flag
-- [x] **START-07**: `start.sh --version` flag
-- [x] **START-08**: `start.sh --uninstall` removes install and prints PATH cleanup
-- [x] **CONF-01**: `.env` config file generation with defaults during install
-- [x] **CONF-02**: Interactive config wizard for first-run setup
-- [x] **CONF-03**: `MESH_STATUS_HOME` env var to override install directory
-- [x] **CONF-04**: CLI flag override for non-interactive config
-- [x] **TEST-01**: Docker-based CI test verifies full install flow in fresh container
-- [x] **TEST-02**: CI test runs `install.sh -y` with env vars for non-interactive mode
-- [x] **TEST-03**: CI test verifies `start.sh` launches and process is healthy
-- [x] **FIX-05**: Fix `persistence.py` to respect `DATA_DIR` env var instead of hardcoded `Path("data")`
+- ✓ **COLOR-01**: Extract shared `uptimeColor()` to `views/colors.ts` — v0.9
+- ✓ **COLOR-02**: HSL gradient thresholds — v0.9
+- ✓ **COLOR-03**: Remove duplicated color logic — v0.9
+- ✓ **COLOR-04**: Test color consistency at boundary values — v0.9
+- ✓ **WINDOW-01**: Backend retention 1800s→5400s — v0.9
+- ✓ **WINDOW-02**: `/data?window=90h` endpoint — v0.9
+- ✓ **WINDOW-03**: Frontend bars 30→90 — v0.9
+- ✓ **WINDOW-04**: `api.ts` adds `fetchData90h()`, renames — v0.9
+- ✓ **WINDOW-05**: `types.ts` adds HourData/Data90hResponse — v0.9
+- ✓ **WINDOW-06**: `main.ts` wires third tab — v0.9
+- ✓ **UNIFY-01**: Extract shared card template to `views/card.ts` — v0.9
+- ✓ **UNIFY-02**: cards.ts includes split circle + check count — v0.9
+- ✓ **UNIFY-03**: day30.ts renders per-pair cards — v0.9
+- ✓ **UNIFY-04**: hourly.ts uses shared card template — v0.9
+
+### v0.8 Validated
+
+- ✓ **INST-01**: `deploy/install.sh` installs mesh-status to `~/.local/meshtest` — v0.8
+- ✓ **INST-02**: Prerequisite checks for `uv` and `git` with actionable messages — v0.8
+- ✓ **INST-03**: Version-pinned git clone via `MESH_STATUS_VERSION` env var — v0.8
+- ✓ **INST-04**: `uv sync` installs Python dependencies — v0.8
+- ✓ **INST-05**: Frontend build during install (npm ci + npm run build) — v0.8
+- ✓ **INST-06**: Idempotent reinstall — git pull in existing clone on re-run — v0.8
+- ✓ **INST-07**: Success banner with install path, start commands, dashboard URL — v0.8
+- ✓ **INST-08**: `-y` / `--yes` flag for non-interactive mode — v0.8
+- ✓ **INST-09**: `--help` flag for install.sh — v0.8
+- ✓ **START-01**: `start.sh --leader` starts the leader via `uv run` — v0.8
+- ✓ **START-02**: `start.sh --node` starts the node agent — v0.8
+- ✓ **START-03**: Log output redirected to `$INSTALL_DIR/var/*.log` — v0.8
+- ✓ **START-04**: PID file management for process tracking — v0.8
+- ✓ **START-05**: Signal handling (SIGTERM/SIGINT traps for graceful shutdown) — v0.8
+- ✓ **START-06**: `start.sh --help` flag — v0.8
+- ✓ **START-07**: `start.sh --version` flag — v0.8
+- ✓ **START-08**: `start.sh --uninstall` removes install and prints PATH cleanup — v0.8
+- ✓ **CONF-01**: `.env` config file generation with defaults during install — v0.8
+- ✓ **CONF-02**: Interactive config wizard for first-run setup — v0.8
+- ✓ **CONF-03**: `MESH_STATUS_HOME` env var to override install directory — v0.8
+- ✓ **CONF-04**: CLI flag override for non-interactive config — v0.8
+- ✓ **TEST-01**: Docker-based CI test verifies full install flow in fresh container — v0.8
+- ✓ **TEST-02**: CI test runs `install.sh -y` with env vars for non-interactive mode — v0.8
+- ✓ **TEST-03**: CI test verifies `start.sh` launches and process is healthy — v0.8
+- ✓ **FIX-05**: Fix `persistence.py` to respect `DATA_DIR` env var — v0.8
 
 ### Out of Scope
 
@@ -177,4 +188,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-06-19 after v0.8 milestone start*
+*Last updated: 2026-06-20 after v0.9 milestone*
