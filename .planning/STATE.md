@@ -5,15 +5,15 @@
 See: .planning/PROJECT.md (updated 2026-06-19)
 
 **Core value:** A node must be able to detect and report whether it can reach every other node in the mesh, and the leader must present an accurate, up-to-date connectivity view.
-**Current focus:** v0.8 Non-Docker Install & Start Scripts
+**Current focus:** v0.9 UI Consolidation — History Bars, Color & Windows
 
 ## Current Position
 
-Milestone: v0.8 (Non-Docker Install & Start Scripts) — MILESTONE COMPLETE
-Current Phase: Phase 20 (Docker CI Testing) — Complete
-Plan: Phase 18-20 complete — install.sh + start.sh + CI workflow
-Status: v0.8 milestone audit PASSED — all 25 requirements satisfied
-Last activity: 2026-06-20 — v0.8 milestone audit: passed
+Milestone: v0.9 (UI Consolidation — History Bars, Color & Windows)
+Phase: Not started (defining requirements)
+Plan: —
+Status: Defining requirements
+Last activity: 2026-06-20 — Milestone v0.9 started
 
 ## Performance Metrics
 
@@ -110,6 +110,20 @@ Phase 4 (CI/CD) decisions:
 - [x] Phase 19: Start Script & Config Integration — Complete
 - [x] Phase 20: Docker CI Testing — Complete
 
+### Milestone v0.9 Status
+
+- [ ] Phase 21: — Not started
+
+### Decisions (v0.9)
+
+- **Phase numbering**: v0.9 starts at Phase 21 (continuing from v0.8's Phase 20)
+- **Color scheme**: HSL gradient with <90%→red (0°), 90-99%→amber ramp (45°→120°), ≥99.9%→green (120°). Same scheme for bars AND numbers.
+- **Window structure**: 90m (90 × 1-min bars), 90h (90 × 1-hour bars), 90d (90 × 1-day bars) — replacing 30m/30d
+- **Layout**: Cards layout with split circle + total check count used consistently across all three windows
+- **Shared color function**: Extract to `views/colors.ts` — single source of truth
+- **Backend**: Extend in-memory retention to 5400s; add `/data?window=90h` endpoint
+- **All changes TDD**: Write Vitest tests first, then implementation
+
 ### Decisions (v0.8 — roadmap creation)
 
 - **Phase numbering**: v0.8 starts at Phase 18 (continuing from v0.7's Phase 17)
@@ -129,6 +143,6 @@ None.
 ## Session Continuity
 
 Last session: 2026-06-20
-Stopped at: v0.8 milestone audit passed
+Stopped at: v0.9 milestone initialized
 Resume file: None
-Next action: Complete milestone via /gsd-complete-milestone v0.8
+Next action: Define requirements and create roadmap

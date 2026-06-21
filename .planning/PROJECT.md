@@ -8,17 +8,16 @@ A distributed mesh connectivity testing tool for monitoring network health acros
 
 A node must be able to detect and report whether it can reach every other node in the mesh, and the leader must present an accurate, up-to-date connectivity view.
 
-## Current Milestone: v0.8 Non-Docker Install & Start Scripts
+## Current Milestone: v0.9 UI Consolidation — History Bars, Color & Windows
 
-**Goal:** Provide a production-ready install experience — `curl ... | bash` installs mesh-status, `start.sh --leader` runs the leader, `start.sh --node` runs the node.
+**Goal:** Unify the status history display across all time windows with consistent coloring, increase bar count from 30 to 90 per window, and add a 90-hour intermediate view.
 
 **Target features:**
-- `deploy/install.sh` — curl-pipe-bash installer (prereqs: uv + git)
-- `start.sh` — unified runner with `--leader` / `--node` roles
-- Interactive config setup (CLI flags for non-interactive mode, CI-friendly)
-- Docker-based CI testing of the full install flow
-- Works both inside and outside Docker
-
+- HSL gradient coloring with <90% red, 90–99% amber ramp, ≥99.9% green — applied to bars AND numbers
+- Extract shared color function, remove duplicated color logic
+- Backend: extend retention to 5400s, add `/data?window=90h` endpoint with hourly aggregation
+- Frontend: 30→90 bars in all views, add types/api/view for 90h
+- Unified card layout: 30m cards get split circle + total check count; 90d and 90h use same card layout
 
 
 ## Requirements
@@ -92,31 +91,31 @@ Now part of validated requirements — see v0.5 validated section.
 
 ### v0.8 Active
 
-- [ ] **INST-01**: `deploy/install.sh` installs mesh-status to `~/.local/meshtest`
-- [ ] **INST-02**: Prerequisite checks for `uv` and `git` with actionable messages
-- [ ] **INST-03**: Version-pinned git clone via `MESH_STATUS_VERSION` env var
-- [ ] **INST-04**: `uv sync` installs Python dependencies
-- [ ] **INST-05**: Frontend build during install (npm ci + npm run build)
-- [ ] **INST-06**: Idempotent reinstall — git pull in existing clone on re-run
-- [ ] **INST-07**: Success banner with install path, start commands, dashboard URL
-- [ ] **INST-08**: `-y` / `--yes` flag for non-interactive mode
-- [ ] **INST-09**: `--help` flag for install.sh
-- [ ] **START-01**: `start.sh --leader` starts the leader via `uv run`
-- [ ] **START-02**: `start.sh --node` starts the node agent
-- [ ] **START-03**: Log output redirected to `$INSTALL_DIR/var/*.log`
-- [ ] **START-04**: PID file management for process tracking
-- [ ] **START-05**: Signal handling (SIGTERM/SIGINT traps for graceful shutdown)
-- [ ] **START-06**: `start.sh --help` flag
-- [ ] **START-07**: `start.sh --version` flag
-- [ ] **START-08**: `start.sh --uninstall` removes install and prints PATH cleanup
-- [ ] **CONF-01**: `.env` config file generation with defaults during install
-- [ ] **CONF-02**: Interactive config wizard for first-run setup
-- [ ] **CONF-03**: `MESH_STATUS_HOME` env var to override install directory
-- [ ] **CONF-04**: CLI flag override for non-interactive config
-- [ ] **TEST-01**: Docker-based CI test verifies full install flow in fresh container
-- [ ] **TEST-02**: CI test runs `install.sh -y` with env vars for non-interactive mode
-- [ ] **TEST-03**: CI test verifies `start.sh` launches and process is healthy
-- [ ] **FIX-05**: Fix `persistence.py` to respect `DATA_DIR` env var instead of hardcoded `Path("data")`
+- [x] **INST-01**: `deploy/install.sh` installs mesh-status to `~/.local/meshtest`
+- [x] **INST-02**: Prerequisite checks for `uv` and `git` with actionable messages
+- [x] **INST-03**: Version-pinned git clone via `MESH_STATUS_VERSION` env var
+- [x] **INST-04**: `uv sync` installs Python dependencies
+- [x] **INST-05**: Frontend build during install (npm ci + npm run build)
+- [x] **INST-06**: Idempotent reinstall — git pull in existing clone on re-run
+- [x] **INST-07**: Success banner with install path, start commands, dashboard URL
+- [x] **INST-08**: `-y` / `--yes` flag for non-interactive mode
+- [x] **INST-09**: `--help` flag for install.sh
+- [x] **START-01**: `start.sh --leader` starts the leader via `uv run`
+- [x] **START-02**: `start.sh --node` starts the node agent
+- [x] **START-03**: Log output redirected to `$INSTALL_DIR/var/*.log`
+- [x] **START-04**: PID file management for process tracking
+- [x] **START-05**: Signal handling (SIGTERM/SIGINT traps for graceful shutdown)
+- [x] **START-06**: `start.sh --help` flag
+- [x] **START-07**: `start.sh --version` flag
+- [x] **START-08**: `start.sh --uninstall` removes install and prints PATH cleanup
+- [x] **CONF-01**: `.env` config file generation with defaults during install
+- [x] **CONF-02**: Interactive config wizard for first-run setup
+- [x] **CONF-03**: `MESH_STATUS_HOME` env var to override install directory
+- [x] **CONF-04**: CLI flag override for non-interactive config
+- [x] **TEST-01**: Docker-based CI test verifies full install flow in fresh container
+- [x] **TEST-02**: CI test runs `install.sh -y` with env vars for non-interactive mode
+- [x] **TEST-03**: CI test verifies `start.sh` launches and process is healthy
+- [x] **FIX-05**: Fix `persistence.py` to respect `DATA_DIR` env var instead of hardcoded `Path("data")`
 
 ### Out of Scope
 
