@@ -66,18 +66,100 @@ def _flush_results(results_batch: dict[str, list[dict]]):
         logger.info("Flushed %d results to %s", len(items), _date_path(d))
 
 
+async def load_into_memory(
+    results_store: dict[str, list[dict]],
+    day_aggregates: dict[str, dict],
+):
+    """Load disk data into in-memory stores on leader startup.
+
+    Data within last 90h → raw results in results_store.
+    Data older than 90h → daily aggregates in day_aggregates.
+    """
+    cutoff_90h = time.time() - 90 * 3600
+    start = (datetime.now() - timedelta(days=90)).date()
+    end = datetime.now().date()
+    raw = _read_results(start, end)
+
+    target_to_source: dict[str, str] = {}
+    loaded_raw = 0
+    loaded_agg = 0
+
+    for r in raw:
+        ts = r.get("timestamp", 0)
+        node_ip = r.get("node_ip", "")
+        target_ip = r.get("target_ip", "")
+
+        if not node_ip and target_ip:
+            node_ip = target_to_source.get(target_ip, "")
+        if node_ip and target_ip and node_ip not in target_to_source:
+            target_to_source[target_ip] = node_ip
+
+        if ts >= cutoff_90h:
+            if node_ip not in results_store:
+                results_store[node_ip] = []
+            check = {k: v for k, v in r.items() if k != "node_ip"}
+            results_store[node_ip].append(check)
+            loaded_raw += 1
+        else:
+            day = datetime.fromtimestamp(ts).strftime("%Y-%m-%d")
+            if day not in day_aggregates:
+                day_aggregates[day] = {}
+            key = (node_ip, target_ip)
+            if key not in day_aggregates[day]:
+                day_aggregates[day][key] = {"total": 0, "ping_ok": 0, "http_ok": 0}
+            day_aggregates[day][key]["total"] += 1
+            if r.get("ping_ok"):
+                day_aggregates[day][key]["ping_ok"] += 1
+            if r.get("http_ok"):
+                day_aggregates[day][key]["http_ok"] += 1
+            loaded_agg += 1
+
+    logger.info(
+        "Loaded from disk: %d raw results, %d aggregated checks across %d days",
+        loaded_raw,
+        loaded_agg,
+        len(day_aggregates),
+    )
+
+
 async def flush_loop(interval: int = 3600):
-    """Background task: flush _results to disk every `interval` seconds."""
-    from mesh_status.leader import _results
+    """Background task: flush _results to disk every `interval` seconds.
+
+    After flushing, moves data older than 90h to daily aggregates
+    and removes it from _results.
+    """
+    from mesh_status.leader import _results, _day_aggregates
 
     while True:
         await asyncio.sleep(interval)
         if _results:
             batch = dict(_results)
             _flush_results(batch)
-            # Keep last 10 minutes in memory
-            cutoff = time.time() - 5400
+            cutoff_90h = time.time() - 90 * 3600
             for node_ip in list(_results.keys()):
-                _results[node_ip] = [
-                    r for r in _results[node_ip] if r.get("timestamp", 0) >= cutoff
-                ]
+                recent = []
+                for r in _results[node_ip]:
+                    ts = r.get("timestamp", 0)
+                    if ts >= cutoff_90h:
+                        recent.append(r)
+                    else:
+                        day = datetime.fromtimestamp(ts).strftime("%Y-%m-%d")
+                        if day not in _day_aggregates:
+                            _day_aggregates[day] = {}
+                        key = (node_ip, r.get("target_ip", ""))
+                        if key not in _day_aggregates[day]:
+                            _day_aggregates[day][key] = {"total": 0, "ping_ok": 0, "http_ok": 0}
+                        _day_aggregates[day][key]["total"] += 1
+                        if r.get("ping_ok"):
+                            _day_aggregates[day][key]["ping_ok"] += 1
+                        if r.get("http_ok"):
+                            _day_aggregates[day][key]["http_ok"] += 1
+                if recent:
+                    _results[node_ip] = recent
+                else:
+                    del _results[node_ip]
+            logger.debug(
+                "Flush complete: %d nodes in _results, %d days in _day_aggregates",
+                len(_results),
+                len(_day_aggregates),
+            )

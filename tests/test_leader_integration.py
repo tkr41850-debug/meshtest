@@ -160,6 +160,9 @@ class TestDataApiIntegration:
         assert "timestamp" in data
 
     async def test_data_90d_includes_in_memory_data(self, client):
+        import time
+
+        ts = time.time() - 3600
         await client.post(
             "/submit",
             json={
@@ -169,10 +172,10 @@ class TestDataApiIntegration:
                         "target_ip": "10.0.0.2",
                         "ping_ok": True,
                         "http_ok": True,
-                        "timestamp": 1000.0,
+                        "timestamp": ts,
                     }
                 ],
-                "timestamp": 1000.0,
+                "timestamp": ts,
             },
         )
         resp = await client.get("/data?window=90d")
@@ -186,6 +189,9 @@ class TestDataApiIntegration:
         assert conn["http_uptime_pct"] == 100.0
 
     async def test_data_90d_aggregates_by_day(self, client):
+        import time
+
+        ts = time.time() - 3600
         await client.post(
             "/submit",
             json={
@@ -195,16 +201,16 @@ class TestDataApiIntegration:
                         "target_ip": "10.0.0.1",
                         "ping_ok": True,
                         "http_ok": False,
-                        "timestamp": 1000.0,
+                        "timestamp": ts,
                     },
                     {
                         "target_ip": "10.0.0.3",
                         "ping_ok": False,
                         "http_ok": False,
-                        "timestamp": 1000.5,
+                        "timestamp": ts + 0.5,
                     },
                 ],
-                "timestamp": 1000.0,
+                "timestamp": ts,
             },
         )
         resp = await client.get("/data?window=90d")
