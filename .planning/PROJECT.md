@@ -12,7 +12,7 @@ A node must be able to detect and report whether it can reach every other node i
 
 **Shipped:** v0.10 — Custom Hover Tooltips (2026-06-21)
 
-**Context:** Native HTML `title` tooltips replaced with custom CSS-only tooltip containers in the unified card template and matrix view, using group-based hover for bar rows. CI pipeline fixes (ruff deps, Makefile, heredoc quoting). `total_checks` summing bug fixed in hourly/daily views.
+**Context:** Native HTML `title` tooltips replaced with custom CSS-only per-bar tooltip containers in the unified card template and matrix view. CI pipeline fixes (ruff deps, Makefile, heredoc quoting). `total_checks` summing bug fixed in hourly/daily views.
 
 ## Requirements
 
@@ -86,7 +86,7 @@ Now part of validated requirements — see v0.5 validated section.
 ### v0.10 Validated
 
 - ✓ **UXTIP-01**: Remove `title` from bar spans, use `data-tooltip` — v0.10
-- ✓ **UXTIP-02**: CSS-only tooltip containers around bar rows in `card.ts` — v0.10
+- ✓ **UXTIP-02**: Each bar span wrapped in `.mesh-tooltip-group` with individual `.mesh-tooltip` div — per-bar hover, not row-level — v0.10
 - ✓ **UXTIP-03**: Tooltip CSS classes in `style.css` (dark bg, positioned, arrow) — v0.10
 - ✓ **UXTIP-04**: Matrix column headers use tooltip div instead of `title` — v0.10
 - ✓ **UXTIP-05**: Tests updated — no `getAttribute("title")`, use `.mesh-tooltip` / `data-tooltip` — v0.10

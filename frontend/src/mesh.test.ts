@@ -202,8 +202,9 @@ describe("renderCards", () => {
     const bars = container.querySelectorAll("[data-history-bar]");
     expect(bars.length).toBe(360);
     const tooltips = container.querySelectorAll(".mesh-tooltip");
-    expect(tooltips[0]?.textContent).toBe("ICMP");
-    expect(tooltips[1]?.textContent).toBe("HTTP");
+    expect(tooltips.length).toBe(360);
+    expect(tooltips[0]?.textContent).toMatch(/100\.0% ICMP/);
+    expect(tooltips[90]?.textContent).toMatch(/100\.0% HTTP/);
   });
 
   it("computes correct bar uptime percentages from ping_ok/http_ok", () => {
@@ -392,8 +393,9 @@ describe("renderDay30", () => {
     const bars = container.querySelectorAll("[data-history-bar]");
     expect(bars.length).toBe(180);
     const tooltips = container.querySelectorAll(".mesh-tooltip");
-    expect(tooltips[0]?.textContent).toBe("ICMP");
-    expect(tooltips[1]?.textContent).toBe("HTTP");
+    expect(tooltips.length).toBe(180);
+    expect(tooltips[89]?.textContent).toMatch(/2026-06-01.*100\.0% ICMP/);
+    expect(tooltips[179]?.textContent).toMatch(/2026-06-01.*99\.5% HTTP/);
   });
 
   it("shows empty bars in day30 when no data for some days", () => {

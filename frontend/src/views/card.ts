@@ -53,8 +53,8 @@ export function cardHtml(
     `<span>Last: <strong class="text-mesh-dark">${lastSeen}</strong></span>`,
     `<span>Checks: <strong class="text-mesh-dark">${totalChecks}</strong></span>`,
     `</div>`,
-    `<div class="mesh-tooltip-group"><div class="mesh-tooltip">ICMP</div><div class="flex items-end gap-0.5 mt-1.5">${pingBarHtml}</div></div>`,
-    `<div class="mesh-tooltip-group"><div class="mesh-tooltip">HTTP</div><div class="flex items-end gap-0.5 mt-0.5">${httpBarHtml}</div></div>`,
+    `<div class="flex items-end gap-0.5 mt-1.5">${pingBarHtml}</div>`,
+    `<div class="flex items-end gap-0.5 mt-0.5">${httpBarHtml}</div>`,
     `</div>`,
   ].join("");
 }
