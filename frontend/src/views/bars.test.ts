@@ -14,8 +14,12 @@ describe("barColor", () => {
     expect(barColor(0.5)).toBe("hsl(0, 85%, 40%)");
   });
 
-  it("returns amber start for 90%", () => {
-    expect(barColor(0.9)).toBe("hsl(45, 85%, 40%)");
+  it("returns red for 90% (start of red~amber ramp)", () => {
+    expect(barColor(0.9)).toBe("hsl(0, 85%, 40%)");
+  });
+
+  it("returns amber for 99%", () => {
+    expect(barColor(0.99)).toBe("hsl(45, 85%, 40%)");
   });
 
   it("returns green for 100%", () => {
