@@ -10,10 +10,10 @@ See: .planning/PROJECT.md (updated 2026-06-19)
 ## Current Position
 
 Milestone: v0.9 (UI Consolidation — History Bars, Color & Windows)
-Phase: Not started (defining requirements)
+Phase: 21 (Color Consistency)
 Plan: —
-Status: Defining requirements
-Last activity: 2026-06-20 — Milestone v0.9 started
+Status: Roadmap created — ready to plan Phase 21
+Last activity: 2026-06-20 — v0.9 roadmap created (Phases 21-23)
 
 ## Performance Metrics
 
@@ -112,7 +112,9 @@ Phase 4 (CI/CD) decisions:
 
 ### Milestone v0.9 Status
 
-- [ ] Phase 21: — Not started
+- [ ] Phase 21: Color Consistency — Not started
+- [ ] Phase 22: 90m/90h/90d Window Expansion — Not started
+- [ ] Phase 23: Unified Cards Layout — Not started
 
 ### Decisions (v0.9)
 
@@ -143,6 +145,6 @@ None.
 ## Session Continuity
 
 Last session: 2026-06-20
-Stopped at: v0.9 milestone initialized
+Stopped at: v0.9 roadmap created (Phases 21-23)
 Resume file: None
-Next action: Define requirements and create roadmap
+Next action: Plan Phase 21 (Color Consistency)

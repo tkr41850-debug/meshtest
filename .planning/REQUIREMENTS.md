@@ -7,43 +7,68 @@
 
 ### Install Script (INST)
 
-- [ ] **INST-01**: `deploy/install.sh` installs mesh-status to `~/.local/meshtest`
-- [ ] **INST-02**: Prerequisite checks for `uv` and `git` with actionable messages
-- [ ] **INST-03**: Version-pinned git clone via `MESH_STATUS_VERSION` env var
-- [ ] **INST-04**: `uv sync` installs Python dependencies
-- [ ] **INST-05**: Frontend build during install (npm ci + npm run build)
-- [ ] **INST-06**: Idempotent reinstall — git pull in existing clone on re-run
-- [ ] **INST-07**: Success banner with install path, start commands, dashboard URL
-- [ ] **INST-08**: `-y` / `--yes` flag for non-interactive mode
-- [ ] **INST-09**: `--help` flag for install.sh
+- [x] **INST-01**: `deploy/install.sh` installs mesh-status to `~/.local/meshtest`
+- [x] **INST-02**: Prerequisite checks for `uv` and `git` with actionable messages
+- [x] **INST-03**: Version-pinned git clone via `MESH_STATUS_VERSION` env var
+- [x] **INST-04**: `uv sync` installs Python dependencies
+- [x] **INST-05**: Frontend build during install (npm ci + npm run build)
+- [x] **INST-06**: Idempotent reinstall — git pull in existing clone on re-run
+- [x] **INST-07**: Success banner with install path, start commands, dashboard URL
+- [x] **INST-08**: `-y` / `--yes` flag for non-interactive mode
+- [x] **INST-09**: `--help` flag for install.sh
 
 ### Start Script (START)
 
-- [ ] **START-01**: `start.sh --leader` starts the leader via `uv run`
-- [ ] **START-02**: `start.sh --node` starts the node agent
-- [ ] **START-03**: Log output redirected to `$INSTALL_DIR/var/*.log`
-- [ ] **START-04**: PID file management for process tracking
-- [ ] **START-05**: Signal handling (SIGTERM/SIGINT traps for graceful shutdown)
-- [ ] **START-06**: `start.sh --help` flag
-- [ ] **START-07**: `start.sh --version` flag
-- [ ] **START-08**: `start.sh --uninstall` removes install and prints PATH cleanup
+- [x] **START-01**: `start.sh --leader` starts the leader via `uv run`
+- [x] **START-02**: `start.sh --node` starts the node agent
+- [x] **START-03**: Log output redirected to `$INSTALL_DIR/var/*.log`
+- [x] **START-04**: PID file management for process tracking
+- [x] **START-05**: Signal handling (SIGTERM/SIGINT traps for graceful shutdown)
+- [x] **START-06**: `start.sh --help` flag
+- [x] **START-07**: `start.sh --version` flag
+- [x] **START-08**: `start.sh --uninstall` removes install and prints PATH cleanup
 
 ### Config & Setup (CONF)
 
-- [ ] **CONF-01**: `.env` config file generation with defaults during install
-- [ ] **CONF-02**: Interactive config wizard for first-run setup
-- [ ] **CONF-03**: `MESH_STATUS_HOME` env var to override install directory
-- [ ] **CONF-04**: CLI flag override for non-interactive config
+- [x] **CONF-01**: `.env` config file generation with defaults during install
+- [x] **CONF-02**: Interactive config wizard for first-run setup
+- [x] **CONF-03**: `MESH_STATUS_HOME` env var to override install directory
+- [x] **CONF-04**: CLI flag override for non-interactive config
 
 ### Docker CI Test (TEST)
 
-- [ ] **TEST-01**: Docker-based CI test verifies full install flow in fresh container
-- [ ] **TEST-02**: CI test runs `install.sh -y` with env vars for non-interactive mode
-- [ ] **TEST-03**: CI test verifies `start.sh` launches and process is healthy
+- [x] **TEST-01**: Docker-based CI test verifies full install flow in fresh container
+- [x] **TEST-02**: CI test runs `install.sh -y` with env vars for non-interactive mode
+- [x] **TEST-03**: CI test verifies `start.sh` launches and process is healthy
 
 ### Infrastructure Fix (FIX)
 
-- [ ] **FIX-05**: Fix `persistence.py` to respect `DATA_DIR` env var instead of hardcoded `Path("data")`
+- [x] **FIX-05**: Fix `persistence.py` to respect `DATA_DIR` env var instead of hardcoded `Path("data")`
+
+## v0.9 Requirements
+
+### COLOR — Consistent Color Scheme
+
+- [ ] **COLOR-01**: Extract shared `uptimeColor()` function from `cards.ts`/`day30.ts` into `views/colors.ts` — single source of truth
+- [ ] **COLOR-02**: Update `bars.ts` `barColor()` to use HSL gradient with <90%→red, 90–99%→amber ramp, ≥99.9%→green — same scheme applied to bars AND percentage numbers
+- [ ] **COLOR-03**: Remove duplicated `uptimeColor()` and `BADGE_MAP` color logic from individual view files — all views use `colors.ts`
+- [ ] **COLOR-04**: Test color consistency — bars and numbers use matching colors at boundary values (0%, 50%, 89.9%, 90%, 95%, 99%, 99.9%, 100%)
+
+### WINDOW — 90m/90h/90d Windows
+
+- [ ] **WINDOW-01**: Backend extends in-memory retention from 1800s to 5400s in `persistence.py` to support 90-minute window
+- [ ] **WINDOW-02**: Backend adds `/data?window=90h` endpoint with hourly aggregation (reuses 30d aggregation pattern, groups by hour instead of day)
+- [ ] **WINDOW-03**: Frontend increases bar count from 30 to 90 in all time-window views
+- [ ] **WINDOW-04**: `api.ts` adds `fetchData90h()`, renames existing fetch functions to reflect new window sizes
+- [ ] **WINDOW-05**: `types.ts` adds 90h response/entry types (HourData with same shape as DayData)
+- [ ] **WINDOW-06**: `main.ts` wires up third tab for 90h view alongside 90m and 90d tabs
+
+### UNIFY — Unified Cards Layout
+
+- [ ] **UNIFY-01**: Extract shared card template from `cards.ts` into `views/card.ts` — reusable across all three time windows
+- [ ] **UNIFY-02**: Refactor 30m `cards.ts` to include split circle + total check count on each card (adds missing info to existing card layout)
+- [ ] **UNIFY-03**: Refactor 90d `day30.ts` to render each pair as a card (not per-day rows), reusing the shared card template with same density as 30m view
+- [ ] **UNIFY-04**: Create `views/hourly.ts` for 90h view using the shared card template
 
 ## v2 Requirements
 
@@ -59,42 +84,58 @@ None deferred.
 | Windows/Git Bash support | Python ecosystem on Windows is a separate concern |
 | Mutual TLS between nodes | Config stubs deferred — no auth in prototype |
 | Pre-built frontend artifact | Requires release CI workflow — build from source in v0.8 |
+| Performance safeguards for 50+ nodes | Beyond current deployment scale — CSS containment deferred |
 
 ## Traceability
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| INST-01 | Phase 18 | Pending |
-| INST-02 | Phase 18 | Pending |
-| INST-03 | Phase 18 | Pending |
-| INST-04 | Phase 18 | Pending |
-| INST-05 | Phase 18 | Pending |
-| INST-06 | Phase 18 | Pending |
-| INST-07 | Phase 18 | Pending |
-| INST-08 | Phase 18 | Pending |
-| INST-09 | Phase 18 | Pending |
-| START-01 | Phase 19 | Pending |
-| START-02 | Phase 19 | Pending |
-| START-03 | Phase 19 | Pending |
-| START-04 | Phase 19 | Pending |
-| START-05 | Phase 19 | Pending |
-| START-06 | Phase 19 | Pending |
-| START-07 | Phase 19 | Pending |
-| START-08 | Phase 19 | Pending |
-| CONF-01 | Phase 18 | Pending |
-| CONF-02 | Phase 19 | Pending |
-| CONF-03 | Phase 18 | Pending |
-| CONF-04 | Phase 19 | Pending |
-| TEST-01 | Phase 20 | Pending |
-| TEST-02 | Phase 20 | Pending |
-| TEST-03 | Phase 20 | Pending |
-| FIX-05 | Phase 19 | Pending |
+| INST-01 | Phase 18 | Complete |
+| INST-02 | Phase 18 | Complete |
+| INST-03 | Phase 18 | Complete |
+| INST-04 | Phase 18 | Complete |
+| INST-05 | Phase 18 | Complete |
+| INST-06 | Phase 18 | Complete |
+| INST-07 | Phase 18 | Complete |
+| INST-08 | Phase 18 | Complete |
+| INST-09 | Phase 18 | Complete |
+| START-01 | Phase 19 | Complete |
+| START-02 | Phase 19 | Complete |
+| START-03 | Phase 19 | Complete |
+| START-04 | Phase 19 | Complete |
+| START-05 | Phase 19 | Complete |
+| START-06 | Phase 19 | Complete |
+| START-07 | Phase 19 | Complete |
+| START-08 | Phase 19 | Complete |
+| CONF-01 | Phase 18 | Complete |
+| CONF-02 | Phase 19 | Complete |
+| CONF-03 | Phase 18 | Complete |
+| CONF-04 | Phase 19 | Complete |
+| TEST-01 | Phase 20 | Complete |
+| TEST-02 | Phase 20 | Complete |
+| TEST-03 | Phase 20 | Complete |
+| FIX-05 | Phase 19 | Complete |
+| COLOR-01 | Phase 21 | Pending |
+| COLOR-02 | Phase 21 | Pending |
+| COLOR-03 | Phase 21 | Pending |
+| COLOR-04 | Phase 21 | Pending |
+| WINDOW-01 | Phase 22 | Pending |
+| WINDOW-02 | Phase 22 | Pending |
+| WINDOW-03 | Phase 22 | Pending |
+| WINDOW-04 | Phase 22 | Pending |
+| WINDOW-05 | Phase 22 | Pending |
+| WINDOW-06 | Phase 22 | Pending |
+| UNIFY-01 | Phase 23 | Pending |
+| UNIFY-02 | Phase 23 | Pending |
+| UNIFY-03 | Phase 23 | Pending |
+| UNIFY-04 | Phase 23 | Pending |
 
 **Coverage:**
 - v0.8 requirements: 25 total
-- Mapped to phases: 25
+- v0.9 requirements: 14 total
+- Mapped to phases: 14
 - Unmapped: 0
 
 ---
 *Requirements defined: 2026-06-20*
-*Last updated: 2026-06-20 after initial definition*
+*Last updated: 2026-06-20 after v0.9 requirements definition*
