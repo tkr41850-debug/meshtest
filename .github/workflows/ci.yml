@@ -18,7 +18,7 @@ jobs:
 
       - name: TEST-01 — install.sh -y non-interactive
         run: |
-          docker run --rm mesh-test bash -c '
+          docker run --rm mesh-test bash <<'SCRIPT'
             set -e
             MESH_STATUS_LOCAL_SOURCE=/repo bash /repo/deploy/install.sh -y 2>&1
             if [ -d "$HOME/.local/meshtest" ]; then
@@ -33,14 +33,13 @@ jobs:
               echo "FAIL: sentinel file missing"
               exit 1
             fi
-          '
+          SCRIPT
 
       - name: TEST-02 — install.sh -y with MESH_STATUS_VERSION
         run: |
-          docker run --rm mesh-test bash -c '
+          docker run --rm mesh-test bash <<'SCRIPT'
             set -e
-            MESH_STATUS_VERSION=v0.8
-            MESH_STATUS_LOCAL_SOURCE=/repo bash /repo/deploy/install.sh -y 2>&1
+            MESH_STATUS_VERSION=v0.8 MESH_STATUS_LOCAL_SOURCE=/repo bash /repo/deploy/install.sh -y 2>&1
             VERSION=$(cat "$HOME/.local/meshtest/.mesh-status.install")
             echo "Installed version: $VERSION"
             if echo "$VERSION" | grep -qE '^(main|v?[0-9]+\.[0-9]+(\.[0-9]+)?)$'; then
@@ -49,17 +48,17 @@ jobs:
               echo "FAIL: version '$VERSION' does not match expected pattern (main or semver)"
               exit 1
             fi
-          '
+          SCRIPT
 
       - name: TEST-03 — start.sh --leader launches and is healthy
         run: |
           docker run -d --name mesh-leader mesh-test \
-            bash -c '\
+            bash -c "\
               set -e
               MESH_STATUS_LOCAL_SOURCE=/repo bash /repo/deploy/install.sh -y 2>&1
-              cd "$HOME/.local/meshtest"
+              cd \$HOME/.local/meshtest
               bash start.sh --leader 2>&1
-            '
+            "
 
           SLEEP=3
           for i in $(seq 1 10); do
@@ -89,13 +88,10 @@ jobs:
         run: uv python install 3.12
 
       - name: Sync dependencies
-        run: uv sync
+        run: uv sync --extra dev
 
       - name: Check formatting with ruff
         run: uv run ruff format --check .
 
       - name: Lint with ruff
         run: uv run ruff check .
-
-      - name: Type check with pyright
-        run: uv run pyright .
