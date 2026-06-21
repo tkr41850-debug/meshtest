@@ -34,6 +34,21 @@ function hourlyBarsForPair(
   return { pingBars, httpBars };
 }
 
+function sumHourlyChecks(
+  hours: HourData[],
+  src: string,
+  tgt: string,
+): number {
+  let total = 0;
+  for (const hour of hours) {
+    const conn = hour.connections.find(
+      (c) => c.node_ip === src && c.target_ip === tgt,
+    );
+    if (conn) total += conn.total_checks;
+  }
+  return total;
+}
+
 function computeStatus(
   pingUp: number,
   httpUp: number,
@@ -73,6 +88,7 @@ export function renderHourly(
         const { pingBars, httpBars } = hourlyBarsForPair(hours, src, conn.target_ip);
         const st = computeStatus(conn.ping_uptime_pct, conn.http_uptime_pct);
         const lastSeen = hour.date;
+        const totalChecks = sumHourlyChecks(hours, src, conn.target_ip);
         html += cardHtml(
           conn.target_ip,
           st,
@@ -81,7 +97,7 @@ export function renderHourly(
           lastSeen,
           conn.ping_uptime_pct,
           conn.http_uptime_pct,
-          conn.total_checks,
+          totalChecks,
           pingBars,
           httpBars,
           pairKey,

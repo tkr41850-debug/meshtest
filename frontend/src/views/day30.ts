@@ -41,6 +41,21 @@ function dailyBarsForPair(
   return { pingBars, httpBars };
 }
 
+function sumDailyChecks(
+  days: DayData[],
+  src: string,
+  tgt: string,
+): number {
+  let total = 0;
+  for (const day of days) {
+    const conn = day.connections.find(
+      (c) => c.node_ip === src && c.target_ip === tgt,
+    );
+    if (conn) total += conn.total_checks;
+  }
+  return total;
+}
+
 function computeStatus(
   pingUp: number,
   httpUp: number,
@@ -80,6 +95,7 @@ export function renderDay30(
         const { pingBars, httpBars } = dailyBarsForPair(days, src, conn.target_ip);
         const st = computeStatus(conn.ping_uptime_pct, conn.http_uptime_pct);
         const lastSeen = day.date;
+        const totalChecks = sumDailyChecks(days, src, conn.target_ip);
         html += cardHtml(
           conn.target_ip,
           st,
@@ -88,7 +104,7 @@ export function renderDay30(
           lastSeen,
           conn.ping_uptime_pct,
           conn.http_uptime_pct,
-          conn.total_checks,
+          totalChecks,
           pingBars,
           httpBars,
           pairKey,
