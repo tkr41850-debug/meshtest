@@ -85,21 +85,18 @@ Completed 2026-06-20. See `.planning/milestones/v0.9-ROADMAP.md` for full detail
 
 ### ✅ v0.10 — Custom Hover Tooltips
 
-**Status:** Planning started 2026-06-21.
+Shipped 2026-06-21. See `.planning/milestones/v0.10-ROADMAP.md` for full details.
 
-### ✅ Phase 24: Custom Hover Tooltips (COMPLETE)
+<details>
+<summary>✅ v0.10 — Custom Hover Tooltips (Phase 24) — SHIPPED 2026-06-21</summary>
 
-**Goal**: Replace native HTML `title` tooltips with custom CSS-only tooltip containers in the unified card template and matrix view, using group-based hover for bar rows
-**Depends on**: Phase 23 (unified card template must exist before tooltip wrappers)
-**Requirements**: UXTIP-01, UXTIP-02, UXTIP-03, UXTIP-04, UXTIP-05, UXTIP-06
-**Success Criteria** (what must be TRUE):
-1. ✅ Bar rows show a styled tooltip on hover with protocol label (ICMP/HTTP) — no native `title` tooltips shown for bars
-2. ✅ Matrix column headers show a styled tooltip with the full IP on hover — no native `title` tooltips on headers
-3. ✅ Tooltip CSS is in `style.css` — uses dark background, white text, small font, rounded corners, positioned above content
-4. ✅ All test assertions updated — tests no longer check native `title` attributes for bars/headers
-5. ✅ No visual regression — tooltips only appear on hover and don't shift layout
-**Plans**: 1 plan (direct execution)
-**UI hint**: yes
+- [x] **Phase 24: Custom Hover Tooltips** — Completed 2026-06-21
+  - 6 UXTIP requirements satisfied
+  - Replaced native `title` tooltips with CSS-only `.mesh-tooltip` divs
+  - Group-based hover for bar rows (ICMP/HTTP)
+  - Matrix column headers use same tooltip pattern
+  - All 100 tests pass, CI pipeline fixed with ruff + Makefile
+</details>
 
 ## Progress
 

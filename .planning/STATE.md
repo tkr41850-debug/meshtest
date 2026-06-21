@@ -12,8 +12,8 @@ See: .planning/PROJECT.md (updated 2026-06-19)
 Milestone: v0.10 (Custom Hover Tooltips)
 Phase: 24
 Plan: Complete
-Status: Phase 24 complete 2026-06-21
-Last activity: 2026-06-21 — Phase 24 shipped (all 6 UXTIP requirements satisfied)
+Status: Shipped 2026-06-21
+Last activity: 2026-06-21 — v0.10 shipped (all 6 UXTIP requirements satisfied)
 
 ## Performance Metrics
 
