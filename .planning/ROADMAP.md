@@ -131,6 +131,7 @@ Shipped 2026-06-21. See `.planning/milestones/v0.10-ROADMAP.md` for full details
 | 22 | v0.9 | Complete | 2026-06-20 |
 | 23 | v0.9 | Complete | 2026-06-20 |
 | 24 | v0.10 | Complete | 2026-06-21 |
+| 25 | v0.10 | Not planned | — |
 
 ## v0.8 Phase Details
 
@@ -169,6 +170,16 @@ Shipped 2026-06-21. See `.planning/milestones/v0.10-ROADMAP.md` for full details
 1. ✅ CI builds a fresh container from a minimal base image, runs `install.sh -y`, and the install completes successfully
 2. ✅ CI runs `install.sh -y` with env var overrides and verifies non-interactive mode works without stdin
 3. ✅ CI validates `start.sh --leader` launches and the process is healthy
+
+### Phase 25: Add the tests
+
+**Goal:** Integration + unit tests for leader restart/data-reload behavior
+**Requirements**: TBD
+**Depends on:** Nothing
+**Plans:** 0 plans
+
+Plans:
+- [ ] TBD (run /gsd-plan-phase 25 to break down)
 
 ---
 

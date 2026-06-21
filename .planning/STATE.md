@@ -10,10 +10,10 @@ See: .planning/PROJECT.md (updated 2026-06-19)
 ## Current Position
 
 Milestone: v0.10 (Custom Hover Tooltips)
-Phase: 24
-Plan: Complete
-Status: Shipped 2026-06-21
-Last activity: 2026-06-21 — v0.10 shipped (all 6 UXTIP requirements satisfied)
+Phase: 25
+Plan: Not planned yet
+Status: Phase 25 added (not yet planned)
+Last activity: 2026-06-21 — Phase 25 added: Add the tests
 
 ## Performance Metrics
 
@@ -97,6 +97,7 @@ Phase 4 (CI/CD) decisions:
 - Phase **4.1** inserted after Phase **4** (URGENT) — Fix cross-phase integration gaps (node HTTP server, /healthz, 30m data retention)
 - Phase **4** added to v0.2: GitHub Actions CI/CD — Build & Push to Docker Hub
 - v0.4 replaces original v3.5+ deferred items with dashboard UI polish
+- Phase **25** added to v0.10: Add the tests (restart/data-reload integration + unit tests)
 
 ### Milestone v0.7 Status
 
