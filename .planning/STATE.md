@@ -9,11 +9,11 @@ See: .planning/PROJECT.md (updated 2026-06-19)
 
 ## Current Position
 
-Milestone: v0.9 (UI Consolidation — History Bars, Color & Windows)
-Phase: 21-23
+Milestone: v0.10 (Custom Hover Tooltips)
+Phase: 24
 Plan: —
-Status: Shipped 2026-06-20
-Last activity: 2026-06-20 — v0.9 shipped (all 14 requirements satisfied)
+Status: Planning 2026-06-21
+Last activity: 2026-06-21 — v0.10 requirements defined, Phase 24 planned
 
 ## Performance Metrics
 
@@ -138,13 +138,24 @@ Phase 4 (CI/CD) decisions:
 - **Script shebangs**: `deploy/install.sh` uses `#!/bin/sh` (POSIX), `start.sh` uses `#!/usr/bin/env bash`
 - **Config approach**: Env vars only (no TOML/YAML), consistent with existing `config.py` pattern; `.env` file generated during install
 
+### Decisions (v0.10 — roadmap creation)
+
+- **CSS-only tooltips**: No JS event listeners or mouse-tracking — uses `:hover` on parent container + positioned div
+- **Group-based hover for bars**: One tooltip per bar row (ICMP/HTTP), not 90 individual tooltips
+- **Tooltip content**: Protocol label (ICMP/HTTP) — simple, always available, no extra data passing needed
+- **Tooltip classes in `style.css`**: Dark background, white text, small font, rounded corners with arrow indicator
+- **Arrow indicator**: CSS border trick via `::after` pseudo-element
+- **Matrix view covered**: Column header `title` attributes replaced with same CSS tooltip pattern
+- **Phase numbering**: v0.10 starts at Phase 24 (continuing from v0.9's Phase 23)
+- **All changes TDD**: Write Vitest tests first, then implementation
+
 ### Blockers/Concerns
 
 None.
 
 ## Session Continuity
 
-Last session: 2026-06-20
-Stopped at: v0.9 shipped
+Last session: 2026-06-21
+Stopped at: v0.10 requirements defined, Phase 24 planned
 Resume file: None
-Next action: Plan next milestone
+Next action: Execute Phase 24 — Custom Hover Tooltips

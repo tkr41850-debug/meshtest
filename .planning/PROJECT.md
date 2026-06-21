@@ -10,9 +10,9 @@ A node must be able to detect and report whether it can reach every other node i
 
 ## Current State
 
-**Shipped:** v0.9 — UI Consolidation (2026-06-20)
+**Active:** v0.10 — Custom Hover Tooltips (planning started 2026-06-21)
 
-**Context:** Color scheme unified across all views, 90-bar windows (90m/90h/90d), shared card layout template. All 14 v0.9 requirements satisfied.
+**Context:** Replacing native HTML `title` tooltips with custom CSS-only tooltip containers in the unified card template and matrix view, using group-based hover for bar rows.
 
 ## Requirements
 

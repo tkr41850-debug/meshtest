@@ -70,6 +70,17 @@
 - [x] **UNIFY-03**: Refactor 90d `day30.ts` to render each pair as a card (not per-day rows), reusing the shared card template with same density as 30m view
 - [x] **UNIFY-04**: Create `views/hourly.ts` for 90h view using the shared card template
 
+## v0.10 Requirements
+
+### UXTIP — Custom Hover Tooltips
+
+- [ ] **UXTIP-01**: Remove native `title` attributes from bar `<span>` elements in `renderBars()` — tooltips handled at container level in card template, not per-bar
+- [ ] **UXTIP-02**: Add CSS-only tooltip containers around bar rows in `card.ts` — hovering over a bar row (ICMP or HTTP) shows a styled tooltip with protocol label, avoiding 90 individual overlapping tooltips
+- [ ] **UXTIP-03**: Tooltip CSS classes defined in `style.css` — positioned absolutely above the bar row with dark bg, white text, small font, rounded corners, and arrow indicator
+- [ ] **UXTIP-04**: Matrix view column headers (`matrix.ts`) use the same CSS tooltip pattern — replace native `title` attribute with custom tooltip div for consistency
+- [ ] **UXTIP-05**: Update all test assertions — tests that check `getAttribute("title")` now check tooltip div content or container-level attributes instead
+- [ ] **UXTIP-06**: No visual regression — tooltips are only visible on hover, don't affect layout dimensions, and all other UI elements remain unchanged
+
 ## v2 Requirements
 
 None deferred.
@@ -119,6 +130,12 @@ None deferred.
 | COLOR-02 | Phase 21 | Complete |
 | COLOR-03 | Phase 21 | Complete |
 | COLOR-04 | Phase 21 | Complete |
+| UXTIP-01 | Phase 24 | Pending |
+| UXTIP-02 | Phase 24 | Pending |
+| UXTIP-03 | Phase 24 | Pending |
+| UXTIP-04 | Phase 24 | Pending |
+| UXTIP-05 | Phase 24 | Pending |
+| UXTIP-06 | Phase 24 | Pending |
 | WINDOW-01 | Phase 22 | Complete |
 | WINDOW-02 | Phase 22 | Complete |
 | WINDOW-03 | Phase 22 | Complete |
@@ -133,9 +150,10 @@ None deferred.
 **Coverage:**
 - v0.8 requirements: 25 total
 - v0.9 requirements: 14 total
-- Mapped to phases: 14
+- v0.10 requirements: 6 total
+- Mapped to phases: 6
 - Unmapped: 0
 
 ---
-*Requirements defined: 2026-06-20*
-*Last updated: 2026-06-20 after v0.9 requirements definition*
+*Requirements defined: 2026-06-21*
+*Last updated: 2026-06-21 after v0.10 requirements definition*
