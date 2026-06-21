@@ -1,11 +1,9 @@
 import asyncio
-import time
 from argparse import Namespace
 from collections import deque
 from unittest.mock import AsyncMock, Mock, patch
 
 import node
-from mesh_status import config
 
 
 class _StopLoop(BaseException):
@@ -146,7 +144,7 @@ class TestSemaphoreIntegration:
             return {"target_ip": ip, "ping_ok": True}
 
         with patch.object(node, "check_node", mock_check):
-            results = await node.run_check_cycle(sem, peers)
+            await node.run_check_cycle(sem, peers)
 
         assert max_active[0] == 10
 
@@ -180,7 +178,7 @@ class TestBufferRetryIntegration:
         combined.append(cycle_results)
 
         for batch in combined:
-            with patch("node.submit_results", AsyncMock(return_value=False)) as mock_sub:
+            with patch("node.submit_results", AsyncMock(return_value=False)):
                 ok = await node.submit_results(batch, "10.0.0.1", "http://10.0.0.2:58080")
                 if not ok:
                     buffer.append(batch)
@@ -243,9 +241,11 @@ class TestRegistrationHttpIntegration:
             mock_resp.json = Mock(return_value={"peers": [{"ip": "10.0.0.1", "port": 58080}]})
             mock_inst.post = AsyncMock(return_value=mock_resp)
 
-            url = f"http://10.0.0.1:58080/register"
+            url = "http://10.0.0.1:58080/register"
             async with mock_cls(timeout=10.0) as client:
-                resp = await client.post(url, json={"node_ip": "10.0.0.2", "listen_port": 58080, "node_url": ""})
+                await client.post(
+                    url, json={"node_ip": "10.0.0.2", "listen_port": 58080, "node_url": ""}
+                )
 
             mock_inst.post.assert_called_once()
             call_url = mock_inst.post.call_args[0][0]
@@ -259,7 +259,11 @@ class TestRegistrationHttpIntegration:
             mock_cls.return_value.__aenter__.return_value = mock_inst
             mock_resp = AsyncMock()
             mock_resp.is_success = True
-            mock_resp.json = Mock(return_value={"peers": [{"ip": "10.0.0.1", "port": 58080}, {"ip": "10.0.0.3", "port": 58080}]})
+            mock_resp.json = Mock(
+                return_value={
+                    "peers": [{"ip": "10.0.0.1", "port": 58080}, {"ip": "10.0.0.3", "port": 58080}]
+                }
+            )
             mock_inst.post = AsyncMock(return_value=mock_resp)
 
             async with mock_cls(timeout=10.0) as client:
@@ -307,19 +311,26 @@ class TestCycleIntegration:
 
                 mock_reg_resp = AsyncMock()
                 mock_reg_resp.is_success = True
-                mock_reg_resp.json = Mock(return_value={"peers": [{"ip": "10.0.0.1", "port": 58080}]})
+                mock_reg_resp.json = Mock(
+                    return_value={"peers": [{"ip": "10.0.0.1", "port": 58080}]}
+                )
 
                 mock_list_resp = AsyncMock()
                 mock_list_resp.is_success = True
-                mock_list_resp.json = Mock(return_value={"nodes": [{"ip": "10.0.0.1", "port": 58080}, {"ip": "10.0.0.3", "port": 58080}]})
+                mock_list_resp.json = Mock(
+                    return_value={
+                        "nodes": [
+                            {"ip": "10.0.0.1", "port": 58080},
+                            {"ip": "10.0.0.3", "port": 58080},
+                        ]
+                    }
+                )
 
                 mock_inst.post = AsyncMock(return_value=mock_reg_resp)
                 mock_inst.get = AsyncMock(return_value=mock_list_resp)
 
                 with patch("node.run_check_cycle") as mock_check:
-                    mock_check.return_value = [
-                        {"target_ip": "10.0.0.3", "ping_ok": True}
-                    ]
+                    mock_check.return_value = [{"target_ip": "10.0.0.3", "ping_ok": True}]
 
                     with patch("node.submit_results", AsyncMock(return_value=True)) as mock_sub:
                         with patch("node.asyncio.sleep", side_effect=_StopLoop()):
@@ -349,19 +360,21 @@ class TestCycleIntegration:
 
                 mock_reg_resp = AsyncMock()
                 mock_reg_resp.is_success = True
-                mock_reg_resp.json = Mock(return_value={"peers": [{"ip": "10.0.0.1", "port": 58080}]})
+                mock_reg_resp.json = Mock(
+                    return_value={"peers": [{"ip": "10.0.0.1", "port": 58080}]}
+                )
 
                 mock_list_resp = AsyncMock()
                 mock_list_resp.is_success = True
-                mock_list_resp.json = Mock(return_value={"nodes": [{"ip": "10.0.0.3", "port": 58080}]})
+                mock_list_resp.json = Mock(
+                    return_value={"nodes": [{"ip": "10.0.0.3", "port": 58080}]}
+                )
 
                 mock_inst.post = AsyncMock(return_value=mock_reg_resp)
                 mock_inst.get = AsyncMock(return_value=mock_list_resp)
 
                 with patch("node.run_check_cycle") as mock_check:
-                    mock_check.return_value = [
-                        {"target_ip": "10.0.0.3", "ping_ok": True}
-                    ]
+                    mock_check.return_value = [{"target_ip": "10.0.0.3", "ping_ok": True}]
 
                     submit_results_call_count = [0]
 

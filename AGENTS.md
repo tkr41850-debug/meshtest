@@ -26,6 +26,27 @@ This file provides workflow-enforcement guidance and current project context.
 - `/gsd-progress` — check project progress
 - `/gsd-settings` — update workflow preferences
 
+## Before pushing — run heavy checks
+
+Run `make ci` before every push to catch CI failures locally. This runs:
+
+```
+make ci           # full pipeline: lint → format-check → test-backend → test-frontend → build
+```
+
+Individual targets are also available:
+
+```
+make lint              # ruff check (Python lint)
+make format            # ruff format (auto-fix)
+make format-check      # ruff format --check
+make test-backend      # pytest
+make test-frontend     # vitest
+make test              # both test-backend + test-frontend
+make build             # frontend tsc + vite build
+make typecheck-frontend  # tsc --noEmit
+```
+
 ## Artifacts
 
 | File | Description |

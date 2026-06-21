@@ -1,11 +1,8 @@
-import json
-import os
-import tempfile
 from datetime import date, datetime
 
-import pytest
 
 from mesh_status import config
+
 
 # Test that config loads
 def test_config_has_defaults():
@@ -14,7 +11,8 @@ def test_config_has_defaults():
 
 class TestPersistence:
     def test_ensure_data_dir_creates_path(self):
-        from mesh_status.persistence import _ensure_data_dir, _date_path
+        from mesh_status.persistence import _ensure_data_dir
+
         d = date(2026, 6, 18)
         path = _ensure_data_dir(d)
         assert path.parent.exists()
@@ -23,6 +21,7 @@ class TestPersistence:
 
     def test_append_and_read_results(self):
         from mesh_status.persistence import _append_results, _read_results
+
         d = date(2026, 6, 18)
         results = [
             {"node_ip": "10.0.0.1", "target_ip": "10.0.0.2", "ping_ok": True, "timestamp": 100.0},
@@ -36,12 +35,14 @@ class TestPersistence:
 
     def test_empty_read_returns_empty_list(self):
         from mesh_status.persistence import _read_results
+
         d = date(2025, 1, 1)
         results = _read_results(d, d)
         assert results == []
 
     def test_atomic_write_no_corrupt(self):
         from mesh_status.persistence import _append_results, _read_results
+
         d = date(2026, 6, 18)
         data = [{"test": "atomic", "n": i, "timestamp": 200.0 + i} for i in range(5)]
         _append_results(d, data)
@@ -51,9 +52,8 @@ class TestPersistence:
         assert len(atomic_items) == 5
 
     def test_flush_results(self):
-        from datetime import datetime
         from mesh_status.persistence import _flush_results, _read_results
-        import time
+
         d = date(2026, 6, 18)
         ts = datetime(2026, 6, 18, 12, 0, 0).timestamp()
         results = {

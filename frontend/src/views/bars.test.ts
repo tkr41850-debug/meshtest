@@ -35,7 +35,7 @@ describe("renderBars", () => {
     expect(div.querySelectorAll("[data-history-bar]").length).toBe(2);
   });
 
-  it("renders no-data bars for negative percent", () => {
+  it("renders bars with data-tooltip instead of title", () => {
     const bars = [
       { percent: -1, tooltip: "" },
       { percent: 0.5, tooltip: "50%" },
@@ -44,8 +44,10 @@ describe("renderBars", () => {
     const div = document.createElement("div");
     div.innerHTML = html;
     const allBars = div.querySelectorAll("[data-history-bar]");
-    expect(allBars[0].getAttribute("title")).toBe("No data");
-    expect(allBars[1].getAttribute("title")).toBe("50%");
+    expect(allBars[0].hasAttribute("title")).toBe(false);
+    expect(allBars[0].getAttribute("data-tooltip")).toBe("No data");
+    expect(allBars[1].hasAttribute("title")).toBe(false);
+    expect(allBars[1].getAttribute("data-tooltip")).toBe("50%");
   });
 
   it("renders inline-block spans with width 8px", () => {

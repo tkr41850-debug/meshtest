@@ -3,7 +3,6 @@
 
 import argparse
 import asyncio
-import json
 import logging
 import os
 import re
@@ -28,12 +27,18 @@ logger = logging.getLogger("mesh-status-node")
 
 def parse_args():
     parser = argparse.ArgumentParser(description="mesh-status node agent")
-    parser.add_argument("--leader-url", "-l",
-                        default=os.environ.get("LEADER_URL", f"http://localhost:{config.DEFAULT_PORT}"),
-                        help="Leader URL (e.g. http://leader:58080)")
-    parser.add_argument("--node-url", "-n",
-                        default=os.environ.get("NODE_URL", ""),
-                        help="This node's URL (e.g. http://node1:58081)")
+    parser.add_argument(
+        "--leader-url",
+        "-l",
+        default=os.environ.get("LEADER_URL", f"http://localhost:{config.DEFAULT_PORT}"),
+        help="Leader URL (e.g. http://leader:58080)",
+    )
+    parser.add_argument(
+        "--node-url",
+        "-n",
+        default=os.environ.get("NODE_URL", ""),
+        help="This node's URL (e.g. http://node1:58081)",
+    )
     return parser.parse_args()
 
 
@@ -55,9 +60,7 @@ def _parse_node_url(url: str) -> tuple[str, int]:
     return hostname, port
 
 
-async def check_node(
-    target_ip: str, port: int = config.DEFAULT_PORT, timeout: float = 5.0
-) -> dict:
+async def check_node(target_ip: str, port: int = config.DEFAULT_PORT, timeout: float = 5.0) -> dict:
     timestamp = time.time()
     ping_ok = False
     ping_latency_ms = None
@@ -66,7 +69,11 @@ async def check_node(
     http_status = None
 
     proc = await asyncio.create_subprocess_exec(
-        "ping", "-c", "1", "-W", str(int(timeout)),
+        "ping",
+        "-c",
+        "1",
+        "-W",
+        str(int(timeout)),
         target_ip,
         stdout=asyncio.subprocess.PIPE,
         stderr=asyncio.subprocess.PIPE,
@@ -119,7 +126,12 @@ async def submit_results(
     results: list[dict], node_ip: str, leader_url: str, node_url: str = ""
 ) -> bool:
     url = f"{leader_url.rstrip('/')}/submit"
-    payload = {"node_ip": node_ip, "node_url": node_url, "checks": results, "timestamp": time.time()}
+    payload = {
+        "node_ip": node_ip,
+        "node_url": node_url,
+        "checks": results,
+        "timestamp": time.time(),
+    }
     try:
         async with httpx.AsyncClient(timeout=10.0) as client:
             resp = await client.post(url, json=payload)
@@ -144,8 +156,12 @@ async def handle_update_peers(request: web.Request) -> web.Response:
         app["state"]["interval"] = int(data["check_interval"])
     if "buffer_size" in data:
         app["state"]["buffer_size"] = int(data["buffer_size"])
-    logger.info("Updated peers via push: %d peers, interval=%s, buffer=%s",
-                len(app["state"]["peers"]), app["state"]["interval"], app["state"]["buffer_size"])
+    logger.info(
+        "Updated peers via push: %d peers, interval=%s, buffer=%s",
+        len(app["state"]["peers"]),
+        app["state"]["interval"],
+        app["state"]["buffer_size"],
+    )
     return web.json_response({"status": "ok"})
 
 
@@ -175,7 +191,6 @@ async def run():
         "buffer_size": config.BUFFER_SIZE,
     }
     http_runner = await start_http_server(shared_state, port=listen_port)
-    interval = shared_state["interval"]
     buffer_size = shared_state["buffer_size"]
     result_buffer: deque[list[dict]] = deque(maxlen=buffer_size)
     semaphore = asyncio.Semaphore(10)

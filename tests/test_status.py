@@ -1,13 +1,10 @@
-import time
-import pytest
-from datetime import datetime
-
 from mesh_status import config
 
 
 class TestStatus:
     def test_ok_status(self):
         from mesh_status.status import calculate_status
+
         now = 1000.0
         results = {
             "10.0.0.1": [
@@ -21,6 +18,7 @@ class TestStatus:
 
     def test_pending_status(self):
         from mesh_status.status import calculate_status
+
         now = 1000.0
         results = {}
         registry = {"10.0.0.1": {}}
@@ -30,6 +28,7 @@ class TestStatus:
 
     def test_not_available_status(self):
         from mesh_status.status import calculate_status
+
         now = 1000.0
         grace = getattr(config, "GRACE_PERIOD", 120)
         old_time = now - grace - 1  # 1s beyond grace period
@@ -45,6 +44,7 @@ class TestStatus:
 
     def test_per_check_type_status(self):
         from mesh_status.status import calculate_status
+
         now = 1000.0
         results = {
             "10.0.0.1": [
@@ -58,6 +58,7 @@ class TestStatus:
 
     def test_target_not_in_registry(self):
         from mesh_status.status import calculate_status
+
         now = 1000.0
         results = {}
         registry = {"10.0.0.1": {}}

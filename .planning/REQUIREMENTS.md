@@ -74,12 +74,12 @@
 
 ### UXTIP — Custom Hover Tooltips
 
-- [ ] **UXTIP-01**: Remove native `title` attributes from bar `<span>` elements in `renderBars()` — tooltips handled at container level in card template, not per-bar
-- [ ] **UXTIP-02**: Add CSS-only tooltip containers around bar rows in `card.ts` — hovering over a bar row (ICMP or HTTP) shows a styled tooltip with protocol label, avoiding 90 individual overlapping tooltips
-- [ ] **UXTIP-03**: Tooltip CSS classes defined in `style.css` — positioned absolutely above the bar row with dark bg, white text, small font, rounded corners, and arrow indicator
-- [ ] **UXTIP-04**: Matrix view column headers (`matrix.ts`) use the same CSS tooltip pattern — replace native `title` attribute with custom tooltip div for consistency
-- [ ] **UXTIP-05**: Update all test assertions — tests that check `getAttribute("title")` now check tooltip div content or container-level attributes instead
-- [ ] **UXTIP-06**: No visual regression — tooltips are only visible on hover, don't affect layout dimensions, and all other UI elements remain unchanged
+- [x] **UXTIP-01**: Remove native `title` attributes from bar `<span>` elements in `renderBars()` — tooltips handled at container level in card template, not per-bar
+- [x] **UXTIP-02**: Add CSS-only tooltip containers around bar rows in `card.ts` — hovering over a bar row (ICMP or HTTP) shows a styled tooltip with protocol label, avoiding 90 individual overlapping tooltips
+- [x] **UXTIP-03**: Tooltip CSS classes defined in `style.css` — positioned absolutely above the bar row with dark bg, white text, small font, rounded corners, and arrow indicator
+- [x] **UXTIP-04**: Matrix view column headers (`matrix.ts`) use the same CSS tooltip pattern — replace native `title` attribute with custom tooltip div for consistency
+- [x] **UXTIP-05**: Update all test assertions — tests that check `getAttribute("title")` now check tooltip div content or container-level attributes instead
+- [x] **UXTIP-06**: No visual regression — tooltips are only visible on hover, don't affect layout dimensions, and all other UI elements remain unchanged
 
 ## v2 Requirements
 
@@ -130,12 +130,12 @@ None deferred.
 | COLOR-02 | Phase 21 | Complete |
 | COLOR-03 | Phase 21 | Complete |
 | COLOR-04 | Phase 21 | Complete |
-| UXTIP-01 | Phase 24 | Pending |
-| UXTIP-02 | Phase 24 | Pending |
-| UXTIP-03 | Phase 24 | Pending |
-| UXTIP-04 | Phase 24 | Pending |
-| UXTIP-05 | Phase 24 | Pending |
-| UXTIP-06 | Phase 24 | Pending |
+| UXTIP-01 | Phase 24 | Complete |
+| UXTIP-02 | Phase 24 | Complete |
+| UXTIP-03 | Phase 24 | Complete |
+| UXTIP-04 | Phase 24 | Complete |
+| UXTIP-05 | Phase 24 | Complete |
+| UXTIP-06 | Phase 24 | Complete |
 | WINDOW-01 | Phase 22 | Complete |
 | WINDOW-02 | Phase 22 | Complete |
 | WINDOW-03 | Phase 22 | Complete |

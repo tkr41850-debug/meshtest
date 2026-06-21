@@ -7,6 +7,7 @@ from unittest.mock import Mock, patch, AsyncMock
 @pytest.fixture(autouse=True)
 def reset_leader_state():
     from mesh_status.leader import _registry, _results, _peers_by_node
+
     _registry.clear()
     _results.clear()
     _peers_by_node.clear()
@@ -19,6 +20,7 @@ def reset_leader_state():
 @pytest.fixture
 def app():
     from mesh_status.leader import app as leader_app
+
     return leader_app
 
 

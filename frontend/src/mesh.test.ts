@@ -66,11 +66,12 @@ describe("renderMatrix", () => {
     expect(dot?.textContent).toBe("●");
   });
 
-  it("sets short label with full IP title on column headers", () => {
+  it("sets short label with full IP tooltip on column headers", () => {
     const container = document.createElement("div");
     renderMatrix(container, ["node-abc-10.0.0.1", "10.0.0.2"], []);
     const headers = container.querySelectorAll("th");
-    expect(headers[1].getAttribute("title")).toBe("node-abc-10.0.0.1");
+    const tooltip = headers[1].querySelector(".mesh-tooltip");
+    expect(tooltip?.textContent).toBe("node-abc-10.0.0.1");
   });
 });
 
@@ -199,8 +200,9 @@ describe("renderCards", () => {
     );
     const bars = container.querySelectorAll("[data-history-bar]");
     expect(bars.length).toBe(360);
-    expect(bars[0].getAttribute("title")).toContain("ICMP");
-    expect(bars[90].getAttribute("title")).toContain("HTTP");
+    const tooltips = container.querySelectorAll(".mesh-tooltip");
+    expect(tooltips[0]?.textContent).toBe("ICMP");
+    expect(tooltips[1]?.textContent).toBe("HTTP");
   });
 
   it("computes correct bar uptime percentages from ping_ok/http_ok", () => {
@@ -231,10 +233,10 @@ describe("renderCards", () => {
     );
     const bars = container.querySelectorAll("[data-history-bar]");
     const hasIcmp100 = [...bars].some(
-      (b) => b.getAttribute("title")?.includes("100.0% ICMP"),
+      (b) => b.getAttribute("data-tooltip")?.includes("100.0% ICMP"),
     );
     const hasHttp100 = [...bars].some(
-      (b) => b.getAttribute("title")?.includes("100.0% HTTP"),
+      (b) => b.getAttribute("data-tooltip")?.includes("100.0% HTTP"),
     );
     expect(hasIcmp100).toBe(true);
     expect(hasHttp100).toBe(true);
@@ -251,7 +253,7 @@ describe("renderCards", () => {
     );
     const bars = container.querySelectorAll("[data-history-bar]");
     expect(bars.length).toBe(360);
-    expect(bars[0].getAttribute("title")).toBe("No data");
+    expect(bars[0].getAttribute("data-tooltip")).toBe("No data");
   });
 
   it("includes history bars below Ping/HTTP/Last stats row", () => {
@@ -388,10 +390,9 @@ describe("renderDay30", () => {
     ]);
     const bars = container.querySelectorAll("[data-history-bar]");
     expect(bars.length).toBe(180);
-    // Last bar of ICMP row
-    expect(bars[89].getAttribute("title")).toContain("ICMP");
-    // Last bar of HTTP row
-    expect(bars[179].getAttribute("title")).toContain("HTTP");
+    const tooltips = container.querySelectorAll(".mesh-tooltip");
+    expect(tooltips[0]?.textContent).toBe("ICMP");
+    expect(tooltips[1]?.textContent).toBe("HTTP");
   });
 
   it("shows empty bars in day30 when no data for some days", () => {
@@ -412,7 +413,7 @@ describe("renderDay30", () => {
     ]);
     const bars = container.querySelectorAll("[data-history-bar]");
     const filledBars = [...bars].filter(
-      (b) => b.getAttribute("title") !== "No data",
+      (b) => b.getAttribute("data-tooltip") !== "No data",
     );
     expect(filledBars.length).toBe(2);
   });

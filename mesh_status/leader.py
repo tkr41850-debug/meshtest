@@ -3,14 +3,14 @@ import logging
 import os
 import sys
 import time
-from datetime import datetime, timedelta, date
+from datetime import datetime, timedelta
 from pathlib import Path
 from urllib.parse import urlparse
 
 import httpx
 from hypercorn.asyncio import serve
 from hypercorn.config import Config
-from quart import Quart, request, jsonify, send_from_directory
+from quart import Quart, request, send_from_directory
 from quart_cors import cors
 
 from mesh_status import config
@@ -93,8 +93,11 @@ async def register():
             logger.info("Node re-registered: %s", node_ip)
         else:
             _registry[node_ip] = NodeInfo(
-                node_ip=node_ip, hostname=hostname, last_seen=time.time(),
-                listen_port=listen_port, node_url=node_url,
+                node_ip=node_ip,
+                hostname=hostname,
+                last_seen=time.time(),
+                listen_port=listen_port,
+                node_url=node_url,
             )
             logger.info("Node registered: %s", node_ip)
 
@@ -140,7 +143,9 @@ async def submit_results():
             parsed = urlparse(node_url)
             listen_port = parsed.port or config.DEFAULT_PORT
             _registry[node_ip] = NodeInfo(
-                node_ip=node_ip, listen_port=listen_port, node_url=node_url,
+                node_ip=node_ip,
+                listen_port=listen_port,
+                node_url=node_url,
                 last_seen=time.time(),
             )
             logger.info("Auto-registered node %s from submit", node_ip)
@@ -227,13 +232,15 @@ async def get_data():
         for day_str in sorted(by_day.keys()):
             connections = []
             for (src, dst), stats in by_day[day_str].items():
-                connections.append({
-                    "node_ip": src,
-                    "target_ip": dst,
-                    "total_checks": stats["total"],
-                    "ping_uptime_pct": round(stats["ping_ok"] / stats["total"] * 100, 1),
-                    "http_uptime_pct": round(stats["http_ok"] / stats["total"] * 100, 1),
-                })
+                connections.append(
+                    {
+                        "node_ip": src,
+                        "target_ip": dst,
+                        "total_checks": stats["total"],
+                        "ping_uptime_pct": round(stats["ping_ok"] / stats["total"] * 100, 1),
+                        "http_uptime_pct": round(stats["http_ok"] / stats["total"] * 100, 1),
+                    }
+                )
             days_list.append({"date": day_str, "connections": connections})
         return {"window": window, "days": days_list, "timestamp": now}, 200
 
@@ -281,18 +288,23 @@ async def get_data():
         for hour_str in sorted(by_hour.keys()):
             connections = []
             for (src, dst), stats in by_hour[hour_str].items():
-                connections.append({
-                    "node_ip": src,
-                    "target_ip": dst,
-                    "total_checks": stats["total"],
-                    "ping_uptime_pct": round(stats["ping_ok"] / stats["total"] * 100, 1),
-                    "http_uptime_pct": round(stats["http_ok"] / stats["total"] * 100, 1),
-                })
+                connections.append(
+                    {
+                        "node_ip": src,
+                        "target_ip": dst,
+                        "total_checks": stats["total"],
+                        "ping_uptime_pct": round(stats["ping_ok"] / stats["total"] * 100, 1),
+                        "http_uptime_pct": round(stats["http_ok"] / stats["total"] * 100, 1),
+                    }
+                )
             hours_list.append({"date": hour_str, "connections": connections})
         return {"window": "90h", "hours": hours_list, "timestamp": now}, 200
 
     else:
-        return {"error": "Invalid or missing window parameter. Use ?window=90m, ?window=90h, or ?window=90d", "status": 400}, 400
+        return {
+            "error": "Invalid or missing window parameter. Use ?window=90m, ?window=90h, or ?window=90d",
+            "status": 400,
+        }, 400
 
 
 def _node_peer_push_url(node: NodeInfo) -> str:
@@ -302,10 +314,7 @@ def _node_peer_push_url(node: NodeInfo) -> str:
 
 
 def _peer_dicts() -> list[dict]:
-    return [
-        {"ip": ip, "port": info.listen_port}
-        for ip, info in _registry.items()
-    ]
+    return [{"ip": ip, "port": info.listen_port} for ip, info in _registry.items()]
 
 
 async def _notify_node(node_ip: str, peers: list[dict]):
@@ -315,11 +324,14 @@ async def _notify_node(node_ip: str, peers: list[dict]):
     url = _node_peer_push_url(node)
     try:
         async with httpx.AsyncClient(timeout=config.PEER_PUSH_TIMEOUT) as client:
-            resp = await client.post(url, json={
-                "peers": peers,
-                "check_interval": config.CHECK_INTERVAL,
-                "buffer_size": config.BUFFER_SIZE,
-            })
+            resp = await client.post(
+                url,
+                json={
+                    "peers": peers,
+                    "check_interval": config.CHECK_INTERVAL,
+                    "buffer_size": config.BUFFER_SIZE,
+                },
+            )
             resp.raise_for_status()
             logger.debug("Peer notification sent to %s", node_ip)
     except Exception as e:

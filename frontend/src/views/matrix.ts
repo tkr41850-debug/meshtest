@@ -53,7 +53,7 @@ export function renderMatrix(
     '<div class="overflow-x-auto"><table class="w-full text-sm border-collapse">';
   html += "<tr><th></th>";
   for (const tgt of nodes) {
-    html += `<th class="px-2 py-1 text-center font-semibold text-mesh-dark bg-mesh-bg border border-mesh-border font-mono" title="${tgt}">${shortLabel(tgt)}</th>`;
+    html += `<th class="px-2 py-1 text-center font-semibold text-mesh-dark bg-mesh-bg border border-mesh-border font-mono"><div class="mesh-tooltip-group"><span>${shortLabel(tgt)}</span><div class="mesh-tooltip">${tgt}</div></div></th>`;
   }
   html += "</tr>";
 

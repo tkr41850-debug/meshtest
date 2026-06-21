@@ -1,8 +1,5 @@
-import pytest
-from unittest.mock import AsyncMock, patch
-
 from mesh_status import config
-from mesh_status.leader import _registry, _results, _peers_by_node
+from mesh_status.leader import _registry
 
 
 class TestRegistrationIntegration:
@@ -67,35 +64,47 @@ class TestPeerPushIntegration:
 
 class TestSubmissionIntegration:
     async def test_valid_submission_returns_202(self, client):
-        resp = await client.post("/submit", json={
-            "node_ip": "10.0.0.1",
-            "checks": [{"target_ip": "10.0.0.2", "ping_ok": True}],
-            "timestamp": 1000.0,
-        })
+        resp = await client.post(
+            "/submit",
+            json={
+                "node_ip": "10.0.0.1",
+                "checks": [{"target_ip": "10.0.0.2", "ping_ok": True}],
+                "timestamp": 1000.0,
+            },
+        )
         assert resp.status_code == 202
         data = await resp.get_json()
         assert data["status"] == "accepted"
 
     async def test_missing_node_ip_returns_400(self, client):
-        resp = await client.post("/submit", json={
-            "checks": [{"target_ip": "10.0.0.2", "ping_ok": True}],
-            "timestamp": 1000.0,
-        })
+        resp = await client.post(
+            "/submit",
+            json={
+                "checks": [{"target_ip": "10.0.0.2", "ping_ok": True}],
+                "timestamp": 1000.0,
+            },
+        )
         assert resp.status_code == 400
 
     async def test_missing_checks_returns_400(self, client):
-        resp = await client.post("/submit", json={
-            "node_ip": "10.0.0.1",
-            "timestamp": 1000.0,
-        })
+        resp = await client.post(
+            "/submit",
+            json={
+                "node_ip": "10.0.0.1",
+                "timestamp": 1000.0,
+            },
+        )
         assert resp.status_code == 400
 
     async def test_bad_timestamp_returns_400(self, client):
-        resp = await client.post("/submit", json={
-            "node_ip": "10.0.0.1",
-            "checks": [{"target_ip": "10.0.0.2", "ping_ok": True}],
-            "timestamp": "bad",
-        })
+        resp = await client.post(
+            "/submit",
+            json={
+                "node_ip": "10.0.0.1",
+                "checks": [{"target_ip": "10.0.0.2", "ping_ok": True}],
+                "timestamp": "bad",
+            },
+        )
         assert resp.status_code == 400
 
 
@@ -151,16 +160,21 @@ class TestDataApiIntegration:
         assert "timestamp" in data
 
     async def test_data_90d_includes_in_memory_data(self, client):
-        await client.post("/submit", json={
-            "node_ip": "10.0.0.1",
-            "checks": [{
-                "target_ip": "10.0.0.2",
-                "ping_ok": True,
-                "http_ok": True,
+        await client.post(
+            "/submit",
+            json={
+                "node_ip": "10.0.0.1",
+                "checks": [
+                    {
+                        "target_ip": "10.0.0.2",
+                        "ping_ok": True,
+                        "http_ok": True,
+                        "timestamp": 1000.0,
+                    }
+                ],
                 "timestamp": 1000.0,
-            }],
-            "timestamp": 1000.0,
-        })
+            },
+        )
         resp = await client.get("/data?window=90d")
         assert resp.status_code == 200
         data = await resp.get_json()
@@ -172,21 +186,27 @@ class TestDataApiIntegration:
         assert conn["http_uptime_pct"] == 100.0
 
     async def test_data_90d_aggregates_by_day(self, client):
-        await client.post("/submit", json={
-            "node_ip": "10.0.0.2",
-            "checks": [{
-                "target_ip": "10.0.0.1",
-                "ping_ok": True,
-                "http_ok": False,
+        await client.post(
+            "/submit",
+            json={
+                "node_ip": "10.0.0.2",
+                "checks": [
+                    {
+                        "target_ip": "10.0.0.1",
+                        "ping_ok": True,
+                        "http_ok": False,
+                        "timestamp": 1000.0,
+                    },
+                    {
+                        "target_ip": "10.0.0.3",
+                        "ping_ok": False,
+                        "http_ok": False,
+                        "timestamp": 1000.5,
+                    },
+                ],
                 "timestamp": 1000.0,
-            }, {
-                "target_ip": "10.0.0.3",
-                "ping_ok": False,
-                "http_ok": False,
-                "timestamp": 1000.5,
-            }],
-            "timestamp": 1000.0,
-        })
+            },
+        )
         resp = await client.get("/data?window=90d")
         assert resp.status_code == 200
         data = await resp.get_json()
@@ -214,19 +234,30 @@ class TestDataApiIntegration:
 
     async def test_data_90m_accumulates_across_submissions(self, client):
         import time
+
         now = time.time()
         ts1 = now - 120
         ts2 = now - 60
-        await client.post("/submit", json={
-            "node_ip": "10.0.0.1",
-            "checks": [{"target_ip": "10.0.0.2", "ping_ok": True, "http_ok": True, "timestamp": ts1}],
-            "timestamp": ts1,
-        })
-        await client.post("/submit", json={
-            "node_ip": "10.0.0.1",
-            "checks": [{"target_ip": "10.0.0.2", "ping_ok": False, "http_ok": True, "timestamp": ts2}],
-            "timestamp": ts2,
-        })
+        await client.post(
+            "/submit",
+            json={
+                "node_ip": "10.0.0.1",
+                "checks": [
+                    {"target_ip": "10.0.0.2", "ping_ok": True, "http_ok": True, "timestamp": ts1}
+                ],
+                "timestamp": ts1,
+            },
+        )
+        await client.post(
+            "/submit",
+            json={
+                "node_ip": "10.0.0.1",
+                "checks": [
+                    {"target_ip": "10.0.0.2", "ping_ok": False, "http_ok": True, "timestamp": ts2}
+                ],
+                "timestamp": ts2,
+            },
+        )
         resp = await client.get("/data?window=90m")
         assert resp.status_code == 200
         data = await resp.get_json()
@@ -247,9 +278,12 @@ class TestCorsIntegration:
         assert resp.headers.get("access-control-allow-origin") == "*"
 
     async def test_options_preflight_returns_cors_headers(self, client):
-        resp = await client.options("/data", headers={
-            "Origin": "http://example.com",
-            "Access-Control-Request-Method": "GET",
-        })
+        resp = await client.options(
+            "/data",
+            headers={
+                "Origin": "http://example.com",
+                "Access-Control-Request-Method": "GET",
+            },
+        )
         cors_header = resp.headers.get("access-control-allow-origin")
         assert cors_header == "*" or cors_header is not None

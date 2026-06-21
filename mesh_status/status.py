@@ -4,9 +4,7 @@ from mesh_status import config
 
 
 def calculate_status(
-    node_ip: str, target_ip: str,
-    results: dict[str, list[dict]],
-    registry: dict, now: float = None
+    node_ip: str, target_ip: str, results: dict[str, list[dict]], registry: dict, now: float = None
 ) -> dict:
     if now is None:
         now = time.time()

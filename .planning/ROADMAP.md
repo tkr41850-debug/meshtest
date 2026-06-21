@@ -87,18 +87,18 @@ Completed 2026-06-20. See `.planning/milestones/v0.9-ROADMAP.md` for full detail
 
 **Status:** Planning started 2026-06-21.
 
-### Phase 24: Custom Hover Tooltips
+### ✅ Phase 24: Custom Hover Tooltips (COMPLETE)
 
 **Goal**: Replace native HTML `title` tooltips with custom CSS-only tooltip containers in the unified card template and matrix view, using group-based hover for bar rows
 **Depends on**: Phase 23 (unified card template must exist before tooltip wrappers)
 **Requirements**: UXTIP-01, UXTIP-02, UXTIP-03, UXTIP-04, UXTIP-05, UXTIP-06
 **Success Criteria** (what must be TRUE):
-1. Bar rows show a styled tooltip on hover with protocol label (ICMP/HTTP) — no native `title` tooltips shown for bars
-2. Matrix column headers show a styled tooltip with the full IP on hover — no native `title` tooltips on headers
-3. Tooltip CSS is in `style.css` — uses dark background, white text, small font, rounded corners, positioned above content
-4. All test assertions updated — tests no longer check native `title` attributes for bars/headers
-5. No visual regression — tooltips only appear on hover and don't shift layout
-**Plans**: TBD
+1. ✅ Bar rows show a styled tooltip on hover with protocol label (ICMP/HTTP) — no native `title` tooltips shown for bars
+2. ✅ Matrix column headers show a styled tooltip with the full IP on hover — no native `title` tooltips on headers
+3. ✅ Tooltip CSS is in `style.css` — uses dark background, white text, small font, rounded corners, positioned above content
+4. ✅ All test assertions updated — tests no longer check native `title` attributes for bars/headers
+5. ✅ No visual regression — tooltips only appear on hover and don't shift layout
+**Plans**: 1 plan (direct execution)
 **UI hint**: yes
 
 ## Progress
@@ -133,7 +133,7 @@ Completed 2026-06-20. See `.planning/milestones/v0.9-ROADMAP.md` for full detail
 | 21 | v0.9 | Complete | 2026-06-20 |
 | 22 | v0.9 | Complete | 2026-06-20 |
 | 23 | v0.9 | Complete | 2026-06-20 |
-| 24 | v0.10 | Planning | — |
+| 24 | v0.10 | Complete | 2026-06-21 |
 
 ## v0.8 Phase Details
 

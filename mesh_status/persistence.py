@@ -2,7 +2,6 @@ import asyncio
 import json
 import logging
 import os
-import tempfile
 import time
 from datetime import date, datetime, timedelta
 from pathlib import Path
@@ -80,6 +79,5 @@ async def flush_loop(interval: int = 3600):
             cutoff = time.time() - 5400
             for node_ip in list(_results.keys()):
                 _results[node_ip] = [
-                    r for r in _results[node_ip]
-                    if r.get("timestamp", 0) >= cutoff
+                    r for r in _results[node_ip] if r.get("timestamp", 0) >= cutoff
                 ]

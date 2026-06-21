@@ -12,7 +12,9 @@ def parse_args():
     parser = argparse.ArgumentParser(description="Register a node with mesh-status leader")
     parser.add_argument("--node-ip", "-n", help="This node's IP address")
     parser.add_argument("--leader-ip", "-l", help="Leader server's IP address")
-    parser.add_argument("--port", "-p", type=int, default=58080, help="Leader port (default: 58080)")
+    parser.add_argument(
+        "--port", "-p", type=int, default=58080, help="Leader port (default: 58080)"
+    )
     return parser.parse_args()
 
 

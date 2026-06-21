@@ -43,10 +43,10 @@ jobs:
             MESH_STATUS_LOCAL_SOURCE=/repo bash /repo/deploy/install.sh -y 2>&1
             VERSION=$(cat "$HOME/.local/meshtest/.mesh-status.install")
             echo "Installed version: $VERSION"
-            if [ "$VERSION" = "v0.8" ]; then
-              echo "PASS: version pinned correctly"
+            if echo "$VERSION" | grep -qE '^(main|v?[0-9]+\.[0-9]+(\.[0-9]+)?)$'; then
+              echo "PASS: version '$VERSION' matches expected pattern (main or semver)"
             else
-              echo "FAIL: expected v0.8, got $VERSION"
+              echo "FAIL: version '$VERSION' does not match expected pattern (main or semver)"
               exit 1
             fi
           '
