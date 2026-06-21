@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import { renderMatrix } from "./views/matrix";
 import { renderCards } from "./views/cards";
 import { renderDay30 } from "./views/day30";
+import { renderHourly } from "./views/hourly";
 
 describe("renderMatrix", () => {
   it("renders table with correct number of rows/cols", () => {
@@ -416,5 +417,101 @@ describe("renderDay30", () => {
       (b) => b.getAttribute("data-tooltip") !== "No data",
     );
     expect(filledBars.length).toBe(2);
+  });
+
+  it("sums total_checks across multiple days", () => {
+    const container = document.createElement("div");
+    const days = [
+      {
+        date: "2026-06-01",
+        connections: [
+          { node_ip: "10.0.0.1", target_ip: "10.0.0.2", ping_uptime_pct: 100, http_uptime_pct: 100, total_checks: 10 },
+        ],
+      },
+      {
+        date: "2026-06-02",
+        connections: [
+          { node_ip: "10.0.0.1", target_ip: "10.0.0.2", ping_uptime_pct: 99.5, http_uptime_pct: 100, total_checks: 20 },
+        ],
+      },
+      {
+        date: "2026-06-03",
+        connections: [
+          { node_ip: "10.0.0.1", target_ip: "10.0.0.2", ping_uptime_pct: 100, http_uptime_pct: 99.9, total_checks: 30 },
+        ],
+      },
+    ];
+    renderDay30(container, ["10.0.0.1", "10.0.0.2"], days);
+    expect(container.innerHTML).toContain('Checks: <strong class="text-mesh-dark">60</strong>');
+  });
+});
+
+describe("renderHourly", () => {
+  it("shows no-data message for undefined hours", () => {
+    const container = document.createElement("div");
+    renderHourly(container, ["10.0.0.1"], undefined);
+    expect(container.innerHTML).toContain("No data available");
+  });
+
+  it("shows no-data message for empty hours", () => {
+    const container = document.createElement("div");
+    renderHourly(container, ["10.0.0.1"], []);
+    expect(container.innerHTML).toContain("No data available");
+  });
+
+  it("renders cards for pairs with hourly data", () => {
+    const container = document.createElement("div");
+    const hours = [
+      {
+        date: "2026-06-01T14:00",
+        connections: [
+          { node_ip: "10.0.0.1", target_ip: "10.0.0.2", ping_uptime_pct: 100, http_uptime_pct: 100, total_checks: 100 },
+        ],
+      },
+    ];
+    renderHourly(container, ["10.0.0.1", "10.0.0.2"], hours);
+    const cards = container.querySelectorAll(".rounded-lg");
+    expect(cards.length).toBe(1);
+    expect(cards[0].textContent).toContain("10.0.0.2");
+  });
+
+  it("sums total_checks across multiple hours", () => {
+    const container = document.createElement("div");
+    const hours = [
+      {
+        date: "2026-06-01T14:00",
+        connections: [
+          { node_ip: "10.0.0.1", target_ip: "10.0.0.2", ping_uptime_pct: 100, http_uptime_pct: 100, total_checks: 100 },
+        ],
+      },
+      {
+        date: "2026-06-01T15:00",
+        connections: [
+          { node_ip: "10.0.0.1", target_ip: "10.0.0.2", ping_uptime_pct: 99.5, http_uptime_pct: 100, total_checks: 120 },
+        ],
+      },
+      {
+        date: "2026-06-01T16:00",
+        connections: [
+          { node_ip: "10.0.0.1", target_ip: "10.0.0.2", ping_uptime_pct: 100, http_uptime_pct: 99.9, total_checks: 140 },
+        ],
+      },
+    ];
+    renderHourly(container, ["10.0.0.1", "10.0.0.2"], hours);
+    expect(container.innerHTML).toContain('Checks: <strong class="text-mesh-dark">360</strong>');
+  });
+
+  it("shows no-data message when source has no pairs", () => {
+    const container = document.createElement("div");
+    const hours = [
+      {
+        date: "2026-06-01T14:00",
+        connections: [
+          { node_ip: "10.0.0.3", target_ip: "10.0.0.4", ping_uptime_pct: 100, http_uptime_pct: 100, total_checks: 10 },
+        ],
+      },
+    ];
+    renderHourly(container, ["10.0.0.1", "10.0.0.2"], hours);
+    expect(container.innerHTML).toContain("No data for this node");
   });
 });
