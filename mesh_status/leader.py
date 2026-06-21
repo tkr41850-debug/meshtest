@@ -170,8 +170,10 @@ async def update_config():
 @app.route("/data", methods=["GET"])
 async def get_data():
     window = request.args.get("window", "")
-    if window == "30m":
-        cutoff = time.time() - 1800
+    now = time.time()
+
+    if window == "90m":
+        cutoff = now - 5400
         checks = []
         for node_ip, node_results in _results.items():
             for r in node_results:
@@ -180,20 +182,18 @@ async def get_data():
                     check["node_ip"] = node_ip
                     checks.append(check)
         statuses = []
-        now = time.time()
         for src_ip in list(_registry.keys()):
             for dst_ip in list(_registry.keys()):
                 if src_ip != dst_ip:
                     s = status_module.calculate_status(src_ip, dst_ip, _results, _registry, now)
                     statuses.append(s)
-        return {"window": "30m", "checks": checks, "statuses": statuses, "timestamp": now}, 200
+        return {"window": "90m", "checks": checks, "statuses": statuses, "timestamp": now}, 200
 
-    elif window == "30d":
-        now = time.time()
-        start = (datetime.now() - timedelta(days=30)).date()
+    elif window in ("90d", "30d"):
+        days = 90 if window == "90d" else 30
+        start = (datetime.now() - timedelta(days=days)).date()
         end = datetime.now().date()
         raw = persistence._read_results(start, end)
-        # Infer node_ip for disk records with empty node_ip (stored before Phase 12 fix)
         target_to_source: dict[str, str] = {}
         for src_ip, src_results in _results.items():
             for sr in src_results:
@@ -203,7 +203,6 @@ async def get_data():
         for r in raw:
             if not r.get("node_ip"):
                 r["node_ip"] = target_to_source.get(r.get("target_ip", ""), "")
-        # Include in-memory data that hasn't been flushed yet
         for node_ip, node_results in list(_results.items()):
             for r in node_results:
                 check = dict(r)
@@ -236,10 +235,64 @@ async def get_data():
                     "http_uptime_pct": round(stats["http_ok"] / stats["total"] * 100, 1),
                 })
             days_list.append({"date": day_str, "connections": connections})
-        return {"window": "30d", "days": days_list, "timestamp": now}, 200
+        return {"window": window, "days": days_list, "timestamp": now}, 200
+
+    elif window == "90h":
+        start = now - 90 * 3600
+        raw = []
+        for node_ip, node_results in _results.items():
+            for r in node_results:
+                if r.get("timestamp", 0) >= start:
+                    check = dict(r)
+                    check["node_ip"] = node_ip
+                    raw.append(check)
+        disk_start = (datetime.fromtimestamp(start)).date()
+        disk_end = datetime.now().date()
+        disk_raw = persistence._read_results(disk_start, disk_end)
+        target_to_source = {}
+        for src_ip, src_results in _results.items():
+            for sr in src_results:
+                tgt = sr.get("target_ip", "")
+                if tgt and tgt not in target_to_source:
+                    target_to_source[tgt] = src_ip
+        for r in disk_raw:
+            if r.get("timestamp", 0) < start:
+                continue
+            if not r.get("node_ip"):
+                r["node_ip"] = target_to_source.get(r.get("target_ip", ""), "")
+            raw.append(r)
+
+        by_hour: dict[str, dict] = {}
+        for r in raw:
+            ts = r.get("timestamp", 0)
+            hour = datetime.fromtimestamp(ts).strftime("%Y-%m-%dT%H:00")
+            if hour not in by_hour:
+                by_hour[hour] = {}
+            key = (r.get("node_ip", ""), r.get("target_ip", ""))
+            if key not in by_hour[hour]:
+                by_hour[hour][key] = {"total": 0, "ping_ok": 0, "http_ok": 0}
+            by_hour[hour][key]["total"] += 1
+            if r.get("ping_ok"):
+                by_hour[hour][key]["ping_ok"] += 1
+            if r.get("http_ok"):
+                by_hour[hour][key]["http_ok"] += 1
+
+        hours_list = []
+        for hour_str in sorted(by_hour.keys()):
+            connections = []
+            for (src, dst), stats in by_hour[hour_str].items():
+                connections.append({
+                    "node_ip": src,
+                    "target_ip": dst,
+                    "total_checks": stats["total"],
+                    "ping_uptime_pct": round(stats["ping_ok"] / stats["total"] * 100, 1),
+                    "http_uptime_pct": round(stats["http_ok"] / stats["total"] * 100, 1),
+                })
+            hours_list.append({"date": hour_str, "connections": connections})
+        return {"window": "90h", "hours": hours_list, "timestamp": now}, 200
 
     else:
-        return {"error": "Invalid or missing window parameter. Use ?window=30m or ?window=30d", "status": 400}, 400
+        return {"error": "Invalid or missing window parameter. Use ?window=90m, ?window=90h, or ?window=90d", "status": 400}, 400
 
 
 def _node_peer_push_url(node: NodeInfo) -> str:

@@ -2,20 +2,24 @@ import { describe, it, expect } from "vitest";
 import { barColor, renderBars } from "./bars";
 
 describe("barColor", () => {
+  it("returns gray for negative (no data)", () => {
+    expect(barColor(-1)).toBe("#e5e7eb");
+  });
+
   it("returns red for 0%", () => {
     expect(barColor(0)).toBe("hsl(0, 85%, 40%)");
   });
 
+  it("returns red for 50% (below 90% threshold)", () => {
+    expect(barColor(0.5)).toBe("hsl(0, 85%, 40%)");
+  });
+
+  it("returns amber start for 90%", () => {
+    expect(barColor(0.9)).toBe("hsl(45, 85%, 40%)");
+  });
+
   it("returns green for 100%", () => {
     expect(barColor(1)).toBe("hsl(120, 85%, 40%)");
-  });
-
-  it("returns yellow-green for 50%", () => {
-    expect(barColor(0.5)).toBe("hsl(60, 85%, 40%)");
-  });
-
-  it("returns gray for negative (no data)", () => {
-    expect(barColor(-1)).toBe("#e5e7eb");
   });
 });
 

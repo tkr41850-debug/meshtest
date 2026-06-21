@@ -1,710 +1,669 @@
-# Pitfalls Research
+# UI Consolidation Milestone — Pitfalls
 
-**Domain:** Adding curl-pipe-bash install scripts, start.sh runner, and interactive config to existing Python (Quart) application
-**Researched:** 2026-06-20
-**Confidence:** HIGH (research cross-referenced with official docs, real issue trackers, production post-mortems, and project-specific codebase analysis)
-
-## Critical Pitfalls
-
-### Pitfall 1: Missing `pipefail` in curl-pipe-bash Pipeline Causes Silent Install Failure
-
-**What goes wrong:**
-`curl -fsSL https://example.com/install.sh | bash` succeeds (exit 0) even when `curl` fails with an HTTP 403, 429, or transient network error. The user sees no error message — `bash` receives an empty or partial stdin, does nothing useful, and exits 0. The install "completes" silently, leaving the system in an inconsistent state with no installed software and no indication anything went wrong.
-
-**Why it happens:**
-In a bash pipe, the exit code is from the **last** command (`bash`), not the first (`curl`). Without `set -o pipefail`, the pipeline exits 0 as long as `bash` (receiving empty stdin) exits 0. This is exactly the bug that hit the `claude-code-action` installer (issue #1136) — curl 429 rate limit → empty pipe → bash exits 0 → GitHub Action reported "Claude Code installed successfully" → subsequent `which claude` failed. Three-attempt retry logic never triggered because every attempt silently succeeded.
-
-**How to avoid:**
-1. **Never use bare `curl ... | bash`** — always prepend `set -o pipefail`:
-   ```bash
-   set -o pipefail
-   curl -fsSL https://github.com/user/repo/releases/latest/download/install.sh | bash
-   ```
-2. **Even better: download-then-execute** (decouples fetch errors from execution):
-   ```bash
-   curl -fsSL -o /tmp/mesh-install.sh https://github.com/user/repo/releases/latest/download/install.sh
-   bash /tmp/mesh-install.sh
-   rm -f /tmp/mesh-install.sh
-   ```
-3. **Post-install verification** — always verify the binary exists:
-   ```bash
-   command -v mesh-status || { echo "Install failed"; exit 1; }
-   ```
-
-**Warning signs:**
-- CI logs show "Installation complete" but `which mesh-status` fails in subsequent steps
-- Empty `/tmp/` download artifacts when debugging
-- curl exit codes masked in CI pipeline output
-
-**Phase to address:**
-Phase 1 (`deploy/install.sh`) — the curl-pipe-bash line itself must be hardened at creation. Retrofitting pipefail is trivial but easy to forget.
+**Context:** v0.9 — Refining frontend views for the mesh monitoring dashboard
+**Changes analyzed:**
+1. Bar count: 30 → 90 bars per window (3× more DOM elements)
+2. Color scheme: HSL gradient → discrete thresholds (≥99% green, ≥95% amber, <95% red)
+3. Views: unify cards.ts vs day30.ts into a consistent card layout
+4. New view: 90h hourly history (requires backend aggregation endpoint)
+5. All rendering is string template + innerHTML (no framework)
+**Date:** 2026-06-20
+**Confidence:** HIGH (verified against codebase analysis, DOM performance studies, time-series monitoring research)
 
 ---
 
-### Pitfall 2: Interactive `read` Stdin Theft in Piped Install Script
+## A. Discrete Color Threshold Pitfalls
+
+### A1. Boundary Hard — The 94.9% / 99.4% Trap
 
 **What goes wrong:**
-When `install.sh` is invoked via `curl -fsSL ... | bash`, bash reads the script incrementally from stdin. Any interactive prompt (`read -p`, `gum input`, `select`) or child process that also reads stdin **steals bytes from the script stream**. This causes:
-- Truncated function names: `warn_shell_path_missing_di` instead of `warn_shell_path_missing_dir`
-- "command not found" errors from corrupted function names
-- Indefinite hangs where bash blocks waiting for more script input
-- Silent corruption of subsequent script lines
+The proposed thresholds are:
+- `>= 99%` → green (`#22c55e`)
+- `>= 95%` → amber (`#f59e0b`)
+- `< 95%` → red (`#ef4444`)
 
-This is not theoretical — the OpenClaw project (PR #82918) documented this exact failure. Their pipe guard attempt was rejected as too risky (it broke `bash -c` invocation), but the underlying stdin-steal bug was confirmed real.
+A value of **94.9%** renders red. A value of **99.4%** renders green. Both are semantically correct for the threshold system, but the **perception gap** between "almost 95%" (red) and "95.0%" (amber) creates a jarring visual jump when a value crosses the boundary. In a bar chart of 90 bars, a single bar flipping from amber to red (or vice versa) draws disproportionate attention because the human visual system is highly sensitive to color transitions in dense grids.
 
 **Why it happens:**
-Bash reads piped scripts lazily from stdin, not as an atomic read. When a `read` call in the script body consumes stdin, it eats bytes intended for the shell parser. The script stream and interactive input share the same file descriptor. This only affects `curl ... | bash` — direct execution (`bash install.sh`) and process substitution (`bash <(curl ...)`) are safe because `BASH_SOURCE[0]` is set.
+The existing code (`cards.ts:19-23`, `day30.ts:4-8`) already uses these exact thresholds. The migration from HSL gradient (`bars.ts:3-6`) to discrete thresholds amplifies the problem because bars will now jump between three colors instead of smoothly transitioning. At 90 bars per row, boundary-crossing bars stand out.
 
-**How to avoid:**
-1. **Delay all interactive prompts until after the script body is fully parsed.** Structure the script: define all functions first, then call a `main` function at the very bottom. Parse errors from stolen stdin hit function bodies, not definitions.
-2. **If interactive prompts are unavoidable, use `/dev/tty` for input**:
-   ```bash
-   read -p "Enter value: " value < /dev/tty
-   ```
-3. **Or buffer the script first** — download to file, then execute:
-   ```bash
-   curl -fsSL -o /tmp/install.sh https://.../install.sh
-   bash /tmp/install.sh
-   ```
-   This bypasses the piped-stdin problem entirely.
-4. **Detect piped execution and refuse** if interactive input is needed:
-   ```bash
-   if [[ -p /dev/stdin && ! -t 0 ]]; then
-       echo "This installer needs interactive input. Download and run directly:"
-       echo "  curl -fsSL -o install.sh https://.../install.sh && bash install.sh"
-       exit 1
-   fi
-   ```
+**Consequences:**
+- During a partial-outage recovery window, uptime values around 94-96% cause bars to flicker between amber and red across refresh cycles
+- Users interpret the red-amber boundary as an alert threshold, but values just above 95% are still problematic — they just look less alarming
+- With HSL, a 95% bar was a different shade of yellow-green than a 94% bar; with discrete thresholds they're completely different colors
 
-**Warning signs:**
-- Install script produces "command not found" errors for internal function names
-- User is prompted but input appears corrupted or causes hangs
-- Works in CI/Docker (no TTY) but fails in interactive terminal
+**Prevention:**
+1. **Add hysteresis** — once a bar goes red, require `>= 97%` to go back to amber (prevents flicker around boundaries):
+   ```typescript
+   let _lastColor: Map<string, string> = new Map();
+   export function barColor(percent: number, barKey?: string): string {
+     // ...normal threshold logic...
+     // Then apply hysteresis if barKey provided
+   }
+   ```
+   This is standard practice in monitoring dashboards (Grafana, Statuspage). Without it, every bar near 95% oscillates.
 
-**Phase to address:**
-Phase 2 (Config bootstrapping + `start.sh`) — interactive prompts are in the config setup, and must use `/dev/tty` if stdin is piped. Phase 1 should already structure `install.sh` with the `main`-function-at-bottom pattern.
+2. **Use more than 3 tiers** — Grafana's thresholds default uses 4+ tiers (null→red, 95→orange, 99→yellow, 99.9→green). The 3-tier system loses granularity at the high end. Consider:
+   - `>= 99.9` → green (`#22c55e`)
+   - `>= 99.0` → lime (`#84cc16`)
+   - `>= 95.0` → amber (`#f59e0b`)
+   - `< 95.0` → red (`#ef4444`)
+
+3. **Document the behavior** — In the tooltip or a legend, explain: "Green = ≥99%, Amber = ≥95%, Red = <95%. Small fluctuations near boundaries are normal."
+
+4. **Test boundary values** — The bar test suite (`bars.test.ts`) only tests `barColor(0)`, `barColor(1)`, `barColor(0.5)`, and `barColor(-1)`. Add tests for:
+   - `barColor(0.9499)` → red
+   - `barColor(0.9500)` → amber
+   - `barColor(0.9899)` → amber
+   - `barColor(0.9900)` → green
+   - `barColor(0.9999)` → green (verify no HSL bleed)
+
+**Detection:**
+- Visual inspection of a 90-bar timeline during partial outage shows chaotic color banding around recovery
+- Unit tests: boundary values return wrong color within rounding of a single test iteration
+- Test failures: `barColor(0.95)` sometimes returns amber, sometimes red depending on floating point
+
+**Phase to address:** Color scheme change (first phase of UI consolidation changes)
 
 ---
 
-### Pitfall 3: Shell Script Doesn't Use `set -euo pipefail` — Silent Failures Cascade
+### A2. HSL → Discrete: Color Function Inconsistency Across Views
 
 **What goes wrong:**
-Without strict mode, a failed `mkdir`, `cd`, or `cp` in the install script silently continues. The script creates a broken installation — directories exist but are empty, permissions are wrong, files are missing. The user runs `start.sh` and gets a Python import error or file-not-found. They assume the software is buggy, not that the install was incomplete.
+There are currently **two different color functions** in the codebase:
+- `bars.ts:barColor()` — uses HSL gradient (`hsl(percent * 120, 85%, 40%)`)
+- `cards.ts:uptimeColor()` — uses discrete thresholds (`>=99 → green, >=95 → amber, else red`)
+- `day30.ts:uptimeColor()` — identical to cards.ts, but separate copy
 
-Specific disaster scenarios with defaults:
-- **`set -u` missing**: `rm -rf "$INSTALL_DIR/"` with unset `$INSTALL_DIR` → `rm -rf /` (the space after the trailing slash is stripped)
-- **`set -e` missing**: `cd /non/existent && rm -rf *` — cd fails silently, `rm -rf *` runs in **current working directory**
-- **`pipefail` missing**: `curl https://broken.link | tar xz` — curl fails, empty tar stream extracts successfully, script continues
+The plan to switch `barColor()` from HSL to discrete thresholds means this now needs to be extracted to a shared function. If someone forgets to update `bars.ts:barColor()`, the 30m tab (which uses `renderBars` → `barColor`) and the 30d tab (which also uses `renderBars` → `barColor`) will show different colors than the summary badges (`uptimeColor`).
 
-**How to avoid:**
-1. **Every script entrypoint gets this immediately after the shebang**:
-   ```bash
-   #!/usr/bin/env bash
-   set -euo pipefail
-   IFS=$'\n\t'
+**Why it happens:**
+All three files (`bars.ts`, `cards.ts`, `day30.ts`) independently implement color logic. After the change, `bars.ts` calls `barColor()` for bar elements, while `cards.ts` and `day30.ts` call `uptimeColor()` for badge elements. If thresholds drift between these two implementations, a card's badge could show "99.1% (green)" while its bar shows "99.1% (not green yet because HSL scale)".
+
+**Consequences:**
+- Same uptime value rendered in two colors on the same card
+- Users lose trust in the data display
+- Debugging requires tracing through three files to find the inconsistency
+
+**Prevention:**
+1. **Extract a single shared `uptimeColor(percent: number): string` function** into a new file (e.g., `views/colors.ts`). Both `bars.ts` and `cards.ts` import from it. `day30.ts` imports from it too.
+2. **The function must return the same type** — currently `barColor` returns `string` (the CSS color), `uptimeColor` returns `string`. Keep it consistent.
+3. **Deprecate individual implementations** — add a `// @deprecated Use views/colors.ts:uptimeColor()` comment to the old functions.
+4. **Add a cross-view test** — in `bars.test.ts`, import both `barColor` and `uptimeColor` and verify they return the same color for the same input:
+   ```typescript
+   import { uptimeColor } from "./colors";
+   import { barColor } from "./bars";
+   // After refactor: barColor should delegate to uptimeColor internally
    ```
-2. **But understand the caveats** (see Greg's Wiki BashFAQ/105):
-   - `set -e` does NOT trigger inside `if`, `while`, `&&`, `||`, or `!`
-   - `set -e` does NOT propagate from functions called in those contexts
-   - For critical operations (rm, mv, critical cp), check return codes **explicitly**
-   - `head` in a pipeline with `pipefail` causes false-positive SIGPIPE failures; guard with `|| true`
-3. **Use `${VAR:-fallback}` for optional variables** to avoid `set -u` aborting on intentionally-unset vars
-4. **Add a trap for debug output** so silent failures leave evidence:
-   ```bash
-   trap 'echo "ERROR at line $LINENO (exit code $?)"' ERR
-   ```
 
-**Warning signs:**
-- Install "succeeds" but `start.sh` immediately fails with missing files
-- Random directories created in the CWD when cd fails
-- CI install step passes but subsequent verification fails
+**Detection:**
+- Visual diff: same uptime percentage displayed as different colors on badge vs bar
+- Integration test: render card with known uptime, inspect both badge color and bar color, verify match
 
-**Phase to address:**
-Phase 1 (`deploy/install.sh`) and Phase 2 (`start.sh`, config setup) — every shell script entrypoint must have strict mode from the first commit.
+**Phase to address:** Color scheme change, but also touching views/bars.ts
 
 ---
 
-### Pitfall 4: Orphaned Processes When Script Is Killed (No Signal Propagation)
+### A3. HSL Gradient Loss: Information Destruction
 
 **What goes wrong:**
-When `start.sh` launches the Python backend and Hypercorn as background processes (`&`), a SIGTERM or SIGINT to `start.sh` kills the script but NOT the child processes. The Python processes become orphans, re-parented to init, and continue running. The user:
-1. Runs `start.sh --leader` again → port 58080 is still in use → "Address already in use" error
-2. Kills `start.sh` with Ctrl+C → terminal returns but process continues running on port 58080
-3. Starts a new `start.sh` → finds no PID file → launches another instance → port conflict → silent failure
+HSL gradient maps `0% → red (hue 0)`, `50% → yellow-green (hue 60)`, `100% → green (hue 120)`. This encodes the **magnitude** of uptime into the hue — users can visually estimate "about 80%" just from color.
 
-This is a **process group** problem, documented extensively in Unix StackExchange (#806014). The default behavior: killing a script via `kill -TERM $script_pid` kills only the script process, not its children. Only Ctrl+C in an interactive shell propagates properly because the kernel sends the signal to the process group.
+Discrete thresholds collapse this to 3 colors. A bar at 89% and a bar at 10% are both red — you lose the ability to distinguish "barely failed" from "completely down" without reading the tooltip.
 
 **Why it happens:**
-Bash does not set process group IDs for background jobs by default (`set -m` must be enabled). When the parent script dies, orphaned child processes are adopted by init. No trap or cleanup handler fires because the parent never set up signal propagation. The `entrypoint.sh` already uses `set -e` but has no process group management.
+HSL gradient is actually superior for magnitude encoding. The proposed change prioritizes "glanceability" (quickly see which are good/bad) over precision (see how bad). This is a legitimate tradeoff, but it's a deliberate loss of information that must be acknowledged.
 
-**How to avoid:**
-1. **Always set a trap in `start.sh`** to propagate signals to children:
-   ```bash
-   #!/usr/bin/env bash
-   set -euo pipefail
+**Consequences:**
+- At 90 bars per row with 3 colors, any row with >10% failure is uniformly uninformative
+- Users must hover each red bar to see if it's 95% or 10%
+- The "no data" bars (`percent < 0`, gray) and the "failed" bars (red) are both non-green, but mean very different things
+
+**Prevention:**
+1. **Keep the HSL gradient as a secondary encoding** — gray for no-data, then use saturation or lightness changes within the discrete color bands to preserve magnitude information:
+   ```typescript
+   // Four bands with intensity
+   if (percent >= 99) return `hsl(120, 85%, ${35 + (percent - 0.99) * 1000}%)`; // green, varying lightness
+   if (percent >= 95) return `hsl(45, 85%, 50%)`; // amber (fixed)
+   return `hsl(0, 85%, ${20 + percent * 20}%)`; // red, varying lightness
+   ```
+   This keeps the "green/amber/red at a glance" benefit while preserving magnitude within each band.
+
+2. **Add a saturation dimension for no-data** — make `percent < 0` renders as `hsl(0, 0%, 80%)` (light gray with zero saturation) to distinguish from actual failures.
+
+3. **Document the tradeoff explicitly** — in the PR description, note: "HSL gradient → discrete thresholds loses magnitude encoding. Mitigated by using lightness variation within bands and improved tooltip density."
+
+**Detection:**
+- User feedback: "All the red bars look the same, I can't tell if it's barely down or completely down"
+- A/B comparison: 30-bar HSL history is more information-dense than 90-bar discrete history
+
+**Phase to address:** Color scheme change — acceptance criteria must include "color still encodes magnitude within each band"
+
+---
+
+## B. DOM Density Pitfalls
+
+### B1. innerHTML at Scale: The O(n²) String Concatenation Trap
+
+**What goes wrong:**
+The existing code builds HTML by array-joining template strings and then assigning to `container.innerHTML = html`. Currently at 30 bars per window, each card generates 60 `<span>` elements (2 rows × 30 bars). For a 10-node mesh (90 pairs), that's 90 × 60 = 5,400 bar `<span>` elements. Total DOM: cards + headers + badges ≈ 6,000 elements for the 30m view.
+
+At 90 bars: 90 × 180 = 16,200 bar elements. Total ≈ 17,000 elements.
+
+The current code does **not** use `innerHTML +=` in a loop (it builds the full string and assigns once). So it avoids the worst O(n²) pattern. However:
+- `renderBars()` is called **per-card** (90 times for 10 nodes)
+- Each call produces a separate string for the bar row
+- InnerHTML assignment happens once at the end in `renderCards()`
+
+The benchmark research confirms: building HTML with `.join("")` and a single innerHTML assignment is the correct pattern. The performance concern is not O(n²) string cost (that's avoided), but **total parsed HTML size**.
+
+**Why it happens:**
+At 17,000 elements, innerHTML assignment triggers the browser HTML parser on a ~300KB HTML string. For reference:
+- A single innerHTML assignment of 1,000 nodes takes ~2.4ms (benchmarked)
+- At 17,000 nodes, expect ~40ms parse + ~30ms layout
+- That's fine for initial render, but this runs **every 10 seconds** (the auto-refresh interval in `main.ts:109`)
+- Over 5 minutes of uptime: 30 parses × 70ms = 2.1 seconds of blocking main thread work
+
+**Consequences:**
+- UI freezes for 70-100ms every 10 seconds during refresh
+- On slower devices (Raspberry Pi, older laptops): 150-300ms freezes
+- Scrolling during refresh becomes janky (layout thrash)
+- If the user has many browser tabs open, the cumulative CPU usage is noticeable
+
+**Prevention:**
+1. **The current `.join("") + innerHTML` pattern is correct** — do NOT switch to `innerHTML +=` in a loop. The existing code already does it right.
+
+2. **Measure before optimizing** — run a performance test first:
+   ```typescript
+   const t0 = performance.now();
+   renderCards(container, nodes, statuses, checks, uptimeMap);
+   const t1 = performance.now();
+   console.log(`Render took ${(t1 - t0).toFixed(1)}ms`);
+   ```
+   If `< 50ms`, no optimization needed. The real problem starts above 100ms.
+
+3. **Optimize if > 100ms: Detach container during rebuild** — prevents layout thrashing on intermediate states:
+   ```typescript
+   const parent = container.parentNode;
+   const nextSibling = container.nextSibling;
+   parent?.removeChild(container);
+   container.innerHTML = html; // No layout thrash — detached
+   parent?.insertBefore(container, nextSibling); // Single layout
+   ```
+   This reduces reflow from N partial reflows to 2 total.
+
+4. **Worst-case guard** — if more than 50 nodes registered, cap bar rendering or show a warning:
+   ```typescript
+   if (nodes.length > 50) {
+     // Skip bar rendering, show text-only view
+   }
+   ```
+
+**Detection:**
+- Chrome DevTools Performance recording shows a long task (>50ms) every 10s
+- `window.performance.now()` logging reveals render time creeping up with node count
+- Users report "page freezes every few seconds" on lower-end hardware
+
+**Phase to address:** Bar count change — must include performance measurement gate
+
+---
+
+### B2. Total Bar Element Count Math
+
+**The numbers at 90 bars:**
+
+| Scenario | Nodes | Pairs | Cards | Bars/Card | Total Bars | Total DOM nodes |
+|----------|-------|-------|-------|-----------|------------|-----------------|
+| Small mesh | 3 | 6 | 6 | 180 | 1,080 | ~1,300 |
+| Medium mesh | 10 | 90 | 90 | 180 | 16,200 | ~17,000 |
+| Large mesh | 50 | 2,450 | 2,450 | 180 | 441,000 | ~445,000 |
+| Max registry | 100 | 9,900 | 9,900 | 180 | 1,782,000 | ~1.8M |
+
+**Key insight:** At 10 nodes (the most realistic deployment), total bars is 16,200 — manageable. At 50+, the system falls apart because:
+- The 30m view builds ALL pairs (N × N-1) × 2 rows × 90 bars
+- The 30d view builds ALL pairs × 2 rows × 30 bars (daily, not per-hour)
+- The new 90h view would build ALL pairs × 2 rows × 90 hourly bars
+
+**The 50-node / 100-node scenarios are not handled by any view.** The code currently iterates over all pairs and renders every bar. At 50 nodes: 445,000 DOM nodes from bars alone. At 100 nodes: 1.8 million — the browser will crash or become unusable.
+
+**Prevention:**
+1. **Pagination per source group** — Instead of rendering all 49 targets for a 50-node source, show first 10, hide rest behind "Show all 49" toggle:
+   ```typescript
+   const INITIAL_TARGETS = 10;
+   const visibleTargets = targets.slice(0, INITIAL_TARGETS);
+   const hiddenTargets = targets.slice(INITIAL_TARGETS);
+   ```
+2. **Virtualize the bar rows** — Only render bars for visible viewport cards. Use `IntersectionObserver` to defer rendering of off-screen cards. This is **not** full virtual scrolling, but deferred rendering per-source-group.
+3. **Hard cap at 30 nodes for full bar rendering** — Above 30, show collapsed view with no bars, just summary stats. The matrix view (no bars) already handles this scale.
+4. **Add a node count check before render** — If `nodes.length > 30`, skip bar rendering and show a text hint: `"Bar chart hidden — {N} nodes. See matrix view for overview."`
+
+**Detection:**
+- Chrome DevTools shows 445,000+ DOM nodes on a 50-node deployment
+- `document.querySelectorAll("[data-history-bar]").length` reveals the count
+- Browser tab crashes or shows "Out of memory" on 100-node registrations
+- Scroll performance degrades to < 10fps
+
+**Phase to address:** Bar count change — must include node-count-based render gating
+
+---
+
+### B3. innerHTML Destroys Event Listeners & State
+
+**What goes wrong:**
+Every 10-second refresh, `renderCards()` calls `container.innerHTML = html`. This **destroys all existing DOM nodes and creates new ones from scratch**. Any event listeners attached to individual bar elements or cards are lost.
+
+The existing day30 view has a click handler attached to `day30Container` (in `main.ts:113`) that uses event delegation via `e.target.closest("[data-node-pair]")` — this works because the listener is on the **container**, not on individual elements. However, any state attached to DOM nodes (e.g., expanded detail state, hover tooltip timeout IDs, `data-*` attributes set by JS after render) is lost.
+
+**Why it happens:**
+`innerHTML = ...` is a full replacement. The existing code recognizes this and uses `data-*` attributes for all state (no JS event listeners on nodes). But if any new view adds interactivity (e.g., click-to-expand tooltips, scroll position tracking), those will be lost on every 10s refresh.
+
+**Consequences:**
+- User scrolls down, 10s refresh fires, scroll resets to top (because nodes are recreated)
+- Expanded tooltip or detail panel collapses on every refresh
+- Any `data-*` attributes set by JS after initial render disappear
+
+**Prevention:**
+1. **Current pattern is acceptable** — the existing code deliberately avoids JS event listeners on bar elements. This is correct for `innerHTML`-based rendering.
+2. **If adding interactivity** (e.g., click-on-bar to see details): use **event delegation** on a container that isn't replaced (like `main.ts:113` already does), or attach listeners **after** innerHTML assignment.
+3. **Save and restore scroll position** on refresh:
+   ```typescript
+   const scrollY = window.scrollY;
+   container.innerHTML = html;
+   window.scrollTo(0, scrollY);
+   ```
+   But this causes a flash. Better: save per-source-group scroll state and restore selectively.
+4. **Consider `DocumentFragment` for partial updates** — If the 90h view needs persistent state (expanded rows, pinned cards), switch to DOM API for rendering instead of innerHTML. But this is a major refactor — not recommended for this milestone.
+
+**Detection:**
+- After 10s refresh, user's scroll position jumps to top
+- Expanded tooltips/hints collapse on auto-refresh
+- Any `data-expanded="true"` set by JS is reset to initial state
+
+**Phase to address:** View unification (if adding interactive elements) or defer to post-v0.9
+
+---
+
+## C. View Unification Pitfalls
+
+### C1. Different Data Shapes Collide in One Layout
+
+**What goes wrong:**
+Currently, `cards.ts` and `day30.ts` accept different data shapes:
+- `cards.ts:renderCards(container, nodes, statuses, checks, uptimeMap)` — needs real-time status + raw checks + 30d uptime map
+- `day30.ts:renderDay30(container, nodes, days)` — needs pre-aggregated daily data
+
+The unified view must handle BOTH shapes. If the same layout function receives different data (e.g., 30m data has no uptime aggregation, 90h data has different granularity), rendering the wrong view with the wrong data type will throw errors or show empty states.
+
+**Why it happens:**
+The existing code has separate view functions with different signatures. Unifying them requires a common interface (or a renderer that detects which data it received). The type `Data30mResponse` has `checks` and `statuses`, while `Data30dResponse` has `days`. A unified card must render from either.
+
+**Consequences:**
+- Rendering 30m view with 30d data (or vice versa) produces empty bars because key fields don't exist
+- TypeScript catches some mismatches, but runtime checks for null/undefined are needed
+- The `aggregateByMinute()` function in `cards.ts:37-89` expects raw `CheckResult[]` — if passed `DayData[]`, it silently returns empty bars
+
+**Prevention:**
+1. **Keep separate render functions for different data shapes** — do not try to merge `renderCards` and `renderDay30` into one. Instead, **share the card template** but keep the data shaping separate:
+   ```typescript
+   // Shared card template
+   function cardHtml(props: CardProps): string { ... }
    
-   _cleanup() {
-       echo "Shutting down..."
-       # Kill all children in the process group (negative PID = PGID)
-       kill -- -$(ps -o pgid= -p $$ | tr -d ' ') 2>/dev/null || true
-       wait
-   }
-   trap _cleanup EXIT SIGTERM SIGINT SIGHUP
+   // Each view shapes data to CardProps
+   function render30mView(...) { ... renderCards(cardProps) ... }
+   function render30dView(...) { ... renderCards(cardProps) ... }
+   function render90hView(...) { ... renderCards(cardProps) ... }
    ```
-2. **Enable job control** (`set -m`) to create proper process groups for background jobs
-3. **PID file as fallback** — write the main process PID to a known location, read it on restart:
-   ```bash
-   PIDFILE="${MESH_STATUS_HOME:-$HOME/.mesh-status}/leader.pid"
-   echo $$ > "$PIDFILE"
-   # On cleanup:
-   rm -f "$PIDFILE"
-   ```
-4. **Port-liveness pre-check** before starting to detect orphaned processes:
-   ```bash
-   if lsof -i :58080 >/dev/null 2>&1; then
-       echo "Port 58080 is already in use. Is mesh-status already running?"
-       exit 1
-   fi
-   ```
-
-**Warning signs:**
-- "Address already in use" when re-running `start.sh`
-- `ps aux | grep hypercorn` shows multiple processes
-- Port stays occupied after expected shutdown
-
-**Phase to address:**
-Phase 2 (`start.sh` runner) — signal propagation and cleanup must be designed into the startup script, not added after orphan processes cause port conflicts.
-
----
-
-### Pitfall 5: Partial or Interleaved Config File Writes from Concurrent Starts
-
-**What goes wrong:**
-`start.sh --leader` runs interactive config setup that writes config to a file. Two scenarios:
-1. **Concurrent launches**: User runs two `start.sh` in parallel → both write to the same config file → interleaved writes → corrupted YAML/JSON → Python parse error on startup
-2. **Crash during write**: User Ctrl+C's during config write → truncated config file → on next start, `start.sh` sees existing config → skips interactive setup → Python fails to parse truncated file → user is stuck with no way to reconfigure
-
-**Why it happens:**
-Writing config files with raw `echo` or `cat > file << EOF` is not atomic. There's no write-lock mechanism. The config "exists" check (`[ -f config.json ]`) doesn't verify the file is well-formed. Once a truncated file exists, the skip-logic prevents regeneration.
-
-**How to avoid:**
-1. **Use atomic write pattern for config files**:
-   ```bash
-   cat > /tmp/config.tmp << EOF
-   {...}
-   EOF
-   mv /tmp/config.tmp "$CONFIG_FILE"  # atomic on same filesystem
-   ```
-2. **Validate config after writing** before marking config as complete:
-   ```bash
-   if python3 -c "import json; json.load(open('${CONFIG_FILE}'))" 2>/dev/null; then
-       echo "Config valid."
-   else
-       echo "Config invalid — re-running setup..."
-       rm -f "$CONFIG_FILE"
-       # re-run interactive setup
-   fi
-   ```
-3. **Use a file lock for write exclusion** (`flock`) to prevent concurrent writes
-4. **Interactive + non-interactive mode flag confusion guard** — if `--non-interactive` is passed, config MUST be provided via env/CLI flags. If neither env/CLI nor existing config is available, exit with clear instructions instead of silently generating partial config.
-
-**Warning signs:**
-- `start.sh` fails with JSON/YAML parse errors at startup
-- Config file exists but is smaller than expected
-- Two users report the same config corruption after parallel operation
-
-**Phase to address:**
-Phase 2 (Config bootstrapping in `start.sh`) — atomic writes and validation must be designed in from the start. Retrofitting after users have corrupted configs is painful.
-
----
-
-### Pitfall 6: Docker CI Tests Use Cached Images, Miss Install Flow Bugs
-
-**What goes wrong:**
-The CI test for install.sh uses a pre-built Docker image that already has Python, git, and dependencies installed. The install script passes in CI because all prereqs are present. But on a fresh Ubuntu VM, the user doesn't have `uv` and the install script's `curl ... | sh` for uv silently fails (pipefail not set — see Pitfall 1). The test never caught this because the Docker base image had uv cached in a previous layer.
-
-This exact pattern killed the worthless project's CI install tests (see GitHub Actions workflow `install-docker.yml`) — they had to force `DOCKER_BUILDKIT=1` and use `--no-cache` to get reliable install flow tests.
-
-**Why it happens:**
-Docker build layer caching is aggressive. If `apt-get`, `uv install`, or `git clone` happen in cached layers, they're not re-executed. The install script's error handling is never actually exercised. The test passes, but the install script is broken.
-
-**How to avoid:**
-1. **Use a minimal base image** for CI install tests — `scratch` or `alpine` with just `bash` and `curl`. Force every dependency to be installed via the script itself.
-2. **Explicitly disable Docker layer cache** in CI install test jobs:
-   ```yaml
-   - name: Build test image
-     run: docker build --no-cache -t mesh-install-test .
-   ```
-3. **Use `docker pull python:3.12-slim` fresh each time** (no local cache) as the starting image, then run the install.sh inside it
-4. **Test against the actual user experience** — start from a container that matches the user's environment:
-   - Ubuntu 22.04 / 24.04 (most likely target)
-   - No `uv` pre-installed
-   - No `git` pre-installed
-   - Verify prereq-check logic actually fires
-5. **Test from scratch in ephemeral containers** as separate CI jobs, not as a build step in the main image pipeline
-
-**Warning signs:**
-- Install tests pass in CI but fail when run on a fresh VM
-- CI test image has dependencies that the script claims to install
-- "Already installed" messages dominate CI log instead of "Installing X"
-
-**Phase to address:**
-Phase 3 (Docker CI test) — the CI test design must explicitly account for cache busting. This is the phase that validates Phases 1 and 2, so it must be rigorous.
-
----
-
-### Pitfall 7: Hardcoded Version / Git SHA in Install Script Causes Version Mismatch
-
-**What goes wrong:**
-The install script clones a specific git tag or branch. Three weeks later, the same `curl ... | bash` installs a different version than the user expects. Or the install script was updated but the application code wasn't — the script references features that don't exist in the installed version.
-
-Specific failure:
-- `install.sh` installs from `main` branch → later `main` has breaking API changes → old `start.sh` doesn't work with new Python code
-- Or: `install.sh` pins to tag `v0.8.0` → user installs → reads docs about features in `v0.8.1` → `start.sh` references flags that don't exist
-- Or: the user already has mesh-status installed (from apt/pip) and runs `start.sh` → `start.sh` from PATH is older version → launches newer Python code from git clone → interface mismatch
-
-**Why it happens:**
-The install script and the application code have independent versioning. The script is distributed via curl URL; the code is distributed via `git clone` or pip. They can drift. The existing `pyproject.toml` declares version `0.1.0` but the actual code has evolved significantly.
-
-**How to avoid:**
-1. **Version lock-step**: The install script URL should include the version tag:
-   ```
-   curl -fsSL https://github.com/user/repo/releases/download/v0.8.0/install.sh | bash
-   ```
-   The script then checks out that same tag: `git checkout v0.8.0`
-2. **Self-version check**: At the top of `install.sh`, define `INSTALLER_VERSION` and verify against the repo:
-   ```bash
-   SCRIPT_VERSION="0.8.0"
-   REPO_VERSION=$(curl -fsSL https://api.github.com/repos/user/repo/releases/latest | ...)
-   # Warn if mismatch
-   ```
-3. **`start.sh` checks Python package version** against its own version:
-   ```bash
-   INSTALLED_VER=$(python3 -c "import mesh_status; print(mesh_status.__version__)" 2>/dev/null || echo "unknown")
-   EXPECTED_VER="0.8.0"
-   if [ "$INSTALLED_VER" != "$EXPECTED_VER" ]; then
-       echo "Warning: installed version ($INSTALLED_VER) != expected ($EXPECTED_VER)"
-   fi
-   ```
-4. **Keep `pyproject.toml` version current** — bump on every release. Currently at `0.1.0` but code is v0.8 milestone. This discrepancy will cause confusion.
-
-**Warning signs:**
-- `start.sh --leader` throws errors about missing functions/classes
-- Install script was updated but old users get stale behavior
-- Docs describe flag `--foo` but `start.sh --foo` says "unrecognized argument"
-
-**Phase to address:**
-Phase 1 (install.sh) — the version pinning strategy must be designed upfront. Version drift between installer and application is a "fix it later" trap that rarely gets fixed.
-
----
-
-### Pitfall 8: Prerequisite Checks Not Done First — Destructive Operations Before Validation
-
-**What goes wrong:**
-The install script starts cloning the repo or creating directories before checking that `uv` and `git` are available. The clone partially succeeds, then the script fails because `uv` isn't installed. The user is left with a half-populated directory. On retry, the script sees the directory exists and skips creation, but files are missing from the partial clone. The install is permanently broken — `git pull` in the partial directory also fails.
-
-Specific pattern from the existing project:
-- `install.sh` needs `uv` and `git`
-- If `git` is not installed → `git clone` fails → script continues (no `set -e`) → creates broken directory
-- If `uv` is not installed → `uv sync` fails → script errors after already modifying filesystem
-
-**How to avoid:**
-1. **Prerequisite check block at the very top of the script**, before any filesystem operations:
-   ```bash
-   REQS=(git curl python3 uv)
-   MISSING=()
-   for cmd in "${REQS[@]}"; do
-       if ! command -v "$cmd" &>/dev/null; then
-           MISSING+=("$cmd")
-       fi
-   done
-   if [ ${#MISSING[@]} -gt 0 ]; then
-       echo "Missing prerequisites: ${MISSING[*]}"
-       echo "Install them and re-run this installer."
-       exit 1
-   fi
-   ```
-2. **Idempotent directory creation** — check `[ -d "$DIR" ] && [ -f "$DIR/sentinel.file" ]` before assuming previous install succeeded:
-   ```bash
-   if [ -d "$INSTALL_DIR" ]; then
-       if [ ! -f "$INSTALL_DIR/.mesh-installed" ]; then
-           echo "Directory exists but appears to be incomplete. Removing..."
-           rm -rf "$INSTALL_DIR"
-       fi
-   fi
-   ```
-3. **Use a sentinel file** (`.mesh-installed`) written as the **last** step of install, indicating completion
-4. **Never clone into an existing non-empty directory** — always start fresh or verify
-
-**Warning signs:**
-- Install fails midway but directory exists on retry
-- `uv sync` fails with "missing pyproject.toml" even though directory exists
-- User reports "I ran the install script twice and it works the second time"
-
-**Phase to address:**
-Phase 1 (install.sh) — prerequisite validation before destructive operations is a structural choice, not a polish detail.
-
----
-
-### Pitfall 9: macOS vs Linux Shell Incompatibilities
-
-**What goes wrong:**
-The install script works perfectly on Ubuntu but fails on macOS with:
-- `sed -i` requires different syntax (`sed -i ''` on BSD, `sed -i` on GNU)
-- `readlink -f` doesn't exist on macOS (use `realpath` or `greadlink` from coreutils)
-- `lsof` requires different flags to check port usage (`sudo lsof -i :58080` vs standard)
-- `ping` has different flags (macOS uses `-c 1 -t 5`, Linux uses `-c 1 -W 5`)
-- `/tmp` cleanup behavior varies (macOS clears `/tmp` on reboot, not guaranteed on Linux)
-- `python3` vs `python` naming — macOS may alias python3 or require full path
-
-The existing node.py already handles `ping` via `asyncio.create_subprocess_exec` with Linux-style args. The install/start scripts need similar care.
-
-**Why it happens:**
-Developers primarily test on one platform (Linux) and assume POSIX compatibility. BSD userland (macOS) deviates from GNU userland (Linux) in subtle but breaking ways. Shell scripts are particularly vulnerable because they invoke system utilities directly.
-
-**How to avoid:**
-1. **Use POSIX-specified utilities** where possible — avoid GNU extensions
-2. **Abstract platform-specific commands into functions** at the top of the script:
-   ```bash
-   get_script_dir() {
-       # Works on both macOS (realpath from coreutils) and Linux
-       if command -v realpath &>/dev/null; then
-           dirname "$(realpath "$0")"
-       elif command -v greadlink &>/dev/null; then
-           dirname "$(greadlink -f "$0")"
-       else
-           # Fallback that works for simple cases
-           cd "$(dirname "$0")" && pwd
-       fi
+2. **Define a `CardProps` interface** that both views can produce:
+   ```typescript
+   interface CardProps {
+     targetIp: string;
+     status: string;
+     pingLat: string;
+     httpLat: string;
+     lastSeen: string;
+     pingUp: number | null;
+     httpUp: number | null;
+     bars: { ping: BarEntry[]; http: BarEntry[] };
    }
    ```
-3. **Use `uname -s` to branch** when needed:
-   ```bash
-   case "$(uname -s)" in
-       Darwin*)
-           PING_ARGS="-c 1 -t 5"
-           ;;
-       Linux*)
-           PING_ARGS="-c 1 -W 5"
-           ;;
-       *)
-           echo "Unsupported OS: $(uname -s)"
-           exit 1
-           ;;
-   esac
-   ```
-4. **Test on both platforms** in CI — matrix across `ubuntu-latest` and `macos-latest`
+3. **Add a TypeScript discriminant** to distinguish data sources — a `kind` field that the unified renderer can switch on.
 
-**Warning signs:**
-- Install works on dev's Ubuntu machine but fails on team member's MacBook
-- "Illegal option" errors from `sed`, `readlink`, or other utilities
-- CI passes but users report failures
+**Detection:**
+- Rendering a 30m tab shows "No data" for all bars even though data exists
+- `aggregateByMinute()` returns empty arrays when data shape changes
+- TypeScript error: `Property 'date' does not exist on type 'CheckResult[]'`
 
-**Phase to address:**
-Phase 1 (install.sh) and Phase 2 (start.sh) — cross-platform awareness must be built in from the first line. Retrofitting platform detection is tedious.
+**Phase to address:** View unification — design the shared card template first, then adapt views
 
 ---
 
-### Pitfall 10: Upgrade/Downgrade Path Not Tested — Fresh Install Only
+### C2. Dark Mode / CSS Class Inconsistency Between Views
 
 **What goes wrong:**
-The `install.sh` works perfectly for a fresh install. But when a user who installed v0.7 runs the v0.8 install script:
-1. The script clones over the existing directory → old config is preserved (good) or overwritten (bad) unpredictably
-2. `uv sync` might downgrade packages → v0.8 requires `quart>=0.21.0` but v0.7 pinned `quart>=0.20.0` → conflict
-3. Old data files in `/app/data` are incompatible with new format → leader crashes on startup
-4. `start.sh` has new flags → old user's muscle memory or automation breaks
+`cards.ts` uses Tailwind utility classes like `bg-white`, `border-mesh-border`, `text-mesh-dark`, `text-mesh-muted`. `day30.ts` uses some of the same classes but with different combinations. When unifying, the card layout's class strings must produce identical styling regardless of which data source populated it.
 
 **Why it happens:**
-Install scripts are almost exclusively tested on clean systems. The upgrade path is an afterthought because developers test in disposable environments. The existing project's Docker files already do clean installs every build — there's no upgrade scenario tested.
+Both views use Tailwind, but the exact class combinations have drifted:
+- `cards.ts:106` card div: `"border border-mesh-border border-l-4 rounded-lg p-3 mb-2 bg-white"`
+- `day30.ts:95` row div: `"py-1 text-xs border-b border-mesh-border last:border-0"`
+- Different backgrounds: cards use `bg-white`, day30 rows have no explicit background
 
-**How to avoid:**
-1. **Version detection before install**:
-   ```bash
-   if [ -f "$INSTALL_DIR/mesh_status/__init__.py" ]; then
-       OLD_VER=$(python3 -c "import sys; sys.path.insert(0,'$INSTALL_DIR'); import mesh_status; print(getattr(mesh_status, '__version__', 'unknown'))" 2>/dev/null || echo "unknown")
-       echo "Existing installation detected: $OLD_VER"
-       echo "Upgrading to $NEW_VER..."
-   fi
-   ```
-2. **Backup config before upgrade**:
-   ```bash
-   if [ -f "$INSTALL_DIR/config.json" ]; then
-       cp "$INSTALL_DIR/config.json" "$INSTALL_DIR/config.json.bak.$(date +%Y%m%d%H%M%S)"
-   fi
-   ```
-3. **Run `uv sync` with upgrade strategy** — not just `uv sync` but `uv sync --upgrade` to respect new dependency ranges
-4. **Data migration guard** — if data format changed, detect old format and either migrate or refuse:
-   ```bash
-   if [ -f "$DATA_DIR/checks.json" ]; then
-       FIRST_LINE=$(head -1 "$DATA_DIR/checks.json")
-       if echo "$FIRST_LINE" | python3 -c "import json,sys; d=json.load(sys.stdin); assert 'version' in d" 2>/dev/null; then
-           : # new format, ok
-       else
-           echo "Old data format detected. Starting fresh..."
-           mv "$DATA_DIR" "${DATA_DIR}.bak.$(date +%Y%m%d%H%M%S)"
-       fi
-   fi
-   ```
-5. **Document breaking changes** in a `RELEASE_NOTES.md` that `start.sh` can display on first run after upgrade
+When cards and day30 rows become the same layout, the background, padding, and border classes must be identical or the visual inconsistency is obvious.
 
-**Warning signs:**
-- Upgrade "succeeds" but leader crashes with format errors
-- Users report "it worked before upgrading"
-- Only fresh-install scenarios tested in CI
+**Consequences:**
+- Cards from 30m data look different from cards from 90h data on the same page
+- If dark mode is later added (via Tailwind `dark:` prefix), both views need separate dark-mode updates
+- Users perceive the different styling as a bug or broken page
 
-**Phase to address:**
-Phase 2 (start.sh) — upgrade detection logic belongs in the runner. Phase 1 (install.sh) should handle the backup. Phase 3 (Docker CI) must include an upgrade-from-previous test case.
+**Prevention:**
+1. **Extract a single `cardTailwindClasses` constant** or function:
+   ```typescript
+   const CARD_CLASSES = "border border-mesh-border border-l-4 rounded-lg p-3 mb-2 bg-white";
+   const CARD_HEADER_CLASSES = "flex items-center gap-2 mb-1";
+   const CARD_STATS_CLASSES = "text-xs text-mesh-muted flex gap-4 flex-wrap";
+   const BAR_ROW_CLASSES = "flex items-end gap-0.5 mt-1.5";
+   ```
+2. **Both `renderCards` and `renderDay30` (and `render90h`) import from the same constants file.**
+3. **If dark mode is needed later**, add the CSS variables approach (not Tailwind `dark:` classes which would require updating every card) — use CSS custom properties that can be toggled via a single class on `<html>`.
+
+**Detection:**
+- Side-by-side visual comparison: a 30m card and a 30d card have different padding, background, or border styles
+- CSS specificity war: one view's classes override the other's after unification
+
+**Phase to address:** View unification — must include CSS audit of all card classes
 
 ---
 
-### Pitfall 11: Hardcoded Paths That Break in Non-Default Environments
+### C3. Sticky Header Collisions After Unification
 
 **What goes wrong:**
-The install script hardcodes paths like `/opt/mesh-status` or `~/mesh-status` and the user has no control to change them. When:
-- User doesn't have sudo access → can't write to `/opt/`
-- User wants to install it in their home directory → forced to edit the script
-- User runs multiple instances → path collision
-- System uses a different home directory structure (NixOS, macOS)
-
-**Why it happens:**
-It's convenient to hardcode paths. The installer doesn't expose `--prefix` or `--install-dir` flags. The existing Docker build hardcodes `/app` but that's fine because Docker is a controlled environment. Non-Docker install needs flexibility.
-
-**How to avoid:**
-1. **Make install directory configurable** — `INSTALL_DIR="${1:-$HOME/.mesh-status}"`
-2. **Use XDG Base Directory spec** for config and data:
-   ```bash
-   INSTALL_DIR="${MESH_STATUS_HOME:-$HOME/.local/share/mesh-status}"
-   CONFIG_DIR="${MESH_STATUS_CONFIG:-$XDG_CONFIG_HOME/mesh-status}"
-   DATA_DIR="${MESH_STATUS_DATA:-$XDG_DATA_HOME/mesh-status}"
-   ```
-3. **`start.sh` discovers its own location** rather than using hardcoded paths:
-   ```bash
-   SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-   PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
-   ```
-4. **Default should work without `sudo`** — install to user home by default, `--system` flag for system-wide
-
-**Warning signs:**
-- "Permission denied" on install
-- Users ask "how do I change where it's installed?"
-- Install script needs `sudo` for default operation
-
-**Phase to address:**
-Phase 1 (install.sh) — path configurability is a structural API decision, hard to change later.
-
----
-
-### Pitfall 12: No Graceful Degradation for Missing `uv` or Corrupted Virtual Environment
-
-**What goes wrong:**
-The existing project relies on `uv` for dependency management. If `uv` is installed but the virtual environment (`/app/.venv`) is corrupted, missing, or has wrong Python version:
-- `uv sync` fails with cryptic errors about "conflicting dependencies"
-- `start.sh` tries to run `uv run python ...` but `.venv` doesn't exist → uv auto-creates it → but with wrong interpreter
-- Or: system Python is 3.11 (not 3.12+) → `uv sync` creates env with 3.11 → some async features fail at runtime
-
-The existing `Dockerfile.leader` already has a pattern for this (using `--no-dev`), but the non-Docker install script needs similar care.
-
-**How to avoid:**
-1. **Python version check before `uv sync`**:
-   ```bash
-   PYTHON_VERSION=$(python3 --version 2>&1 | grep -oP '\d+\.\d+')
-   REQUIRED="3.12"
-   if [ "$(echo "$PYTHON_VERSION >= $REQUIRED" | bc)" != "1" ]; then
-       echo "Python $REQUIRED+ required, found $PYTHON_VERSION"
-       exit 1
-   fi
-   ```
-2. **Validate `.venv` before use** — check sentinel file created by `uv sync`:
-   ```bash
-   if [ -f "$INSTALL_DIR/.venv/pyvenv.cfg" ]; then
-       VENV_PYTHON=$(head -1 "$INSTALL_DIR/.venv/pyvenv.cfg")
-       # Verify matches expected
-   fi
-   ```
-3. **`start.sh` should recreate `.venv` if `uv sync` fails** rather than using a broken env:
-   ```bash
-   cd "$PROJECT_ROOT"
-   if ! uv sync --no-dev --frozen 2>/dev/null; then
-       echo "Dependency sync failed. Recreating environment..."
-       rm -rf .venv
-       uv sync --no-dev
-   fi
-   ```
-4. **Use `uv run` consistently** (not raw `python3`) so uv handles env activation automatically
-
-**Warning signs:**
-- `ModuleNotFoundError` on startup despite successful install
-- `start.sh` runs system Python instead of venv Python
-- `uv sync` succeeds but `uv run` fails with "script not found in venv"
-
-**Phase to address:**
-Phase 1 (install.sh) and Phase 2 (start.sh) — uv/venv validation must be in both install (initial setup) and start (runtime validation).
-
----
-
-### Pitfall 13: Logging Configuration Collision Between `start.sh` and Python Backend
-
-**What goes wrong:**
-The current `mesh_status/config.py` reads `MESH_STATUS_LOG_LEVEL` and the Python code configures logging at startup. The `start.sh` runner also writes to stdout/stderr. When the user runs:
-```bash
-start.sh --leader 2>&1 | tee -a /var/log/mesh-status.log
+Both `cards.ts:165` and `day30.ts:76` use sticky headers:
+```html
+<div data-source-header class="sticky top-0 bg-mesh-bg z-10 ...">${src}</div>
 ```
-- Both shell output and Python logs go to the same stream
-- Shell output (INFO lines, startup messages, timestamps) and Python JSON logs mix
-- If start.sh redirects stderr (e.g., `2>/dev/null`), Python errors disappear because Hypercorn inherits start.sh's stderr
-- If start.sh daemonizes, all logging disappears entirely
+
+After unification, if multiple views are rendered on the same page (the 30m tab shows both matrix + cards), the sticky headers from different views overlap. The `top-0` position causes headers from the card view to collide with headers from the day view when they're in the same scroll container.
 
 **Why it happens:**
-Shell scripts and Python processes share the same stdout/stderr by default. The `start.sh` runner is a thin wrapper that inherits the terminal's file descriptors and passes them to the child process. Without explicit log separation, mixing is inevitable.
+`main.ts:42-51` shows/hides containers. Both `cardsContainer` and `day30Container` have `class="hidden"` toggling, so they are never visible simultaneously. However, within a single view, if the unified layout nests source-group headers at different levels of the DOM, they may overlap.
 
-**How to avoid:**
-1. **`start.sh` does minimal logging itself** — let the Python process handle all structured logging
-2. **Use `exec` to replace the shell process** with the Python process so there's no wrapper process at all:
-   ```bash
-   exec uv run python -m mesh_status.leader "$@"
+**Consequences:**
+- After view unification, headers from different data sections overlap when scrolling
+- `z-10` is not enough if both headers are at the same z-index layer
+- The `top-0` position is relative to the scrolling container, not the viewport — if the card layout is inside a nested scrollable div, sticky breaks
+
+**Prevention:**
+1. **Verify sticky positioning context** — For `position: sticky` to work, the parent element must not have `overflow: hidden` or `overflow: auto`. The card container div (`#cards-container`) must be a block-level flow element.
+2. **Use `top: 0` only if the container is the viewport scroll** — If the cards are inside a scrollable container, use `top: 0` relative to that container's top.
+3. **Stagger z-index levels** if nested source groups appear:
+   - Level 1 source group header: `z-10`
+   - Level 2 sub-header: `z-20`
+4. **Test specifically with 3+ source groups** scrolling — this is where sticky header collisions first appear.
+
+**Detection:**
+- Two source headers overlap when scrolling through the list
+- Header text is partially obscured by another element
+- Sticky header scrolls away instead of sticking (wrong scroll container)
+
+**Phase to address:** View unification — include sticky scroll test in acceptance criteria
+
+---
+
+## D. 90h Hourly History Endpoint Pitfalls
+
+### D1. Window Alignment Mismatch — 90h ≠ 4 Days
+
+**What goes wrong:**
+90 hours = 3 days + 18 hours = 3.75 days. This is an unusual time window that doesn't align with calendar boundaries. The existing `day30.ts` aligns to day boundaries (midnight). A 90h window aligned to "now" will produce partial-day buckets:
+- Most recent 18 hours of today
+- All of yesterday
+- All of the day before
+- First 6 hours of 3 days ago
+
+When users see "90 Hour History" and the bars don't align to midnight, it's confusing. Worse: if the server returns buckets aligned to the **hour** (00:00, 01:00, ...), but the frontend expects 90 bars starting from "current hour - 89 hours", the last bar will be a partial hour.
+
+**Why it happens:**
+The 30d view aligns to calendar days. The 30m view aligns to minute boundaries. A 90h view must decide between:
+- **Sliding window**: last 90 hours from "now" — bucket boundaries change every second
+- **Calendar hours**: aligned to 00:00 of each day — last bucket is always partial
+- **Rolling hours**: aligned to the current clock hour — full hours only, total count varies
+
+**Consequences:**
+- The final hour bucket has fewer checks than others → its uptime percentage is noisy/skewed
+- Comparing "same hour yesterday" is impossible because windows shift
+- The 90h endpoint returns 89 bars some refreshes and 90 others depending on timing
+
+**Prevention:**
+1. **Use fixed hourly buckets aligned to UTC/clock hours** — truncate each check's timestamp to the start of the clock hour (`timestamp - (timestamp % 3600)`). Return 90 full hours plus the current partial hour.
+2. **Return a stable count** — always return 90 buckets, where bucket 0 is the oldest full hour and bucket 89 is the current (possibly partial) hour. This matches the existing `30m` pattern (30 buckets, current minute is last).
+3. **Document the partial bucket behavior** — the current hour bucket shows "in progress" and may have fewer data points. Add a visual indicator (lighter opacity, dashed border) for the active bucket.
+4. **Use a consistent naming convention** — `?window=90h` (not `90hours`, not `3d18h`).
+
+**Detection:**
+- Refresh at 10:31 → last bar shows 10:00-10:31 data (21 fewer minutes than other buckets)
+- 90h endpoint returns 89 bars one refresh, 90 bars the next
+- User asks "why is the last bar lighter / different?"
+
+**Phase to address:** Backend aggregation endpoint design — must specify bucket alignment strategy before implementation
+
+---
+
+### D2. The Aggregation Query Performance Problem (N×M Explosion)
+
+**What goes wrong:**
+The existing 30d endpoint (`leader.py:191-239`) builds per-day aggregations by iterating over ALL in-memory checks AND ALL disk-stored checks, then grouping by day + key. For the 90h endpoint, this same pattern would need to read disk data for the last 4 days and group by **hour** instead of **day**.
+
+The problem: the 30d endpoint currently reads ALL disk data from the persistence layer (`persistence._read_results(start, end)`) for the entire 30-day range. For 90h (4 days), this would read ~13% of that data. But the grouping by hour creates 24× more buckets than the daily grouping, so the per-bucket overhead is higher.
+
+**Why it happens:**
+`leader.py:212-238` loads ALL raw results into memory and iterates through each to build day buckets. This scales as O(N_checks × N_days). For 10 nodes checking every 10 seconds for 30 days: 10 × 8640/day × 30 = 2.6M checks. Loading 2.6M rows into memory every request is already expensive. Adding a 90h endpoint that also loads all raw data and re-aggregates doubles the work.
+
+**Consequences:**
+- `/data?window=90h` takes 5+ seconds to respond (loading 4 days of raw data)
+- Memory usage spikes during the aggregation (loading all raw checks into Python dicts)
+- The 10-second auto-refresh in `main.ts` now has TWO expensive API calls: 30m + 90h (or 30d + 90h) → request waterfall causes stale data display
+
+**Prevention:**
+1. **Pre-aggregate on write, not on read** — The persistence layer (`persistence.py`) could maintain hourly rollups that are updated as checks are flushed. The 90h endpoint reads pre-aggregated hourly buckets instead of scanning all raw checks. This is the Prometheus pattern (recording rules).
+2. **Add a dedicated hourly aggregation table/file** — When `_flush_results()` runs (every hour, line 70), aggregate the last hour's data into hourly buckets and save separately:
+   ```python
+   def _flush_hourly_summary():
+       now = datetime.now()
+       current_hour = now.replace(minute=0, second=0, microsecond=0)
+       # Aggregate all checks for this hour
+       # Write to data/hourly/<year>/<month>/<day>/<hour>.json
    ```
-   This way, all signals go directly to Python, there's no orphan risk, and log streams are clean.
-3. **If startup logging is needed, use a dedicated log file**:
-   ```bash
-   exec uv run python -m mesh_status.leader "$@" >> "$LOG_FILE" 2>&1
+3. **At minimum, limit the scan scope** — Only load raw checks timestamped within the last 90 hours, not all 30 days. The 30d endpoint also needs this fix.
+4. **Cache the aggregation result** — If the leader is in-memory, cache the 90h result for 60 seconds (one refresh cycle). The data doesn't change between 10s refreshes.
+5. **Add a `_last_90h_cache` to `leader.py`** — Simple dict with timestamp, invalidated when new checks arrive:
+   ```python
+   _90h_cache: dict = {}
+   _90h_cache_ts: float = 0
+   
+   elif window == "90h":
+       if time.time() - _90h_cache_ts < 10:
+           return _90h_cache, 200
+       # ... expensive aggregation ...
+       _90h_cache = result
+       _90h_cache_ts = time.time()
    ```
-4. **Apply consistent formatting** — if start.sh outputs startup info, match the Python log format (timestamp, level, message)
-5. **Document the log destination** — users should know where to find logs without guessing
 
-**Warning signs:**
-- Mixed shell and Python output in logs
-- /dev/null applied by user breaks Python logging silently
-- "start.sh: line X: ..." messages mixed with asctime-format Python logs
+**Detection:**
+- Network tab in DevTools shows `/data?window=90h` taking > 2 seconds
+- Chrome shows "Queued" time on the 90h request (blocked by 30m request completing first)
+- Server logs show `/data` handling taking > 1 second per request
+- `top` on the server shows Python process at 100% CPU during dashboard refresh
 
-**Phase to address:**
-Phase 2 (start.sh) — the logging architecture (shell wrapper vs exec replacement) is a design decision for the runner.
+**Phase to address:** Backend aggregation endpoint — design pre-aggregation or caching before implementing
 
-## Technical Debt Patterns
+---
 
-| Shortcut | Immediate Benefit | Long-term Cost | When Acceptable |
-|----------|-------------------|----------------|-----------------|
-| Skip `set -euo pipefail` | Faster script writing | Silent failures, rm -rf / disasters, untrusted CI | Never. Add it from line 1. |
-| Hardcode install path | Simpler code, fewer flags | Users can't customize, sudo required, conflicts | First commit prototyping only; fix before tagging |
-| Pin to `main` branch in install.sh | Always get latest | Breaking changes surprise users, version drift | Never for production. Use tags/releases. |
-| Single-script monolithic install.sh | One file to distribute | Hard to test, review, or maintain | Acceptable for v0.8 MVP — but extract shared libs before v1.0 |
-| No pidfile / process tracking | Simpler start.sh | Orphans after kill, port conflicts, can't stop | Acceptable only if `exec` is used (no wrapper process), otherwise never |
-| Test install only in pre-built Docker | Fast CI, simple setup | Misses prereq failures, cached dependency bugs, real user conditions | Never for CI — test in fresh-from-scratch containers too |
-| Ignore upgrade path | Ship faster, test less | Stuck users on old versions, data format incompatibility | Acceptable for v0.8 alpha only; must be addressed before v1.0 |
-| No sentinel file for install completion | One fewer file to manage | Can't distinguish "never installed" from "broken install" | Acceptable short-term if `set -e` + atomic operations are used; add sentinel before v1.0 |
+### D3. Hourly Granularity: The Midnight Boundary Bug
 
-## Integration Gotchas
+**What goes wrong:**
+The existing persistence layer (`persistence.py`) stores checks in **daily files** (`YYYY/MM/DD.json`, line 21-23). For hourly aggregation, the endpoint must read partial day files:
+- Today's file (contains all checks from today)
+- Yesterday's file
+- Day-before-yesterday's file
+- 3-days-ago file
 
-| Integration | Common Mistake | Correct Approach |
-|-------------|----------------|------------------|
-| `curl ... | bash` pipeline to `git clone` | Script clones into CWD, polishes installer output with no regards to where user ran the command | Always cd to a known absolute path (`INSTALL_DIR`) before git ops; never assume CWD |
-| `uv sync` in install.sh | Running `uv sync` in the cloned directory without creating a `.venv` first, or running it as root | Let `uv` create `.venv` automatically; run as non-root when possible; use `--no-dev` for production installs |
-| `start.sh` with `exec` vs `&` | Using `&` (background) then waiting — complex process management, signal handling fragile | Use `exec` to replace shell with Python process — simpler, reliable signal propagation, no orphans |
-| `start.sh` env vars with existing `config.py` | Hardcoding env vars in start.sh that differ from the existing `MESH_STATUS_*` convention | Reuse existing `MESH_STATUS_INTERVAL`, `MESH_STATUS_LOG_LEVEL` env vars from `config.py`. Don't introduce a parallel config system. |
-| Docker CI test with GitHub Actions socket | Mounting `/var/run/docker.sock` without proper group permissions, especially on Ubuntu 22.04+ | Ensure runner user is in `docker` group, check `_work` directory ownership, use `DOCKER_BUILDKIT=1` |
-| Config bootstrapping with existing `mesh_status/config.py` | Creating a new config file (config.yaml) alongside the existing Python-based `config.py` that reads env vars | Don't create parallel config systems. Either use env vars (existing pattern) or generate a `.env` file that `config.py` reads. |
-| `pip` vs `uv` | `start.sh` falls back to `pip install` if `uv` not found, but `uv` creates different `.venv` layouts | Have one package manager. The project chose `uv`. Don't add `pip` as a fallback — if `uv` is missing, fail with clear instructions. |
+But `_read_results()` reads entire daily files. If the 90h endpoint calls `_read_results(start_date=3_days_ago, end_date=today)`, it reads **all checks for all 4 days** — not just the last 90 hours. This includes checks from hour 0 of 3-days-ago that are outside the window.
 
-## Performance Traps
+**Why it happens:**
+File granularity is per-day. Hourly filtering must happen **after** loading. The 30d endpoint loads entire days and groups by day, so the granularity matches. The 90h endpoint loads 4 entire days (each ~86K checks for 10 nodes) just to filter to 90 hours.
 
-| Trap | Symptoms | Prevention | When It Breaks |
-|------|----------|------------|----------------|
-| `start.sh` uses `&` + `wait` for process management | Orphaned hypercorn processes, "port in use" on restart, leak over time | Use `exec` instead of backgrounding, or use a PID file with signal trap | First time user kills start.sh with SIGTERM (not Ctrl+C) |
-| Interactive config prompt in piped install | "command not found" for function names, corrupted input, hangs | Structure script with main-at-bottom; use `/dev/tty` for prompts; or download-then-execute | First time user runs `curl ... | bash` interactively |
-| `curl | bash` without post-install verification | Silent install failure, user thinks it worked, subsequent commands fail | Add `command -v mesh-status \|\| exit 1` after install | First time curl gets a 429 or network blips |
-| `.venv` recreated on every `start.sh` run | 10-30 second startup delay while `uv sync` downloads packages | Cache `.venv` across runs; only re-sync if `pyproject.toml` changed; use `--frozen` for speed | Every non-cached startup |
-| Config file re-read on every start.sh invocation | Slow startup if config file is large | Config is tiny; not a real perf concern for this project |
-| `lsof -i :58080` port check on every start | ~100ms check; fine for this scale | N/A for this project scale | Never a real concern at <100 nodes |
+**Consequences:**
+- 90h endpoint loads 33% more data than it needs (loading full days instead of hours)
+- `persistence.py` filesystem reads are O(N_days), not O(N_hours)
+- The extra data is loaded but filtered out after processing — wasted memory and CPU
+- At scale (50 nodes): loading 4 days × 50 × 8640 = 1.7M checks to display 172K
 
-## Security Mistakes
+**Prevention:**
+1. **Add a lower-level persistence function** that reads only checks within a timestamp range, not whole days:
+   ```python
+   def _read_results_range(start_ts: float, end_ts: float) -> list[dict]:
+       # Determine which daily files to open
+       # For each file, read and filter by timestamp
+       # Potentially use line seek + binary search on sorted files
+   ```
+   This is the most impactful optimization — reading fewer bytes from disk.
+2. **Add hourly summary files** (as described in D2) — completely avoids reading raw data for the 90h endpoint.
+3. **If neither optimization is possible** (time constraint), at minimum add a post-read filter:
+   ```python
+   raw = _read_results(start_date, end_date)
+   raw = [r for r in raw if start_ts <= r.get("timestamp", 0) <= end_ts]
+   ```
 
-| Mistake | Risk | Prevention |
-|---------|------|------------|
-| `curl ... | sudo bash` | Full root access to remote script without verification; MITM can deliver malicious payload | Never include `sudo` in the one-liner. Install to user space by default. If system install is needed, download, review, then execute. |
-| Unsafe PID file in world-writable directory | Unprivileged user writes malicious PID → root kills wrong process when stopping | Always use `$PIDFILE` in a root-owned directory when running as root, or use `exec` instead of PID files entirely |
-| Insecure temporary files (`/tmp/install.sh`) | Another user on shared system can replace the script between download and execution (TOCTOU) | Download to a random temp name (`mktemp`), verify checksum, keep 0700 perms |
-| Cloning repo via `git clone` over HTTP not HTTPS | Man-in-the-middle replaces repository content | Always use `https://` URLs for `git clone` |
-| Script stores config with secrets in world-readable file | API keys, tokens, or credentials exposed to other users on the system | `chmod 600` on config files; set `umask 077` before creating them |
-| Shell injection via user-supplied config values | User enters `$(rm -rf /)` as a config value → shell evaluates it | Validate/escape user input before using in shell context; use Python for config validation, not shell |
+**Detection:**
+- Total checks in 90h response is suspiciously high (e.g., 86,400 for 2 nodes when 90h window should have 32,400)
+- Response size for `/data?window=90h` is close to `/data?window=30d` (should be ~13%)
+- Slow response times during the first day of the month (daily file rotation)
 
-## UX Pitfalls
+**Phase to address:** Backend aggregation — persistence layer must support sub-day reads
 
-| Pitfall | User Impact | Better Approach |
-|---------|-------------|-----------------|
-| Install script outputs a wall of `git clone` and `uv sync` logs | User can't tell if install succeeded or what's happening | Use `set -x` for debug only; print clear progress messages: `[1/4] Checking prerequisites... ✓`, `[2/4] Cloning repository... ✓` |
-| No progress indication during long operations | User thinks the script hung | Print progress dots or "This may take a minute..." for network operations |
-| Interactive prompts don't explain what they're asking for | User guesses at config values, gets it wrong | Show default values clearly: `Leader port [58080]:` — show defaults in brackets, accept enter for defaults |
-| `--non-interactive` flag that still prompts | CI pipeline hangs waiting for input that never comes | `--non-interactive` must be strict: if required config is missing, exit with error listing what's needed (env vars or flags) |
-| Install succeeds but PATH not updated | User runs `mesh-status` command → "command not found" immediately after install | Print post-install instructions: `Add to your PATH: export PATH="$PATH:$HOME/.mesh-status/bin"` or offer `--add-to-path` flag |
-| Config error messages are Python tracebacks | User sees the `Quart` framework internals instead of a helpful message | Wrap Python execution; capture stderr; show user-friendly errors. Or don't wrap — let the Python process own its stderr output (consistent format) |
-| `start.sh` fails silently if another instance is running | User runs `start.sh --leader` a second time and sees no change, assumes first one crashed | Detect port conflict, print "mesh-status is already running (PID: 12345). Use start.sh --stop or kill 12345" |
+---
 
-## "Looks Done But Isn't" Checklist
+### D4. Frontend: 90h Bar Bucket → Day30 Bar Bucket Mapping
 
-- [ ] **install.sh**: Has `set -euo pipefail` at the top? Or uses download-then-execute to avoid pipe issues entirely?
-- [ ] **install.sh**: Checks prerequisites (`git`, `uv`, `python3.12+`) before any filesystem operations?
-- [ ] **install.sh**: Uses atomic writes (temp file + `mv`) for all file creation? Never writes directly to target path.
-- [ ] **install.sh**: Creates a sentinel file (`.mesh-installed`) as the absolute last step so broken installs are detectable?
-- [ ] **install.sh**: Has upgrade/backup logic if install directory already exists?
-- [ ] **start.sh**: Handles `SIGTERM`/`SIGINT` to kill child processes (or uses `exec` to avoid needing to)?
-- [ ] **start.sh**: Has a `--stop` or `stop.sh` companion that can cleanly shut down the process?
-- [ ] **start.sh**: Validates that `.venv` exists and `uv sync` ran successfully before starting Python?
-- [ ] **start.sh --non-interactive**: Truly non-interactive? Will it fail with a clear error instead of hanging on a prompt?
-- [ ] **Config bootstrapping**: Writes atomically? Validates format after write? Has `flock`-based concurrency guard?
-- [ ] **Cross-platform**: Tested on macOS? Handles `sed`, `readlink`, `ping` flags, `python3` binary differences?
-- [ ] **Docker CI test**: Starts from a fresh `python:3.12-slim` with no cached dependencies? Tests the actual install flow?
-- [ ] **Docker CI test**: Tests upgrade scenario (install old version, then install new)?
-- [ ] **All scripts**: Pass `shellcheck` with zero warnings?
-- [ ] **Version**: `pyproject.toml` version matches the install script's expected version?
-- [ ] **Failure messages**: All error messages tell the user what to do next, not just why it failed?
+**What goes wrong:**
+The existing `day30.ts:33-57` (`dailyBarsForPair()`) assumes daily granularity — each bucket represents one calendar day. The 90h view needs hourly granularity — each bucket represents one clock hour. If a shared `renderBars()` function receives 90 hourly `BarEntry[]` objects where it expects 30 daily ones, the bar widths, spacing, and row layout are wrong.
 
-## Recovery Strategies
+**Why it happens:**
+`renderBars()` in `bars.ts` hardcodes `width:8px` per bar. 90 bars × 8px = 720px per row. On mobile (375px viewport), this overflows. The existing 30 bars × 8px = 240px, which fits. The fix isn't to make bars narrower (they'd become unreadable at 4px) — it's to make the row scrollable or to collapse bars.
 
-| Pitfall | Recovery Cost | Recovery Steps |
-|---------|---------------|----------------|
-| Silent install failure (missing pipefail) | LOW | Rerun with `curl -fsSL -o /tmp/install.sh ... && bash /tmp/install.sh` to decouple download from execution |
-| Orphaned process on port 58080 | LOW | `lsof -ti :58080 \| xargs kill` to find and kill the orphan |
-| Corrupted config file | LOW | `rm ~/.config/mesh-status/config.json && start.sh --leader` to regenerate config interactively |
-| Broken .venv after upgrade | MEDIUM | `rm -rf .venv && uv sync --no-dev` to recreate from scratch |
-| Partial install directory | MEDIUM | `rm -rf ~/.mesh-status && re-run install.sh` — sentinel file check would detect this automatically |
-| Data format incompatibility after upgrade | MEDIUM | Downgrade script: `git checkout v0.7 && uv sync --no-dev` — or restore from backup in `data.bak.*` |
-| Shell injection via config value | HIGH | Purge config, revoke any leaked secrets, reinstall from trusted source |
-| Compromised install script (MITM) | HIGH | Verify script checksum against published SHA-256, compare with known-good copy from GitHub releases |
+**Consequences:**
+- 90 bar row overflows its card container on any viewport < 720px
+- Bars squish to fit via CSS `gap` collapse, producing uneven spacing
+- The `flex items-end gap-0.5` layout in `bars.ts:15` doesn't handle overflow — it clips
 
-## Pitfall-to-Phase Mapping
+**Prevention:**
+1. **Make bar rows horizontally scrollable** — wrap in `overflow-x-auto` container:
+   ```html
+   <div class="overflow-x-auto">${renderBars(bars)}</div>
+   ```
+2. **Keep `width: 8px` but allow container scroll** — this preserves bar readability on desktop while mobile users can scroll horizontally.
+3. **Alternative: shrink bars on small viewports** — use CSS `clamp()` or container queries:
+   ```css
+   [data-history-bar] {
+     width: clamp(4px, 1.5vw, 8px);
+   }
+   ```
+4. **Add a `barCount` parameter to `renderBars()`** so the function can adjust layout:
+   ```typescript
+   export function renderBars(bars: BarEntry[], options?: { barWidth?: number }): string
+   ```
 
-| Pitfall | Prevention Phase | Verification |
-|---------|------------------|--------------|
-| #1 Missing pipefail | Phase 1 (install.sh curl line) | `shellcheck` on install.sh; test with mock curl 429 response |
-| #2 Stdin theft in piped install | Phase 2 (interactive prompts use /dev/tty) | Run `curl .../install.sh \| bash` interactively with prompts; no corruption or hangs |
-| #3 No set -euo pipefail | Phase 1 (all script entrypoints) | `shellcheck` passes with zero warnings; `grep 'set -euo pipefail' *.sh` |
-| #4 Orphaned processes | Phase 2 (start.sh signal trap or exec) | Kill start.sh with SIGTERM, verify no hypercorn processes remain; `ps aux | grep -c hypercorn` |
-| #5 Partial config writes | Phase 2 (atomic write + validation) | Crash test: `kill -9` during config write; on restart, config is recreated not loaded partially |
-| #6 Docker CI cache masking bugs | Phase 3 (--no-cache, fresh base images) | Verify CI uses `--no-cache`; test with container that has no uv/git preinstalled |
-| #7 Version drift | Phase 1 (install from tag) + Phase 2 (version check) | Verify install.sh checks out specific tag; start.sh verifies `pyproject.toml` version matches |
-| #8 Prereqs checked after destructive ops | Phase 1 (prereq block first) | Ordering test: `mock` missing uv, verify script exits before creating any directories |
-| #9 macOS vs Linux | Phase 1 (install.sh) + Phase 2 (start.sh) | CI matrix on ubuntu-latest + macos-latest |
-| #10 Upgrade path not tested | Phase 2 (backup logic) + Phase 3 (CI upgrade test) | CI test: install v0.7, install v0.8, verify config preserved, app starts |
-| #11 Hardcoded paths | Phase 1 (configurable INSTALL_DIR) | Verify `MESH_STATUS_HOME` env var overrides default; verify XDG compliance |
-| #12 Missing uv/venv validation | Phase 1 (install validation) + Phase 2 (start.sh env check) | Remove `.venv`, run `start.sh`, verify it recreates env, not crashes |
-| #13 Logging collision | Phase 2 (exec vs background decision) | Verify Python logs and shell logs are distinguishable; verify `exec` pattern works |
+**Detection:**
+- 90-bar row extends beyond card boundary on standard monitor (1920px)
+- Mobile viewport: bars overlap or are invisible
+- CSS `overflow: hidden` clips the last 60 bars (common Chrome bug with flex items)
+- When resizing the browser, bars at the right edge are cut off
+
+**Phase to address:** View unification — must include responsive bar layout, not just data plumbing
+
+---
+
+### D5. 30-Minute + 90-Hour + 30-Day: Triple API Call Overload
+
+**What goes wrong:**
+Currently (`main.ts:73-78`), the app fetches three endpoints every 10 seconds:
+- `fetchData30m()` — 30-minute window, for the real-time view
+- `fetchData30d()` — 30-day window, for the uptime map
+- `fetchNodeList()` — node registration list
+
+Adding a 90h endpoint means **four parallel requests every 10 seconds**. On a mesh with 10 nodes, each request returns ~50-200KB. Four simultaneous requests = 200-800KB every 10 seconds = 80-320KB/s sustained bandwidth. On a constrained network (VPN WAN), this can saturate the connection.
+
+**Why it happens:**
+The current architecture polls aggressively (`setInterval(refresh, 10_000)`). Each function fetches a full data dump — there's no incremental update, no delta mechanism, no client-side caching of unchanging data.
+
+**Consequences:**
+- Data usage: ~10MB/hour on a 10-node mesh (just for the dashboard)
+- VPN WAN bandwidth consumed by dashboard polling instead of application traffic
+- On metered connections, this is expensive
+- Browser memory grows as responses accumulate in JS heap (the old responses aren't cleaned aggressively)
+
+**Prevention:**
+1. **Stagger refresh intervals** — 30m data refreshes every 10s (needs real-time), 90h/30d data refreshes every 60s (stale data is acceptable for historical views):
+   ```typescript
+   setInterval(refresh30m, 10_000);
+   setInterval(refresh90h, 60_000);
+   setInterval(refresh30d, 60_000);
+   ```
+2. **Use stale-while-revalidate pattern** — Show cached data immediately, fetch new data in background, swap when ready. The existing code already does this implicitly (data is fetched → innerHTML replaced atomically).
+3. **Only fetch the active tab's data** — If 30m tab is active, skip the 90h/30d fetch. The 30d data is needed for `uptimeMap` even in the 30m tab (for uptime percentages in cards). But the 90h data is only needed when the 90h tab is visible.
+4. **Implement HTTP caching headers** — The server can return `Cache-Control: max-age=10` so browsers cache the response within the refresh window. This is free and reduces bandwidth on repeat requests.
+
+**Detection:**
+- Chrome DevTools Network tab shows 4 simultaneous requests every 10s
+- Bandwidth usage visible in Chrome Task Manager (Shift+Esc on Windows/Linux)
+- Users on metered connections report high data usage
+- Dashboard feels sluggish because 4 API calls compete for bandwidth
+
+**Phase to address:** 90h view addition — must include refresh strategy audit
+
+---
+
+## Summary: Pitfall-to-Phase Mapping
+
+| Pitfall | Category | Phase | Severity |
+|---------|----------|-------|----------|
+| A1: Boundary 94.9%/99.4% hard threshold | Color | Color change | MEDIUM — visual flicker but no data loss |
+| A2: Color function inconsistency across views | Color | Color change | HIGH — same value, different colors on same card |
+| A3: HSL gradient information destruction | Color | Color change | LOW — deliberate tradeoff, document it |
+| B1: innerHTML at 17K nodes performance | DOM density | Bar count change | MEDIUM — 70ms freeze every 10s |
+| B2: 50+ node DOM explosion (445K+ nodes) | DOM density | Bar count change | CRITICAL — browser crash at 100 nodes |
+| B3: innerHTML destroys state & scroll | DOM density | Bar count change | MEDIUM — scroll reset, lost state |
+| C1: Different data shapes collide | Unification | View unification | HIGH — runtime errors, empty renders |
+| C2: CSS inconsistency between views | Unification | View unification | MEDIUM — visual drift, dark mode pain |
+| C3: Sticky header overlap | Unification | View unification | LOW — contained to same-page views |
+| D1: 90h window alignment (partial hour) | Backend | 90h aggregation | MEDIUM — confusing last bucket |
+| D2: N×M aggregation query performance | Backend | 90h aggregation | CRITICAL — 5s+ response at 10 nodes |
+| D3: Midnight boundary in daily files | Backend | 90h aggregation | MEDIUM — loads 33% more data than needed |
+| D4: 90 bars × 8px = 720px overflow | Frontend | 90h view | MEDIUM — mobile overflow, desktop edge clip |
+| D5: Triple API call bandwidth overload | Frontend | 90h view | MEDIUM — ~10MB/hour on VPN WAN |
+
+## Critical Pitfalls (Must Fix Before Ship)
+
+| # | Pitfall | Why Critical | Action |
+|---|---------|-------------|--------|
+| 1 | **B2: 50+ node DOM crash** | 445K DOM elements at 50 nodes crashes the browser. Current code has no guard. | Add node-count gating: >30 nodes → skip bars. Defer off-screen cards via IntersectionObserver. |
+| 2 | **D2: Aggregation query performance** | Loading 1.7M raw checks every 10 seconds will kill the server at 10+ nodes. | Implement hourly pre-aggregation or in-memory cache. Do NOT scan raw data per-request. |
+| 3 | **A2: Color function inconsistency** | Same value, different colors on the same card destroys trust in the display. | Extract shared `uptimeColor()` to `views/colors.ts`. Both badges and bars import from it. |
+| 4 | **C1: Data shape collision at runtime** | Passing `DayData[]` to a function that expects `CheckResult[]` causes silent empty renders. | Keep separate render functions; share only the card template. Add TypeScript discriminant. |
 
 ## Sources
 
-- **actsense.dev** — GitHub Actions Security Auditor: "curl | bash is unsafe because it bypasses review and integrity checks" (Accessed 2026-04-23)
-- **claude-code-action issue #1136** — Silent install failure on curl 429 due to missing pipefail (2026-04-01)
-- **OpenClaw PR #82918** — Pipe guard for stdin stealing prevention in install.sh (2026-05-17)
-- **Unix StackExchange #806014** — Killing bash script leaves orphan processes; set -m and process group signals (2026-05-16)
-- **Greg's Wiki BashFAQ/105** — `set -e` edge cases: what it does and doesn't catch
-- **Greg's Wiki ProcessManagement** — PID file risks, race conditions, and proper process management
-- **Wooledge Quotes** — Quoting rules for shell scripts: "When in doubt, double-quote every expansion"
-- **worthless project** — .github/workflows/install-docker.yml: Docker CI patterns for install testing with --no-cache, DOCKER_BUILDKIT=1
-- **The PipePunisher attack** (SNAKE Security) — Server-side detection of curl|bash via timing; delivers different content to shell vs browser
-- **start-stop-daemon(8)** — Debian manpage: PID file security, background flag, process matching
-- **mesh-status codebase analysis** — entrypoint.sh (no trap, no signal propagation), Dockerfile.leader/node (uv install pattern, user/gid configuration), config.py (MESH_STATUS_* env var pattern), pyproject.toml (version 0.1.0 vs actual code maturity)
-- **"Why My One-Line Installer Worked Everywhere Except WSL"** (Vineeth N K, 2026-05-15) — CRLF stripping, curl.exe vs curl on Windows, .gitattributes for line endings
-- **Bash Strict Mode Guide** (linuxize.com, 2026-04-20) — `set -euo pipefail` + IFS explained with examples
-- **"set -euo pipefail Is Not Enough"** (unixy.io, 2024-06-05) — The 40% of failure cases that strict mode misses; ERR trap for debug output
+- **DOM Performance Study (2026)** — stackinsight.dev benchmark: innerHTML in loop = O(n²), single innerHTML = acceptable up to ~10K nodes. 17K nodes = ~70ms render time.
+- **Grafana Threshold Configuration** — Grafana stat panel thresholds: multi-tier (null→red, 95→orange, 99→yellow, 99.9→green). Supports 4+ tiers for high-end granularity.
+- **Statuspage Uptime Display** (Atlassian) — Discrete color thresholds with no-data gray. Documents that partial buckets (current hour/day) get lighter treatment.
+- **Prometheus Aggregation Patterns** — Pre-aggregate on write (recording rules), not on read. Avoids per-request full data scan.
+- **CSS-Tricks Fixed-Height Cards** (2026) — Card UI fragility with varying content lengths: translations, missing images, viewport changes cause layout breaks.
+- **Google Cloud Monitoring Aggregation API docs** — Alignment (regularize data within series) before reduction (combine across series). Single-aggregation-before-reduction pattern.
+- **Looker Studio Data Blending Pitfalls** — Cross-join risk when key types don't match (DATE vs string). Verify join keys exactly.
+- **mesh-status codebase analysis** — Verified against `bars.ts`, `cards.ts`, `day30.ts`, `bars.test.ts`, `mesh.test.ts`, `leader.py`, `persistence.py`, `types.ts`, `api.ts`, `main.ts`.
 
 ---
-*Pitfalls research for: mesh-status v0.8 install.sh, start.sh, and Docker CI testing*
+
+*Pitfalls research for: mesh-status v0.9 UI consolidation milestone*
+*Focus: Discrete color thresholds, 3× bar density, view unification, 90h hourly history*
 *Researched: 2026-06-20*

@@ -174,14 +174,14 @@ describe("renderCards", () => {
   it("renders dual ICMP/HTTP history bar rows per card", () => {
     const container = document.createElement("div");
     const now = 1000000;
-    const checks = Array.from({ length: 30 }, (_, i) => ({
+    const checks = Array.from({ length: 90 }, (_, i) => ({
       node_ip: "10.0.0.1",
       target_ip: "10.0.0.2",
       ping_ok: true,
       http_ok: true,
       ping_latency_ms: 5,
       http_latency_ms: 10,
-      timestamp: now - (29 - i) * 60,
+      timestamp: now - (89 - i) * 60,
     }));
     renderCards(
       container,
@@ -198,22 +198,22 @@ describe("renderCards", () => {
       new Map([["10.0.0.1|10.0.0.2", [100, 100]]]),
     );
     const bars = container.querySelectorAll("[data-history-bar]");
-    expect(bars.length).toBe(120);
+    expect(bars.length).toBe(360);
     expect(bars[0].getAttribute("title")).toContain("ICMP");
-    expect(bars[30].getAttribute("title")).toContain("HTTP");
+    expect(bars[90].getAttribute("title")).toContain("HTTP");
   });
 
   it("computes correct bar uptime percentages from ping_ok/http_ok", () => {
     const container = document.createElement("div");
     const now = 1000000;
-    const checks = Array.from({ length: 30 }, (_, i) => ({
+    const checks = Array.from({ length: 90 }, (_, i) => ({
       node_ip: "10.0.0.1",
       target_ip: "10.0.0.2",
       ping_ok: true,
       http_ok: true,
       ping_latency_ms: 5,
       http_latency_ms: 10,
-      timestamp: now - (29 - i) * 60,
+      timestamp: now - (89 - i) * 60,
     }));
     renderCards(
       container,
@@ -250,8 +250,7 @@ describe("renderCards", () => {
       new Map(),
     );
     const bars = container.querySelectorAll("[data-history-bar]");
-    // 2 sources × 1 target each = 2 cards, each with 2 rows × 30 bars
-    expect(bars.length).toBe(120);
+    expect(bars.length).toBe(360);
     expect(bars[0].getAttribute("title")).toBe("No data");
   });
 
@@ -285,7 +284,7 @@ describe("renderCards", () => {
     const statsLine = card.querySelector(".text-mesh-muted")!;
     const barsAfterStats = statsLine.nextElementSibling;
     expect(barsAfterStats?.querySelectorAll("[data-history-bar]").length).toBe(
-      30,
+      90,
     );
   });
 });
@@ -340,7 +339,7 @@ describe("renderDay30", () => {
     );
   });
 
-  it("renders uptime badge with correct color for >=99%", () => {
+  it("renders status badge and uptime for >=99%", () => {
     const container = document.createElement("div");
     renderDay30(container, ["10.0.0.1", "10.0.0.2"], [
       {
@@ -356,12 +355,11 @@ describe("renderDay30", () => {
         ],
       },
     ]);
-    const badges = container.querySelectorAll(".rounded");
-    expect(badges.length).toBe(1);
-    expect(badges[0].textContent).toContain("100.0%");
+    expect(container.innerHTML).toContain("100.0%");
+    expect(container.innerHTML).toContain("99.5%");
   });
 
-  it("shows no-data line for days without connections", () => {
+  it("shows no-data message for day without connections", () => {
     const container = document.createElement("div");
     renderDay30(container, ["10.0.0.1", "10.0.0.2"], [
       {
@@ -369,7 +367,7 @@ describe("renderDay30", () => {
         connections: [],
       },
     ]);
-    expect(container.innerHTML).toContain("2026-06-01");
+    expect(container.innerHTML).toContain("No data for this node");
   });
 
   it("renders daily ICMP/HTTP bar rows per pair", () => {
@@ -389,11 +387,11 @@ describe("renderDay30", () => {
       },
     ]);
     const bars = container.querySelectorAll("[data-history-bar]");
-    expect(bars.length).toBe(60);
+    expect(bars.length).toBe(180);
     // Last bar of ICMP row
-    expect(bars[29].getAttribute("title")).toContain("ICMP");
+    expect(bars[89].getAttribute("title")).toContain("ICMP");
     // Last bar of HTTP row
-    expect(bars[59].getAttribute("title")).toContain("HTTP");
+    expect(bars[179].getAttribute("title")).toContain("HTTP");
   });
 
   it("shows empty bars in day30 when no data for some days", () => {

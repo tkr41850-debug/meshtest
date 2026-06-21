@@ -1,0 +1,101 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test-install:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build test container
+        run: docker build -t mesh-test -f Dockerfile.ci-test .
+
+      - name: TEST-01 — install.sh -y non-interactive
+        run: |
+          docker run --rm mesh-test bash -c '
+            set -e
+            MESH_STATUS_LOCAL_SOURCE=/repo bash /repo/deploy/install.sh -y 2>&1
+            if [ -d "$HOME/.local/meshtest" ]; then
+              echo "PASS: install directory exists"
+            else
+              echo "FAIL: install directory missing"
+              exit 1
+            fi
+            if [ -f "$HOME/.local/meshtest/.mesh-status.install" ]; then
+              echo "PASS: sentinel file exists: $(cat $HOME/.local/meshtest/.mesh-status.install)"
+            else
+              echo "FAIL: sentinel file missing"
+              exit 1
+            fi
+          '
+
+      - name: TEST-02 — install.sh -y with MESH_STATUS_VERSION
+        run: |
+          docker run --rm mesh-test bash -c '
+            set -e
+            MESH_STATUS_VERSION=v0.8
+            MESH_STATUS_LOCAL_SOURCE=/repo bash /repo/deploy/install.sh -y 2>&1
+            VERSION=$(cat "$HOME/.local/meshtest/.mesh-status.install")
+            echo "Installed version: $VERSION"
+            if [ "$VERSION" = "v0.8" ]; then
+              echo "PASS: version pinned correctly"
+            else
+              echo "FAIL: expected v0.8, got $VERSION"
+              exit 1
+            fi
+          '
+
+      - name: TEST-03 — start.sh --leader launches and is healthy
+        run: |
+          docker run -d --name mesh-leader mesh-test \
+            bash -c '\
+              set -e
+              MESH_STATUS_LOCAL_SOURCE=/repo bash /repo/deploy/install.sh -y 2>&1
+              cd "$HOME/.local/meshtest"
+              bash start.sh --leader 2>&1
+            '
+
+          SLEEP=3
+          for i in $(seq 1 10); do
+            if docker exec mesh-leader curl -sf http://localhost:58080/livez > /dev/null 2>&1; then
+              echo "PASS: leader is healthy after ${i}s"
+              docker kill mesh-leader
+              exit 0
+            fi
+            sleep $SLEEP
+          done
+
+          echo "FAIL: leader did not become healthy within 30s"
+          docker logs mesh-leader
+          docker kill mesh-leader
+          exit 1
+
+  lint-format:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        run: curl -LsSf https://astral.sh/uv/install.sh | sh
+
+      - name: Set up Python
+        run: uv python install 3.12
+
+      - name: Sync dependencies
+        run: uv sync
+
+      - name: Check formatting with ruff
+        run: uv run ruff format --check .
+
+      - name: Lint with ruff
+        run: uv run ruff check .
+
+      - name: Type check with pyright
+        run: uv run pyright .

@@ -49,26 +49,26 @@
 
 ### COLOR — Consistent Color Scheme
 
-- [ ] **COLOR-01**: Extract shared `uptimeColor()` function from `cards.ts`/`day30.ts` into `views/colors.ts` — single source of truth
-- [ ] **COLOR-02**: Update `bars.ts` `barColor()` to use HSL gradient with <90%→red, 90–99%→amber ramp, ≥99.9%→green — same scheme applied to bars AND percentage numbers
-- [ ] **COLOR-03**: Remove duplicated `uptimeColor()` and `BADGE_MAP` color logic from individual view files — all views use `colors.ts`
-- [ ] **COLOR-04**: Test color consistency — bars and numbers use matching colors at boundary values (0%, 50%, 89.9%, 90%, 95%, 99%, 99.9%, 100%)
+- [x] **COLOR-01**: Extract shared `uptimeColor()` function from `cards.ts`/`day30.ts` into `views/colors.ts` — single source of truth
+- [x] **COLOR-02**: Update `bars.ts` `barColor()` to use HSL gradient with <90%→red, 90–99%→amber ramp, ≥99.9%→green — same scheme applied to bars AND percentage numbers
+- [x] **COLOR-03**: Remove duplicated `uptimeColor()` and `BADGE_MAP` color logic from individual view files — all views use `colors.ts`
+- [x] **COLOR-04**: Test color consistency — bars and numbers use matching colors at boundary values (0%, 50%, 89.9%, 90%, 95%, 99%, 99.9%, 100%)
 
 ### WINDOW — 90m/90h/90d Windows
 
-- [ ] **WINDOW-01**: Backend extends in-memory retention from 1800s to 5400s in `persistence.py` to support 90-minute window
-- [ ] **WINDOW-02**: Backend adds `/data?window=90h` endpoint with hourly aggregation (reuses 30d aggregation pattern, groups by hour instead of day)
-- [ ] **WINDOW-03**: Frontend increases bar count from 30 to 90 in all time-window views
-- [ ] **WINDOW-04**: `api.ts` adds `fetchData90h()`, renames existing fetch functions to reflect new window sizes
-- [ ] **WINDOW-05**: `types.ts` adds 90h response/entry types (HourData with same shape as DayData)
-- [ ] **WINDOW-06**: `main.ts` wires up third tab for 90h view alongside 90m and 90d tabs
+- [x] **WINDOW-01**: Backend extends in-memory retention from 1800s to 5400s in `persistence.py` to support 90-minute window
+- [x] **WINDOW-02**: Backend adds `/data?window=90h` endpoint with hourly aggregation (reuses 30d aggregation pattern, groups by hour instead of day)
+- [x] **WINDOW-03**: Frontend increases bar count from 30 to 90 in all time-window views
+- [x] **WINDOW-04**: `api.ts` adds `fetchData90h()`, renames existing fetch functions to reflect new window sizes
+- [x] **WINDOW-05**: `types.ts` adds 90h response/entry types (HourData with same shape as DayData)
+- [x] **WINDOW-06**: `main.ts` wires up third tab for 90h view alongside 90m and 90d tabs
 
 ### UNIFY — Unified Cards Layout
 
-- [ ] **UNIFY-01**: Extract shared card template from `cards.ts` into `views/card.ts` — reusable across all three time windows
-- [ ] **UNIFY-02**: Refactor 30m `cards.ts` to include split circle + total check count on each card (adds missing info to existing card layout)
-- [ ] **UNIFY-03**: Refactor 90d `day30.ts` to render each pair as a card (not per-day rows), reusing the shared card template with same density as 30m view
-- [ ] **UNIFY-04**: Create `views/hourly.ts` for 90h view using the shared card template
+- [x] **UNIFY-01**: Extract shared card template from `cards.ts` into `views/card.ts` — reusable across all three time windows
+- [x] **UNIFY-02**: Refactor 30m `cards.ts` to include split circle + total check count on each card (adds missing info to existing card layout)
+- [x] **UNIFY-03**: Refactor 90d `day30.ts` to render each pair as a card (not per-day rows), reusing the shared card template with same density as 30m view
+- [x] **UNIFY-04**: Create `views/hourly.ts` for 90h view using the shared card template
 
 ## v2 Requirements
 
@@ -115,20 +115,20 @@ None deferred.
 | TEST-02 | Phase 20 | Complete |
 | TEST-03 | Phase 20 | Complete |
 | FIX-05 | Phase 19 | Complete |
-| COLOR-01 | Phase 21 | Pending |
-| COLOR-02 | Phase 21 | Pending |
-| COLOR-03 | Phase 21 | Pending |
-| COLOR-04 | Phase 21 | Pending |
-| WINDOW-01 | Phase 22 | Pending |
-| WINDOW-02 | Phase 22 | Pending |
-| WINDOW-03 | Phase 22 | Pending |
-| WINDOW-04 | Phase 22 | Pending |
-| WINDOW-05 | Phase 22 | Pending |
-| WINDOW-06 | Phase 22 | Pending |
-| UNIFY-01 | Phase 23 | Pending |
-| UNIFY-02 | Phase 23 | Pending |
-| UNIFY-03 | Phase 23 | Pending |
-| UNIFY-04 | Phase 23 | Pending |
+| COLOR-01 | Phase 21 | Complete |
+| COLOR-02 | Phase 21 | Complete |
+| COLOR-03 | Phase 21 | Complete |
+| COLOR-04 | Phase 21 | Complete |
+| WINDOW-01 | Phase 22 | Complete |
+| WINDOW-02 | Phase 22 | Complete |
+| WINDOW-03 | Phase 22 | Complete |
+| WINDOW-04 | Phase 22 | Complete |
+| WINDOW-05 | Phase 22 | Complete |
+| WINDOW-06 | Phase 22 | Complete |
+| UNIFY-01 | Phase 23 | Complete |
+| UNIFY-02 | Phase 23 | Complete |
+| UNIFY-03 | Phase 23 | Complete |
+| UNIFY-04 | Phase 23 | Complete |
 
 **Coverage:**
 - v0.8 requirements: 25 total

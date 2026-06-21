@@ -1,36 +1,29 @@
-import type { BarEntry, DayData } from "../types";
+import type { BarEntry, HourData } from "../types";
 import { cardHtml } from "./card";
 
-function dailyBarsForPair(
-  days: DayData[],
+function hourlyBarsForPair(
+  hours: HourData[],
   src: string,
   tgt: string,
 ): { pingBars: BarEntry[]; httpBars: BarEntry[] } {
-  const allDays = days
-    .filter((d) =>
-      d.connections.some(
-        (c) => c.node_ip === src && c.target_ip === tgt,
-      ),
-    )
-    .sort((a, b) => a.date.localeCompare(b.date));
-  const recentDays = allDays.slice(-90);
+  const recentHours = hours.slice(-90);
   const pingBars: BarEntry[] = [];
   const httpBars: BarEntry[] = [];
   for (let i = 0; i < 90; i++) {
-    const dayIndex = recentDays.length - 90 + i;
-    if (dayIndex >= 0 && dayIndex < recentDays.length) {
-      const day = recentDays[dayIndex];
-      const conn = day.connections.find(
+    const hourIndex = recentHours.length - 90 + i;
+    if (hourIndex >= 0 && hourIndex < recentHours.length) {
+      const hour = recentHours[hourIndex];
+      const conn = hour.connections.find(
         (c) => c.node_ip === src && c.target_ip === tgt,
       );
       if (conn) {
         pingBars.push({
           percent: conn.ping_uptime_pct / 100,
-          tooltip: `${day.date} — ${conn.ping_uptime_pct.toFixed(1)}% ICMP`,
+          tooltip: `${hour.date} — ${conn.ping_uptime_pct.toFixed(1)}% ICMP`,
         });
         httpBars.push({
           percent: conn.http_uptime_pct / 100,
-          tooltip: `${day.date} — ${conn.http_uptime_pct.toFixed(1)}% HTTP`,
+          tooltip: `${hour.date} — ${conn.http_uptime_pct.toFixed(1)}% HTTP`,
         });
         continue;
       }
@@ -50,12 +43,12 @@ function computeStatus(
   return "NotAvailable";
 }
 
-export function renderDay30(
+export function renderHourly(
   container: HTMLElement,
   nodes: string[],
-  days: DayData[] | undefined,
+  hours: HourData[] | undefined,
 ): void {
-  if (!days || days.length === 0) {
+  if (!hours || hours.length === 0) {
     container.innerHTML =
       '<p class="text-mesh-muted text-sm">No data available for this time window</p>';
     return;
@@ -70,16 +63,16 @@ export function renderDay30(
 
     let hasData = false;
     const seenPairs = new Set<string>();
-    for (const day of days) {
-      for (const conn of day.connections) {
+    for (const hour of hours) {
+      for (const conn of hour.connections) {
         if (conn.node_ip !== src) continue;
         const pairKey = `${src}--${conn.target_ip}`;
         if (seenPairs.has(pairKey)) continue;
         seenPairs.add(pairKey);
         hasData = true;
-        const { pingBars, httpBars } = dailyBarsForPair(days, src, conn.target_ip);
+        const { pingBars, httpBars } = hourlyBarsForPair(hours, src, conn.target_ip);
         const st = computeStatus(conn.ping_uptime_pct, conn.http_uptime_pct);
-        const lastSeen = day.date;
+        const lastSeen = hour.date;
         html += cardHtml(
           conn.target_ip,
           st,

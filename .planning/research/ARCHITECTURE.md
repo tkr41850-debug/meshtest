@@ -1,467 +1,524 @@
-# Architecture Research: Install & Start Scripts
+# Architecture Research: v0.9 UI Consolidation — Three Time Windows
 
-**Domain:** Distributed mesh connectivity tool — install/start script integration
+**Domain:** Frontend data flow + backend endpoint changes for 90m/90h/90d windows
 **Researched:** 2026-06-20
-**Confidence:** HIGH (verified against existing codebase)
+**Overall confidence:** HIGH (verified against existing codebase)
 
-## Standard Architecture
+## Current Architecture (v0.8)
 
-### System Overview — Install & Start Flow
-
-```
-┌─────────────────────────────────────────────────────────────────────┐
-│                        USER INTERACTION                               │
-│  ┌──────────────────────┐     ┌──────────────────────────────┐       │
-│  │  curl ... | bash      │     │  start.sh --leader / --node  │       │
-│  │  (one-time install)   │     │  (daily operation)           │       │
-│  └──────────┬───────────┘     └──────────────┬───────────────┘       │
-│             │                                 │                       │
-├─────────────┴─────────────────────────────────┴──────────────────────┤
-│                        INSTALL SCRIPTS                                 │
-│  ┌──────────────────────┐     ┌──────────────────────────────┐       │
-│  │  deploy/install.sh    │     │  start.sh                    │       │
-│  │  ┌──────────────────┐ │     │  ┌────────────────────────┐ │       │
-│  │  │ clone repo       │ │     │  │ detect install dir     │ │       │
-│  │  │ uv sync          │ │     │  │ parse --leader/--node  │ │       │
-│  │  │ build frontend   │ │     │  │ load config file       │ │       │
-│  │  │ create config    │ │     │  │ exec uv run ...        │ │       │
-│  │  └──────────────────┘ │     │  └────────────────────────┘ │       │
-│  └──────────────────────┘     └──────────────────────────────┘       │
-├─────────────────────────────────────────────────────────────────────┤
-│                          APPLICATION LAYER                             │
-│  ┌──────────────────────┐     ┌──────────────────────────────┐       │
-│  │  mesh_status.leader   │     │  node.py                     │       │
-│  │  (Quart + Hypercorn)  │     │  (asyncio check agent)      │       │
-│  └──────────┬───────────┘     └──────────────┬───────────────┘       │
-│             │                                 │                       │
-│  ┌──────────┴─────────────────────────────────┴───────────────┐      │
-│  │  mesh_status/ (config.py, persistence.py, models.py, ...)  │      │
-│  └──────────────────────────┬──────────────────────────────────┘      │
-├─────────────────────────────┴────────────────────────────────────────┤
-│                         DATA LAYER                                      │
-│  ┌──────────────────────┐     ┌──────────────────────────────┐       │
-│  │  config.json          │     │  data/ (JSON Lines files)    │       │
-│  │  (~/.config/mesh-     │     │  (~/.local/share/mesh-      │       │
-│  │   status/config.json) │     │   status/data/)             │       │
-│  └──────────────────────┘     └──────────────────────────────┘       │
-└─────────────────────────────────────────────────────────────────────┘
-```
-
-### Existing Component Boundaries
-
-| Component | Responsibility | Entry Point |
-|-----------|---------------|-------------|
-| `mesh_status.leader:app` | Quart app with Hypercorn ASGI server | `entrypoint.sh` (Docker) or `python -m mesh_status.leader` |
-| `node.py` | Node agent — periodic connectivity checks | `python node.py --leader-url ...` |
-| `register.py` | CLI registration helper | Direct invocation |
-| `entrypoint.sh` | Docker entrypoint (leader only) | `exec hypercorn mesh_status.leader:app` |
-| `mesh_status/config.py` | Defaults overridden by env vars | Imported by leader + node |
-| `mesh_status/persistence.py` | Appends check results to JSON Lines files | Uses `Path("data")` (CWD-relative) |
-
-### New Component Boundaries (v0.8)
-
-| Component | Responsibility | Entry Point |
-|-----------|---------------|-------------|
-| `deploy/install.sh` | Clone repo, `uv sync`, build frontend, create config | `curl ... | bash` or direct |
-| `start.sh` | Unified runner: detect role, load config, exec app | `start.sh --leader` / `start.sh --node` |
-| config.json | User config file (overrides env var defaults) | Read by `start.sh`, exposed as env vars |
-
-## Recommended Project Structure (after install)
-
-### Install Target Layout
+### Data Flow — Two Windows
 
 ```
-~/.local/share/mesh-status/          # MESH_STATUS_HOME
-├── .venv/                           # uv virtual environment
-├── mesh_status/                     # Python package
-│   ├── __init__.py
-│   ├── __main__.py
-│   ├── leader.py
-│   ├── node.py                      # (copied from root)
-│   ├── config.py
-│   ├── persistence.py
-│   ├── models.py
-│   └── status.py
-├── frontend/dist/                   # Pre-built frontend assets
-├── start.sh                         # Unified runner
-├── entrypoint.sh                    # Docker entrypoint (kept for Docker compat)
-├── pyproject.toml
-└── .python-version
-
-~/.config/mesh-status/               # XDG_CONFIG_HOME
-└── config.json                      # User configuration
-
-~/.local/share/mesh-status/data/     # Runtime data (JSON Lines)
-
-~/.local/bin/start.sh                # Symlink → ~/.local/share/mesh-status/start.sh
+main.ts (refresh every 10s)
+├── fetchData30m() → GET /data?window=30m
+│   └── Response: { window:"30m", checks:CheckResult[], statuses:StatusEntry[] }
+│       │ checks: in-memory only (_results dict), cutoff = now - 1800s
+│       │ statuses: derived from _registry + _results
+│       └── Consumed by: renderCards(), renderMatrix()
+│
+├── fetchData30d() → GET /data?window=30d
+│   └── Response: { window:"30d", days:DayData[] }
+│       │ days: disk (_read_results) + in-memory fallback, aggregated per-day
+│       └── Consumed by: buildUptimeMap() → renderCards() (uptime %), renderDay30()
+│
+└── fetchNodeList() → GET /node-list
+    └── Consumed by: all three renderers (node list)
 ```
 
-### Structure Rationale
+### Endpoint Monolith
 
-- **`~/.local/share/mesh-status/`**: Follows XDG Base Directory spec. This is the install root (`MESH_STATUS_HOME`). Contains everything needed to run — the cloned repo, venv, built frontend.
-- **`~/.config/mesh-status/config.json`**: XDG_CONFIG_HOME location for config. Separate from install directory so config survives reinstall.
-- **`~/.local/share/mesh-status/data/`**: Runtime data (check results) in XDG_DATA_HOME. Separate from config.
-- **`~/.local/bin/start.sh`**: Symlink to the real script. `~/.local/bin` is typically on PATH.
-- **`frontend/` lives inside install dir**: Leader serves frontend from the same port (port 58080). The leader expects `dist/` relative to the install directory.
-- **`node.py` lives inside `mesh_status/`**: Node.py currently lives at root. For installed layout, copy/move it into the mesh_status package so `python -m mesh_status.node` works. This avoids CWD assumptions.
+The `/data` endpoint in `leader.py` is a single `if/elif/else` chain:
 
-### Why This Layout
-
-1. **XDG compliance**: Standard, portable, respects user's existing conventions
-2. **Self-contained**: The install directory has everything — clone the repo and `uv sync` once, run forever
-3. **Config/data separation**: Config is user-editable, data is runtime, install dir is immutably versioned
-4. **Symlink entry point**: `~/.local/bin/start.sh` is a symlink, so `start.sh --leader` works from any CWD
-5. **Docker compatibility**: Inside Docker, the layout is `/app/...` (same structure, different root). The existing Dockerfiles use `WORKDIR /app` — the start.sh can detect this and adapt.
-
-## Integration Points
-
-### How `start.sh` Finds and Invokes Python Modules
-
-The script MUST determine its install directory first — it lives at the root of the install:
-
-```bash
-# start.sh — self-locating pattern
-SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-MESH_STATUS_HOME="$SCRIPT_DIR"  # The script is at the install root
+```
+get_data()
+  ├── window == "30m" → in-memory checks + derived statuses
+  ├── window == "30d" → disk read + in-memory, aggregate by day
+  └── else → 400 error
 ```
 
-From there, it invokes:
+### Rendering Duplication
 
-| Role | Command | Why |
-|------|---------|-----|
-| `--leader` | `cd "$MESH_STATUS_HOME" && exec uv run python -m mesh_status.leader` | Uses `uv run` to activate venv, `-m mesh_status.leader` to invoke the ASGI entry point. `cd` ensures `Path("data")` in persistence.py resolves to install root. |
-| `--node` | `cd "$MESH_STATUS_HOME" && exec uv run python -m mesh_status.node --leader-url "$LEADER_URL" --node-url "$NODE_URL"` | Same pattern, but for node.py as a module. |
+| View | Layout | Bars | Bar Count | Color Source |
+|------|--------|------|-----------|--------------|
+| `cards.ts` | Card per target, grouped by source | 30 one-minute bars per ICMP/HTTP | 30 | `bars.ts` HSL gradient |
+| `day30.ts` | Row per day, grouped by source | 30 daily bars per ICMP/HTTP | 30 | `bars.ts` HSL gradient + local `uptimeColor()` |
+| `matrix.ts` | Heatmap table | None | N/A | N/A |
 
-**Alternative (direct venv):** If `.venv/bin/python` exists and uv is not installed:
-```bash
-exec "$MESH_STATUS_HOME/.venv/bin/python" -m mesh_status.leader
+Both `cards.ts` and `day30.ts` have their own `uptimeColor()` function (identical logic, duplicated), and both call `bars.ts` for the actual bar rendering.
+
+### Bar Color (current)
+
+`bars.ts` uses an HSL gradient from red→green:
+```typescript
+const hue = percent * 120;  // 0=red, 120=green
+return `hsl(${hue.toFixed(0)}, 85%, 40%)`;
 ```
 
-This is important because `uv run` is the primary mechanism but we should fall back to direct venv if uv is not available (though install pre-reqs require uv).
+This means every bar has a slightly different color depending on its exact percentage — makes it hard to visually group bars into severity bands at a glance.
 
-### Config File Location and Format
+### In-Memory Retention
 
-**Path:** `~/.config/mesh-status/config.json` (resolved via `$XDG_CONFIG_HOME` with fallback to `~/.config`)
+`persistence.py` flush_loop keeps `time.time() - 1800` (30 min) in memory after each flush (runs every 3600s). The 30m endpoint uses the same 1800s cutoff. Result: ~30 minutes of per-second check data is available for bar rendering.
 
-**Format:** JSON — consistent with the rest of the project (JSON Lines for data, JSON for registration payloads).
+## Target Architecture — Three Windows (90m, 90h, 90d)
 
+### Data Flow
+
+```
+main.ts (refresh every 10s)
+├── fetchData90m() → GET /data?window=90m
+│   └── Response: { window:"90m", checks:CheckResult[], statuses:StatusEntry[] }
+│       │ checks: in-memory, cutoff = now - 5400s (90 min)
+│       └── Consumed by: renderCards() [90-min view]
+│
+├── fetchData90h() → GET /data?window=90h          ← NEW
+│   └── Response: { window:"90h", hours:HourData[] }
+│       │ hours: disk + in-memory, aggregated per-hour over 90 hours
+│       └── Consumed by: renderHourly() [new: 90-hour view]
+│
+├── fetchData90d() → GET /data?window=90d
+│   └── Response: { window:"90d", days:DayData[] }
+│       │ days: disk + in-memory, aggregated per-day over 90 days
+│       └── Consumed by: renderDay30() [90-day view]
+│
+└── fetchNodeList() → GET /node-list
+    └── Consumed by: all renderers (node list)
+```
+
+### Shared Card Component
+
+All three time-window views use the same card layout:
+
+```
+┌──────────────────────────────────────────────────┐
+│ [OK]  10.0.0.2                                   │
+│ Ping: 5.2ms  HTTP: 12.1ms  Last: 14:32:01        │
+│ ██████████████████████████████████████████████████ │  (90 bars — ICMP)
+│ ██████████████████████████████████████████████████ │  (90 bars — HTTP)
+└──────────────────────────────────────────────────┘
+```
+
+The card HTML generation moves from being private inside `cards.ts` to a shared export in a new `card.ts` module. The interface:
+
+```typescript
+// views/card.ts — shared card rendering
+export interface CardConfig {
+  badgeColor: string;
+  badgeLabel: string;
+  targetIp: string;
+  statsLines: Array<{ label: string; value: string; color?: string }>;
+  pingBars: BarEntry[];
+  httpBars: BarEntry[];
+}
+
+export function renderCardHtml(config: CardConfig): string;
+```
+
+Each view module:
+1. Computes its own bars (different aggregation logic per window)
+2. Gathers status/latency stats (different sources per window)
+3. Calls `renderCardHtml()` for each pair
+4. Wraps cards in source-group HTML
+
+### Component Boundaries (After)
+
+| Module | Responsibility | Depends On |
+|--------|---------------|------------|
+| `api.ts` | Fetch functions for all 4 endpoints (90m, 90h, 90d, node-list) | `types.ts` |
+| `types.ts` | Type definitions for all three response shapes, BarEntry, etc. | Nothing |
+| `views/bars.ts` | `barColor()` + `renderBars()` — shared bar rendering | `types.ts` |
+| `views/card.ts` | `renderCardHtml()` — shared card layout template | `types.ts`, `views/bars.ts` |
+| `views/cards.ts` | 90-minute view: per-minute bar aggregation + live status | `views/card.ts`, `types.ts` |
+| `views/hourly.ts` | 90-hour view: per-hour bar aggregation (NEW) | `views/card.ts`, `types.ts` |
+| `views/day30.ts` | 90-day view: per-day bar aggregation (refactored to use cards) | `views/card.ts`, `types.ts` |
+| `views/matrix.ts` | Connectivity table (unchanged) | `types.ts` |
+| `main.ts` | Tab management, data fetching, wiring | All of the above |
+
+### Data Model Per Window
+
+| Window | Raw Source | Aggregation | Bar Unit | Bars |
+|--------|-----------|-------------|----------|------|
+| 90m | `_results` in-memory | 1-minute buckets from raw check timestamps | 1 minute | 90 |
+| 90h | Disk + in-memory, read 4 days | Per-hour from raw check timestamps (hour bucket) | 1 hour | 90 |
+| 90d | Disk + in-memory, read 90 days | Per-day (already aggregated in `DayConnection`) | 1 day | 90 |
+
+## Backend Changes
+
+### 1. Extend In-Memory Retention (for 90m)
+
+**File:** `mesh_status/persistence.py` line 80
+
+```python
+# Before
+cutoff = time.time() - 1800   # 30 min
+
+# After
+cutoff = time.time() - 5400   # 90 min
+```
+
+This ensures enough raw check data stays in `_results` to render 90 one-minute bars.
+
+### 2. Extend 30m → 90m and 30d → 90d Endpoints
+
+**File:** `mesh_status/leader.py` in `get_data()`
+
+The URL params change to match the actual window sizes:
+- `window=30m` → `window=90m` (cutoff: 1800 → 5400)
+- `window=30d` → `window=90d` (timedelta: 30 → 90)
+
+```python
+@app.route("/data", methods=["GET"])
+async def get_data():
+    window = request.args.get("window", "")
+    if window == "90m":
+        cutoff = time.time() - 5400
+        # ... same logic as current 30m with new cutoff
+    elif window == "90h":
+        # NEW: hourly aggregation for 90 hours
+    elif window == "90d":
+        start = (datetime.now() - timedelta(days=90)).date()
+        # ... same logic as current 30d with new day count
+    else:
+        return {"error": "... Use ?window=90m, ?window=90h, or ?window=90d"}, 400
+```
+
+The old `30m` and `30d` window values can be kept for backward compatibility (aliases), but the frontend switches to the new names.
+
+### 3. New `90h` Endpoint
+
+**File:** `mesh_status/leader.py` — new `elif window == "90h"` branch
+
+Data flow for 90h:
+```
+1. Read disk: persistence._read_results(start=4 days ago, end=today)
+2. Append in-memory _results (not yet flushed)
+3. Filter to last 90 hours (time.time() - 324000)
+4. Group by hour (datetime.fromtimestamp(ts).strftime("%Y-%m-%dT%H:00:00"))
+5. For each hour, for each (node_ip, target_ip) pair:
+     total = count of checks
+     ping_uptime_pct = ping_ok / total * 100
+     http_uptime_pct = http_ok / total * 100
+6. Return: { window: "90h", hours: HourData[], timestamp: now }
+```
+
+Response shape:
 ```json
 {
-  "leader_url": "http://0.0.0.0:58080",
-  "node_url": "",
-  "check_interval": 10,
-  "log_level": "INFO",
-  "data_dir": "~/.local/share/mesh-status/data"
+  "window": "90h",
+  "hours": [
+    {
+      "hour": "2026-06-19T14:00:00",
+      "connections": [
+        {
+          "node_ip": "10.0.0.1",
+          "target_ip": "10.0.0.2",
+          "total_checks": 360,
+          "ping_uptime_pct": 99.7,
+          "http_uptime_pct": 98.2
+        }
+      ]
+    }
+  ],
+  "timestamp": 1770550000
 }
 ```
 
-**How it's consumed by `start.sh`:**
+The `HourConnection` type is structurally identical to `DayConnection` — same fields. The type alias exists for semantic clarity.
 
-```bash
-# In start.sh — config is read and exported as env vars
-CONFIG_FILE="${XDG_CONFIG_HOME:-$HOME/.config}/mesh-status/config.json"
-if [ -f "$CONFIG_FILE" ]; then
-    LEADER_URL=$(jq -r '.leader_url // "http://0.0.0.0:58080"' "$CONFIG_FILE")
-    LOG_LEVEL=$(jq -r '.log_level // "INFO"' "$CONFIG_FILE")
-    DATA_DIR=$(jq -r '.data_dir // ""' "$CONFIG_FILE")
-    # ... export all as environment variables
-fi
+### 4. Disk Read for 90m Fallback (Optional Optimization)
 
-# CLI flags override config file values (order: defaults → config file → CLI flags)
-```
+The current 30m endpoint reads ONLY from in-memory `_results`. With the extended retention (5400s), memory should always have 90 min of data (flush_loop runs every 3600s, retains 5400s). No disk read needed for 90m.
 
-**Why JSON not TOML/YAML:** The project already speaks JSON everywhere — registration payloads, submit payloads, peer push, JSON Lines data storage. Using JSON for config is consistent and avoids pulling in a TOML/YAML parser (jq is ubiquitous). If YAML were needed, Python can read it, but `start.sh` is shell and `jq` is the most portable structured data tool.
-
-**Env var mapping** (what config.py already expects):
-
-| Config Key | Env Var | Default |
-|------------|---------|---------|
-| `leader_url` | `LEADER_URL` | `http://0.0.0.0:58080` |
-| `check_interval` | `MESH_STATUS_INTERVAL` | `10` |
-| `log_level` | `MESH_STATUS_LOG_LEVEL` | `INFO` |
-| `data_dir` | `DATA_DIR` | `~/.local/share/mesh-status/data` |
-| `buffer_size` | `MESH_STATUS_BUFFER_SIZE` | `20000` |
-| `peer_push_timeout` | `MESH_STATUS_PEER_PUSH_TIMEOUT` | `5` |
-| `grace_period` | `MESH_STATUS_GRACE_PERIOD` | `120` |
-
-### Relationship Between Docker `entrypoint.sh` and New `start.sh`
-
-| Aspect | `entrypoint.sh` (Docker) | `start.sh` (Unified) |
-|--------|--------------------------|----------------------|
-| **Role** | Leader only | Leader OR Node |
-| **Environment** | Assumes venv on PATH (`/app/.venv/bin`) | Locates install dir, uses `uv run` |
-| **Config source** | Env vars only | Config file → Env vars → CLI flags |
-| **Data directory** | `$DATA_DIR` (env) | Configurable via config file |
-| **Execution style** | `exec hypercorn ...` (direct) | `exec uv run python -m ...` |
-| **PID 1 behavior** | Yes (Docker CMD) | Yes (general process) |
-| **CWD handling** | None needed (WORKDIR /app) | `cd` to install dir |
-
-**Shared patterns:**
-- Both use `exec` to replace the shell process with the Python process
-- Both set `LEADER_URL` as an env var before exec
-- Both respect `DATA_DIR` env var (though persistence.py currently doesn't read it — see Critical Integration Issue below)
-- Both use `set -e` for fail-fast behavior
-
-**Key difference:** `entrypoint.sh` is intentionally minimal — just env parsing + exec. `start.sh` is richer — config file loading, role selection, interactive config setup. This is appropriate: Docker containers get config via environment (the Docker way), while bare-metal installs benefit from a config file.
-
-### How `start.sh` Works Both Inside and Outside Docker
-
-**Detection logic:**
-```bash
-# If /app exists and contains mesh-status, we're inside Docker
-if [ -d "/app/mesh_status" ] && [ -f "/app/pyproject.toml" ]; then
-    MESH_STATUS_HOME="/app"
-else
-    # Self-locate: start.sh lives at install root
-    SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-    MESH_STATUS_HOME="$SCRIPT_DIR"
-fi
-```
-
-**Inside Docker:** The existing `Dockerfile.node` already uses `CMD exec uv run python node.py ...`. When migrating to `start.sh`, it would become `CMD ["/app/start.sh", "--node"]` or equivalent. The `entrypoint.sh` remains for backward compatibility but `start.sh` could eventually replace it.
-
-**Outside Docker:** `start.sh` does its self-location dance, loads config from `~/.config/mesh-status/config.json`, and execs the right Python module.
-
-### What Existing Code Paths Need Modification
-
-| File | Change Required | Why | Risk |
-|------|----------------|------|------|
-| `mesh_status/persistence.py` | **READ `DATA_DIR` env var** | Currently uses `Path("data")` (CWD-relative). The start.sh works around this by `cd`-ing to install dir, but the proper fix is to check `os.environ.get("DATA_DIR", ...)` to respect the env var that `entrypoint.sh` already sets. Without this fix, non-Docker runs could write data to unexpected locations. | **Low** — env var with fallback to current behavior |
-| `node.py` location | **Move into `mesh_status/` package OR copy in install.sh** | Currently at root (`root/node.py`). For `python -m mesh_status.node` to work, node.py must be a module. Either move it OR have `install.sh` copy it into the install dir. Moving it (and adding `if __name__ == "__main__"` back) is cleaner long-term. | **Low** — mechanical change |
-| `leader.py` `dist_dir` | **Verify path resolution** | `Path(__file__).resolve().parent.parent / "dist"` resolves to `root/dist/` when run from root, but under install layout it becomes `mesh_status/../../dist/` which also resolves to the install root. This actually works correctly already. | **None** — already correct |
-| `entrypoint.sh` | **No change needed** | Remains the Docker entrypoint. `start.sh` is additive. | **None** |
-| `Dockerfile.node` | **Optional: switch to start.sh** | Could use `CMD ["/app/start.sh", "--node"]` for consistency. Not required. | **Low** — pure refactor |
-
-**Critical Integration Issue — DATA_DIR in persistence.py:**
+However, at startup or after a leader restart, _results starts empty. For robustness, the 90m endpoint could optionally read from disk for the first cycle:
 
 ```python
-# Current (bug): ignores DATA_DIR env var
-DATA_ROOT = Path("data")
-
-# Fix: respect DATA_DIR env var
-DATA_ROOT = Path(os.environ.get("DATA_DIR", "data"))
+if window == "90m":
+    # Primary: in-memory
+    # Fallback: disk for recent data if memory is empty
+    if not _results:
+        raw = persistence._read_results(today, today)
+        recent = [r for r in raw if r.get("timestamp", 0) >= time.time() - 5400]
+        # ... use recent as checks
 ```
 
-This is the single most important code change. Without it:
-- Docker already sets `DATA_DIR=/app/data` (but persistence ignores it)
-- start.sh must `cd` to install dir for relative `Path("data")` to work
-- Users who run from a different CWD lose data
+**Recommendation:** Defer this — the 10-second refresh cycle means memory fills within one cycle.
 
-### Repository Cloning vs Direct Download
+## Frontend Changes
 
-**Recommendation: Clone with git.**
+### Types (`types.ts`)
 
-| Approach | Pros | Cons |
-|----------|------|------|
-| **Clone** (git clone) | - Prereq git already installed<br>- Easy updates (`git pull`)<br>- User can inspect full source<br>- Version pinning via tags | - Larger download<br>- Requires git |
-| **Direct download** (curl tarball) | - Smaller initial download | - No easy update path<br>- Harder to verify integrity<br>- Need to handle tarball extraction |
-| **Git archive / tarball** | - Smaller than full clone | - No update path<br>- Still need to download |
+```typescript
+// Renamed for clarity (keep old names as aliases for transition)
+export type Data90mResponse = Data30mResponse;  // same shape, different window
 
-Since git is already a prerequisite, **clone is the clear winner**. The install.sh workflow:
+export interface HourConnection {
+  node_ip: string;
+  target_ip: string;
+  ping_uptime_pct: number;
+  http_uptime_pct: number;
+  total_checks: number;
+}
 
-```bash
-git clone --depth 1 --branch <tag> https://github.com/<org>/mesh-status.git "$MESH_STATUS_HOME"
-uv sync --directory "$MESH_STATUS_HOME"
-uv run --directory "$MESH_STATUS_HOME" node frontend/build.js  # or npm run build
+export interface HourData {
+  hour: string;  // ISO format: "2026-06-20T14:00:00"
+  connections: HourConnection[];
+}
+
+export interface Data90hResponse {
+  hours: HourData[];
+  window: string;
+}
+
+export type Data90dResponse = Data30dResponse;  // same shape, different window
 ```
 
-## Architectural Patterns
+### API (`api.ts`)
 
-### Pattern 1: Self-Locating Shell Script
+```typescript
+export function fetchData90m(): Promise<Data90mResponse | null> {
+  return fetchWithTimeout<Data90mResponse>("/data?window=90m");
+}
 
-**What:** The shell script determines its own install directory at runtime, so it can find sibling files (venv, Python modules) regardless of the user's CWD.
+export function fetchData90h(): Promise<Data90hResponse | null> {
+  return fetchWithTimeout<Data90hResponse>("/data?window=90h");
+}
 
-```bash
-SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+export function fetchData90d(): Promise<Data90dResponse | null> {
+  return fetchWithTimeout<Data90dResponse>("/data?window=90d");
+}
 ```
 
-**When to use:** Any script that needs to reference files relative to its own location. Critical for `start.sh` — users may run it from any directory.
+Old `fetchData30m()` and `fetchData30d()` can be removed or kept as aliases.
 
-**Trade-offs:** Resolving symlinks requires `readlink -f` (Linux) or `-f` flag which isn't POSIX. For the symlink case (`~/.local/bin/start.sh` → `~/.local/share/mesh-status/start.sh`), we follow the link:
+### Shared Card (`views/card.ts`) — NEW
 
-```bash
-# Follow symlink to real location
-if [ -L "$0" ]; then
-    SCRIPT_DIR="$(cd "$(dirname "$(readlink -f "$0")")" && pwd)"
-else
-    SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-fi
+Extracted from `views/cards.ts` `cardHtml()` function:
+
+```typescript
+import type { BarEntry } from "../types";
+import { renderBars } from "./bars";
+
+const BADGE_MAP: Record<string, { color: string; label: string }> = {
+  OK: { color: "#22c55e", label: "OK" },
+  NotAvailable: { color: "#f59e0b", label: "Not Available" },
+  Pending: { color: "#9ca3af", label: "Pending" },
+};
+
+function uptimeColor(pct: number): string {
+  if (pct >= 99) return "#22c55e";
+  if (pct >= 95) return "#f59e0b";
+  return "#ef4444";
+}
+
+function uptimeSpan(pct: number | null): string {
+  if (pct === null) return "";
+  const c = uptimeColor(pct);
+  return `<span style="color:${c};font-weight:600;">(${pct.toFixed(1)}%)</span>`;
+}
+
+export function renderCardHtml(
+  tgtIp: string,
+  status: string,
+  pingLat: string,
+  httpLat: string,
+  lastSeen: string,
+  pingUp: number | null,
+  httpUp: number | null,
+  pingBars: BarEntry[],
+  httpBars: BarEntry[],
+): string {
+  // Same implementation as current cards.ts cardHtml()
+  // but exported for use by all views
+}
 ```
 
-### Pattern 2: Config Layering (Defaults → File → Env → CLI)
+### Bars (`views/bars.ts`) — Color Change
 
-**What:** Configuration is resolved in a precedence chain where each layer overrides the previous.
+Replace HSL gradient with discrete severity thresholds:
 
-```
-Defaults (hardcoded in config.py)
-    ↓ (overridden by)
-Config file (~/.config/mesh-status/config.json)
-    ↓ (overridden by)
-Environment variables (set by user or Docker)
-    ↓ (overridden by)
-CLI flags (--leader-url, etc.)
-```
-
-**When to use:** Any application that needs to support multiple deployment modes (Docker, bare-metal, dev).
-
-**Trade-offs:** More complex than a single config source, but necessary for this project's hybrid deployment model (Docker env vars + bare-metal config files).
-
-### Pattern 3: Config File → Env Var Bridge
-
-**What:** The shell script reads a JSON config file and exports the values as environment variables before exec'ing the Python process. The Python code reads env vars (as it already does in `config.py`).
-
-```bash
-# start.sh — bridge config file to env vars
-CONFIG_FILE="${XDG_CONFIG_HOME:-$HOME/.config}/mesh-status/config.json"
-if command -v jq &>/dev/null && [ -f "$CONFIG_FILE" ]; then
-    export MESH_STATUS_INTERVAL=$(jq -r '.check_interval // 10' "$CONFIG_FILE")
-    export MESH_STATUS_LOG_LEVEL=$(jq -r '.log_level // "INFO"' "$CONFIG_FILE")
-    export DATA_DIR=$(jq -r '.data_dir // ""' "$CONFIG_FILE")
-fi
+```typescript
+export function barColor(percent: number): string {
+  if (percent < 0) return "#e5e7eb";      // gray — no data
+  if (percent >= 0.99) return "#22c55e";  // green — ≥99%
+  if (percent >= 0.95) return "#f59e0b";  // amber — 95-98.9%
+  return "#ef4444";                        // red — <95%
+}
 ```
 
-**When to use:** When the Python app already uses env vars for config (as `mesh_status/config.py` does), and you want to add config file support without rewriting the Python config layer.
+This matches the existing `uptimeColor()` function in cards.ts and day30.ts, creating visual consistency between bar colors and uptime text colors.
 
-**Trade-offs:** Requires `jq` for JSON parsing in shell. If jq is not available, fall back to env-only. For minimal-footprint installs, consider shipping a tiny JSON parser or using Python itself to parse the config file (but that's chicken-and-egg for `start.sh`).
+### Cards View (`views/cards.ts`) — Modified In Place
 
-## Data Flow
+Changes:
+1. Import `renderCardHtml` from `views/card.ts` instead of local `cardHtml()`
+2. Change `for (let i = 29; i >= 0; i--)` → `for (let i = 89; i >= 0; i--)` in `aggregateByMinute()`
+3. Remove local `cardHtml()`, `uptimeColor()`, `uptimeSpan()`, `BADGE_MAP`
 
-### Install Flow
-
-```
-User runs: curl https://raw.githubusercontent.com/.../deploy/install.sh | bash
-    ↓
-install.sh:
-  1. Parse MESH_STATUS_HOME (default: ~/.local/share/mesh-status)
-  2. Verify prerequisites: uv, git
-  3. Clone repo: git clone --depth 1 <url> "$MESH_STATUS_HOME"
-  4. Create venv + install deps: uv sync
-  5. Build frontend: cd frontend && npm ci && npm run build
-  6. Create config dir: mkdir -p ~/.config/mesh-status
-  7. Interactive config prompt (or --non-interactive with flags)
-  8. Write config.json
-  9. Create data dir: mkdir -p "$DATA_DIR"
-  10. Install start.sh symlink: ln -s "$MESH_STATUS_HOME/start.sh" ~/.local/bin/start.sh
-  11. Print success message with usage instructions
+```typescript
+export function renderCards(
+  container: HTMLElement,
+  nodes: string[],
+  statuses: StatusEntry[],
+  checks: CheckResult[],
+  uptimeMap: Map<string, [number | null, number | null]>,
+): void {
+  // Same structure, but uses shared renderCardHtml
+}
 ```
 
-### Runtime Flow (Leader)
+### Hourly View (`views/hourly.ts`) — NEW
 
-```
-User runs: start.sh --leader [--port 58080]
-    ↓
-start.sh:
-  1. Resolve install directory (self-locate)
-  2. Parse --leader flag + optional args
-  3. Load config file → export env vars
-  4. CLI flags override env vars
-  5. cd to MESH_STATUS_HOME
-  6. exec uv run python -m mesh_status.leader
-    ↓
-mesh_status.leader.main():
-  7. Reads LEADER_URL from env → determines port
-  8. Starts Quart app on Hypercorn
-  9. Serves API + frontend from port 58080
-  10. Persists data to DATA_DIR/data/
-```
+New module for the 90-hour window:
 
-### Runtime Flow (Node)
+```typescript
+import type { BarEntry, HourData, Data90hResponse } from "../types";
+import { renderCardHtml } from "./card";
 
-```
-User runs: start.sh --node --leader-url http://leader:58080 --node-url http://node1:58081
-    ↓
-start.sh:
-  1. Resolve install directory
-  2. Parse --node flag + --leader-url, --node-url
-  3. Load config file → export env vars
-  4. CLI flags override env vars
-  5. cd to MESH_STATUS_HOME
-  6. exec uv run python -m mesh_status.node --leader-url "$LEADER_URL" --node-url "$NODE_URL"
-    ↓
-node.py (as module):
-  7. Parses --leader-url and --node-url
-  8. Registers with leader
-  9. Begins periodic check cycles
-  10. Buffers results, submits to leader
+function hourlyBarsForPair(
+  hours: HourData[],
+  src: string,
+  tgt: string,
+): { pingBars: BarEntry[]; httpBars: BarEntry[] } {
+  // Similar to dailyBarsForPair() in day30.ts
+  // Slide over the last 90 hours, collect ping_uptime_pct / http_uptime_pct
+  const sorted = hours.sort((a, b) => a.hour.localeCompare(b.hour));
+  const recentHours = sorted.slice(-90);
+  // ... map to BarEntry[90] for ping and http
+}
+
+export function renderHourly(
+  container: HTMLElement,
+  nodes: string[],
+  hours: HourData[] | undefined,
+): void {
+  if (!hours || hours.length === 0) {
+    container.innerHTML = '<p class="text-mesh-muted text-sm">No data available</p>';
+    return;
+  }
+  // Build status by looking at recent hourly aggregates
+  // ... similar source-group + cards layout as cards.ts
+}
 ```
 
-## Scaling Considerations
+### Day View (`views/day30.ts`) — Refactored
 
-| Concern | Single VM (current) | Multi-VM with install script | Notes |
-|---------|---------------------|------------------------------|-------|
-| **Config distribution** | Manual per-VM | Install.sh per-VM is the distribution mechanism | Each VM runs its own install; config connects them |
-| **Data directory** | CWD-relative | Absolute path in config | Must fix DATA_DIR in persistence.py |
-| **Updates** | git pull in install dir | git pull in MESH_STATUS_HOME | Consider adding --update flag to start.sh |
-| **Multiple instances** | Not supported | Not supported | Each VM runs one leader or one node |
-| **Config file conflicts** | N/A | Single config.json | Simple JSON, no merge complexity |
+Changes:
+1. Import `renderCardHtml` from `views/card.ts`
+2. Remove local `uptimeColor()`, `splitCircle()`, `badgeHtml()`
+3. Change `for (let i = 0; i < 30; i++)` → `for (let i = 0; i < 90; i++)` in `dailyBarsForPair()`
+4. Rework layout from per-day rows to cards (consistent with 90m/90h views)
 
-### Scaling Priorities
+The current layout:
+```
+10.0.0.1 (source header)
+  2026-06-01 → 10.0.0.2  [●] [100.0%] 100.0%  100.0%  8640
+  ████████████████████████████████  (30 bars)
+  ████████████████████████████████  (30 bars)
+```
 
-1. **First bottleneck: Data directory confusion** — persistence.py's `Path("data")` breaks when run from wrong CWD. Fix before v0.8 ships.
-2. **Second bottleneck: Non-interactive install** — CI/testing needs `--non-interactive` mode from day one. Include in install.sh.
+Target layout (using shared card):
+```
+10.0.0.1 (source header)
+  ┌──────────────────────────────────────────────────┐
+  │ [OK]  10.0.0.2                                   │
+  │ Ping: 5.2ms  HTTP: 12.1ms  Last: 90d aggregate   │
+  │ ██████████████████████████████████████████████████ │  (90 bars)
+  │ ██████████████████████████████████████████████████ │  (90 bars)
+  └──────────────────────────────────────────────────┘
+```
 
-## Anti-Patterns
+Since `DayConnection` only has aggregated percentages (not per-request latency), the 90d view shows:
+- **Badge:** Based on best of ping/http uptime for the period
+- **Latency:** Use `—` or "N/A" (daily aggregates don't include per-request latency)
+- **Bars:** 90 daily bars from `DayConnection.ping_uptime_pct` / `http_uptime_pct`
+- **Uptime:** Show the latest/max uptime % in parentheses
 
-### Anti-Pattern 1: Requiring CWD to Be Install Directory
+### Main (`main.ts`) — Modified
 
-**What people do:** Assuming the user runs `start.sh` from the install directory, so relative paths work.
+Changes:
+1. Import `fetchData90m`, `fetchData90h`, `fetchData90d` instead of old fetches
+2. Import `renderHourly` from new view
+3. Three tabs: "90-Minute", "90-Hour", "90-Day"
+4. `switchTab("90m" | "90h" | "90d")` — three-way instead of two-way
+5. `refresh()` fetches all three + node-list in parallel
+6. New container for hourly view in HTML template
 
-**Why it's wrong:** Users symlink `start.sh` to `~/.local/bin/` and run it from anywhere (`/tmp`, home directory, etc.). Relative paths break.
+```typescript
+const app = document.querySelector<HTMLDivElement>("#app")!;
+app.innerHTML = `
+  <div class="max-w-6xl mx-auto p-6">
+    <h1 class="text-2xl font-bold text-mesh-dark mb-4">mesh-status</h1>
+    <div class="flex gap-2 mb-4 border-b border-mesh-border">
+      <button id="tab-90m" class="tab-btn ...">90-Minute View</button>
+      <button id="tab-90h" class="tab-btn ...">90-Hour View</button>
+      <button id="tab-90d" class="tab-btn ...">90-Day View</button>
+    </div>
+    <div id="matrix-container" class="mb-6"></div>
+    <div id="cards-container"></div>
+    <div id="hourly-container" class="hidden"></div>
+    <div id="day30-container" class="hidden"></div>
+    <p id="refresh-indicator">Loading...</p>
+  </div>
+`;
+```
 
-**Do this instead:** Self-locate the script directory, `cd` to it before running, or use absolute paths resolved from the script location.
+## Key Integration Points
 
-### Anti-Pattern 2: Hardcoding Data Path in Persistence
+| Integration | What Connects | Risk | Mitigation |
+|-------------|---------------|------|------------|
+| Backend 90h → frontend hourly view | Response shape: `{hours: HourData[]}` | Shape mismatch breaks rendering | Define types first, implement backend + frontend from same contract |
+| Backend flush retention → 90m data | `flush_loop()` cutoff = 5400 | OOM if many nodes × many checks | 5400s × ~1 check/sec × 10 nodes = ~54K entries, ~few MB. Acceptable. |
+| Cards → all three views | `renderCardHtml()` signature | Changing signature breaks all callers | Freeze signature early. Add overloads if needed. |
+| Tab switching state | `switchTab()` + container hide/show | Missing container breaks UI | Three containers, three tabs, one active at a time |
+| Uptime map → 90m cards | `buildUptimeMap()` from 90d data | 90d data not loaded yet → null bars | `refresh()` fetches all in parallel; map is populated by the time cards render |
 
-**What people do:** Using a hardcoded relative path like `Path("data")` in persistence code.
+## Build Order (Dependency-Aware)
 
-**Why it's wrong:** The existing `entrypoint.sh` already sets `DATA_DIR` env var, but `persistence.py` ignores it. This creates an invisible coupling between the shell script's `cd` and the Python module's behavior.
+```
+Step 1: Backend — Extend retention in persistence.py (5400s)
+  ↓ No frontend dependency
+Step 2: Backend — Rename 30m→90m, add 90h, rename 30d→90d in leader.py
+  ↓ Backend must respond to /data?window=90h
+Step 3: Backend — Add tests for 90h endpoint in test_data_api.py
+  ↓
+  ──── Backend complete. Frontend can start. ────
+  ↓
+Step 4: Frontend — bars.ts: barColor() discrete thresholds
+  ↓ No deps on other frontend changes
+Step 5: Frontend — types.ts: add Data90hResponse, HourConnection, HourData
+  ↓ Deps: bars.ts (no circular)
+Step 6: Frontend — api.ts: add fetchData90h(), rename fetch functions
+  ↓ Deps: types.ts
+Step 7: Frontend — bars.ts: change 30→90 bar count
+  ↓ Deps: bars.ts (self-contained)
+Step 8: Frontend — card.ts: extract renderCardHtml from cards.ts
+  ↓ Deps: bars.ts, types.ts
+Step 9: Frontend — cards.ts: refactor to use shared card.ts
+  ↓ Deps: card.ts
+Step 10: Frontend — hourly.ts: new view module
+  ↓ Deps: card.ts, types.ts
+Step 11: Frontend — day30.ts: refactor to use shared card + 90 bars
+  ↓ Deps: card.ts
+Step 12: Frontend — main.ts: wire up third tab + new fetches
+  ↓ Deps: all views, api.ts
+Step 13: Frontend — Update tests: bars.test.ts, mesh.test.ts
+  ↓ Deps: all changes (do last)
+```
 
-**Do this instead:** Read `DATA_DIR` from env var with fallback to `Path("data")`. This makes the behavior explicit and overridable.
+## Scaling Notes
 
-### Anti-Pattern 3: Config File in Install Directory
-
-**What people do:** Writing config.json inside the cloned repo directory.
-
-**Why it's wrong:** A `git pull` update could overwrite user config. User edits to config are lost on reinstall.
-
-**Do this instead:** Use XDG config path (`~/.config/mesh-status/config.json`). Config lives outside the install directory so it survives reinstalls.
-
-### Anti-Pattern 4: Shell Script Doing Too Much
-
-**What people do:** Putting complex logic (validation, networking, parsing) in the shell script.
-
-**Why it's wrong:** Shell is fragile, hard to test, and error messages are cryptic. Complex logic belongs in Python.
-
-**Do this instead:** Shell script handles: directory detection, config loading, env var export, exec. Python handles: validation, networking, complex config logic. The line between `start.sh` and `mesh_status/` is: shell = platform integration + exec; Python = everything else.
-
-## Integration Points
-
-### External Services
-
-| Service | Integration | Notes |
-|---------|-------------|-------|
-| GitHub (repo clone) | `git clone` in install.sh | Shallow clone (`--depth 1`) minimizes download |
-| **Existing Dockerfiles** | `CMD` can use start.sh or stay as-is | No migration needed; start.sh is additive |
-| **Existing entrypoint.sh** | Unchanged | Docker-specific; start.sh is for bare-metal |
-
-### Internal Boundaries
-
-| Boundary | Communication | Notes |
-|----------|---------------|-------|
-| `start.sh` → `mesh_status` module | Env vars + CLI args | The bridge pattern: shell sets env vars, Python reads them |
-| `start.sh` → `config.json` | Shell reads with `jq` (if available) | Falls back to env-only if `jq` not present |
-| `install.sh` → filesystem | Creates directories, clones repo | Non-interactive mode uses CLI flags instead of prompts |
-| `deploy/install.sh` ↔ `start.sh` | Shared install directory convention | Both know about `MESH_STATUS_HOME` |
+| Concern | At 10 nodes × 90m | At 50 nodes × 90m | Mitigation |
+|---------|-------------------|-------------------|------------|
+| In-memory check data | ~54K entries (~5 MB) | ~270K entries (~27 MB) | Acceptable for typical VPS. If memory is tight: reduce retention to 30m, show 30 bars. |
+| 90h aggregation CPU | ~100K records grouped into 90h × N² pairs | ~2.5M records | Aggregation runs per-request. For large meshes, consider caching the 90h result in leader memory. |
+| Bar rendering DOM | 90 bars × 2 rows × (N²-N) cards | 90 bars × 2 rows × 2450 cards | DOM with ~450K spans will lag. Virtualize or paginate for >20 nodes. |
 
 ## Sources
 
-- **Existing codebase**: Verified against `entrypoint.sh`, `Dockerfile.leader`, `Dockerfile.node`, `node.py`, `leader.py`, `persistence.py`, `config.py`, `compose.yml`
-- **XDG Base Directory Specification**: `~/.config/`, `~/.local/share/`, `~/.local/bin/` — standard for Linux user-level installs
-- **uv documentation**: `uv run` activates project venv automatically — used as primary runner mechanism; `uv sync --directory` for non-CWD projects
-- **uv run patterns**: Projects like Homebrew, Rustup, Tailscale use curl|bash for initial install + a binary/script for daily use
-- **jq ubiquity**: jq is the de-facto standard for JSON in shell scripts (pre-installed on Ubuntu, Debian, Fedora, RHEL, macOS)
+- **Existing codebase**: Verified against `leader.py`, `persistence.py`, `cards.ts`, `day30.ts`, `bars.ts`, `main.ts`, `types.ts`, `api.ts`, `test_data_api.py`, `bars.test.ts`, `mesh.test.ts`
+- **Requirement analysis**: Derived from milestone prompt — "three time windows (90m, 90h, 90d)", "bar count 30→90", "consistent card layout", "discrete threshold colors"
 
 ---
 
-*Architecture research for: mesh-status v0.8 install/start scripts*
+*Architecture research for: mesh-status v0.9 UI consolidation*
 *Researched: 2026-06-20*

@@ -1,5 +1,5 @@
 import type { BarEntry, CheckResult, StatusEntry } from "../types";
-import { renderBars } from "./bars";
+import { cardHtml } from "./card";
 
 function summaryLabel(
   src: string,
@@ -15,24 +15,6 @@ function summaryLabel(
   if (ok === 0) return "Pending";
   return `${targets.length - ok} of ${targets.length} down`;
 }
-
-function uptimeColor(pct: number): string {
-  if (pct >= 99) return "#22c55e";
-  if (pct >= 95) return "#f59e0b";
-  return "#ef4444";
-}
-
-function uptimeSpan(pct: number | null): string {
-  if (pct === null) return "";
-  const c = uptimeColor(pct);
-  return `<span style="color:${c};font-weight:600;">(${pct.toFixed(1)}%)</span>`;
-}
-
-const BADGE_MAP: Record<string, { color: string; label: string }> = {
-  OK: { color: "#22c55e", label: "OK" },
-  NotAvailable: { color: "#f59e0b", label: "Not Available" },
-  Pending: { color: "#9ca3af", label: "Pending" },
-};
 
 function aggregateByMinute(
   checks: CheckResult[],
@@ -62,7 +44,7 @@ function aggregateByMinute(
   }
   const pingBars: BarEntry[] = [];
   const httpBars: BarEntry[] = [];
-  for (let i = 29; i >= 0; i--) {
+  for (let i = 89; i >= 0; i--) {
     const minute = currentMinute - i * 60;
     const b = buckets.get(minute);
     if (b && b.total > 0) {
@@ -86,37 +68,6 @@ function aggregateByMinute(
     }
   }
   return { pingBars, httpBars };
-}
-
-function cardHtml(
-  tgtIp: string,
-  status: string,
-  pingLat: string,
-  httpLat: string,
-  lastSeen: string,
-  pingUp: number | null,
-  httpUp: number | null,
-  pingBars: BarEntry[],
-  httpBars: BarEntry[],
-): string {
-  const badge = BADGE_MAP[status] ?? BADGE_MAP.Pending;
-  const pingBarHtml = renderBars(pingBars);
-  const httpBarHtml = renderBars(httpBars);
-  return [
-    `<div class="border border-mesh-border border-l-4 rounded-lg p-3 mb-2 bg-white" style="border-left-color:${badge.color}">`,
-    `<div class="flex items-center gap-2 mb-1">`,
-    `<span class="inline-block px-2.5 py-0.5 rounded-full text-xs font-semibold tracking-wide text-white" style="background:${badge.color}">${badge.label}</span>`,
-    `<span class="font-mono text-sm font-semibold text-mesh-dark">${tgtIp}</span>`,
-    `</div>`,
-    `<div class="text-xs text-mesh-muted flex gap-4 flex-wrap">`,
-    `<span>Ping: <strong class="text-mesh-dark">${pingLat}</strong> ${uptimeSpan(pingUp)}</span>`,
-    `<span>HTTP: <strong class="text-mesh-dark">${httpLat}</strong> ${uptimeSpan(httpUp)}</span>`,
-    `<span>Last: <strong class="text-mesh-dark">${lastSeen}</strong></span>`,
-    `</div>`,
-    `<div class="flex items-end gap-0.5 mt-1.5">${pingBarHtml}</div>`,
-    `<div class="flex items-end gap-0.5 mt-0.5">${httpBarHtml}</div>`,
-    `</div>`,
-  ].join("");
 }
 
 export function renderCards(
@@ -180,6 +131,9 @@ export function renderCards(
         : "—";
       const uptime = uptimeMap.get(`${src}|${tgt}`) ?? [null, null];
       const { pingBars, httpBars } = aggregateByMinute(checks, src, tgt);
+      const totalChecks = checks.filter(
+        (c) => c.node_ip === src && c.target_ip === tgt,
+      ).length;
       html += cardHtml(
         tgt,
         st,
@@ -188,6 +142,7 @@ export function renderCards(
         lastSeen,
         uptime[0],
         uptime[1],
+        totalChecks,
         pingBars,
         httpBars,
       );

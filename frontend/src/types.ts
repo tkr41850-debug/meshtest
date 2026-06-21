@@ -20,7 +20,7 @@ export interface StatusEntry {
   http_status: string;
 }
 
-export interface Data30mResponse {
+export interface Data90mResponse {
   checks: CheckResult[];
   statuses: StatusEntry[];
   timestamp: number;
@@ -40,7 +40,17 @@ export interface DayData {
   connections: DayConnection[];
 }
 
-export interface Data30dResponse {
+export interface HourData {
+  date: string;
+  connections: DayConnection[];
+}
+
+export interface Data90hResponse {
+  hours: HourData[];
+  window: string;
+}
+
+export interface Data90dResponse {
   days: DayData[];
   window: string;
 }
@@ -48,3 +58,5 @@ export interface Data30dResponse {
 export interface NodeListResponse {
   nodes: Array<{ ip: string; port: number } | string>;
 }
+
+export type { Data90mResponse as Data30mResponse, Data90dResponse as Data30dResponse };

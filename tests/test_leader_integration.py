@@ -122,26 +122,35 @@ class TestConfigPushIntegration:
 
 
 class TestDataApiIntegration:
-    async def test_data_30m_returns_expected_structure(self, client):
-        resp = await client.get("/data?window=30m")
+    async def test_data_90m_returns_expected_structure(self, client):
+        resp = await client.get("/data?window=90m")
         assert resp.status_code == 200
         data = await resp.get_json()
         assert "window" in data
-        assert data["window"] == "30m"
+        assert data["window"] == "90m"
         assert "checks" in data
         assert "statuses" in data
         assert "timestamp" in data
 
-    async def test_data_30d_returns_expected_structure(self, client):
-        resp = await client.get("/data?window=30d")
+    async def test_data_90h_returns_expected_structure(self, client):
+        resp = await client.get("/data?window=90h")
         assert resp.status_code == 200
         data = await resp.get_json()
         assert "window" in data
-        assert data["window"] == "30d"
+        assert data["window"] == "90h"
+        assert "hours" in data
+        assert "timestamp" in data
+
+    async def test_data_90d_returns_expected_structure(self, client):
+        resp = await client.get("/data?window=90d")
+        assert resp.status_code == 200
+        data = await resp.get_json()
+        assert "window" in data
+        assert data["window"] == "90d"
         assert "days" in data
         assert "timestamp" in data
 
-    async def test_data_30d_includes_in_memory_data(self, client):
+    async def test_data_90d_includes_in_memory_data(self, client):
         await client.post("/submit", json={
             "node_ip": "10.0.0.1",
             "checks": [{
@@ -152,7 +161,7 @@ class TestDataApiIntegration:
             }],
             "timestamp": 1000.0,
         })
-        resp = await client.get("/data?window=30d")
+        resp = await client.get("/data?window=90d")
         assert resp.status_code == 200
         data = await resp.get_json()
         assert len(data["days"]) > 0
@@ -162,7 +171,7 @@ class TestDataApiIntegration:
         assert conn["ping_uptime_pct"] == 100.0
         assert conn["http_uptime_pct"] == 100.0
 
-    async def test_data_30d_aggregates_by_day(self, client):
+    async def test_data_90d_aggregates_by_day(self, client):
         await client.post("/submit", json={
             "node_ip": "10.0.0.2",
             "checks": [{
@@ -178,7 +187,7 @@ class TestDataApiIntegration:
             }],
             "timestamp": 1000.0,
         })
-        resp = await client.get("/data?window=30d")
+        resp = await client.get("/data?window=90d")
         assert resp.status_code == 200
         data = await resp.get_json()
         assert len(data["days"]) > 0
@@ -191,13 +200,19 @@ class TestDataApiIntegration:
         assert conn_b["ping_uptime_pct"] == 0.0
         assert conn_b["http_uptime_pct"] == 0.0
 
-    async def test_data_30d_returns_empty_days_with_no_data(self, client):
-        resp = await client.get("/data?window=30d")
+    async def test_data_90d_returns_empty_days_with_no_data(self, client):
+        resp = await client.get("/data?window=90d")
         assert resp.status_code == 200
         data = await resp.get_json()
         assert data["days"] == []
 
-    async def test_data_30m_accumulates_across_submissions(self, client):
+    async def test_data_90h_returns_empty_hours_with_no_data(self, client):
+        resp = await client.get("/data?window=90h")
+        assert resp.status_code == 200
+        data = await resp.get_json()
+        assert data["hours"] == []
+
+    async def test_data_90m_accumulates_across_submissions(self, client):
         import time
         now = time.time()
         ts1 = now - 120
@@ -212,7 +227,7 @@ class TestDataApiIntegration:
             "checks": [{"target_ip": "10.0.0.2", "ping_ok": False, "http_ok": True, "timestamp": ts2}],
             "timestamp": ts2,
         })
-        resp = await client.get("/data?window=30m")
+        resp = await client.get("/data?window=90m")
         assert resp.status_code == 200
         data = await resp.get_json()
         assert len(data["checks"]) >= 2, (
@@ -228,7 +243,7 @@ class TestDataApiIntegration:
 
 class TestCorsIntegration:
     async def test_cors_headers_on_data_endpoint(self, client):
-        resp = await client.get("/data?window=30m", headers={"Origin": "http://example.com"})
+        resp = await client.get("/data?window=90m", headers={"Origin": "http://example.com"})
         assert resp.headers.get("access-control-allow-origin") == "*"
 
     async def test_options_preflight_returns_cors_headers(self, client):

@@ -1,229 +1,496 @@
-# Feature Research: Install & Start Scripts
+# Feature Landscape: UI Consolidation (v0.9)
 
-**Domain:** curl-pipe-bash install scripts + unified start runner for Python mesh app
+**Domain:** Mesh connectivity monitoring dashboard — per-pair card views across multiple time windows
 **Researched:** 2026-06-20
-**Confidence:** HIGH (verified against real-world install scripts: rustup, nvm, pyenv-installer; plus init script patterns and FHS standards)
+**Mode:** Ecosystem investigation for refinement of existing views (90m/90h/90d)
+**Overall confidence:** HIGH — patterns verified against Grafana dashboard best practices, shadcn/ui monitoring blocks, and uptime monitoring industry conventions
 
-## Feature Landscape
+## Context
 
-### Table Stakes (Users Expect These)
+This research targets a **subsequent milestone** refining existing frontend views. Current state has two views with different layouts and coloring strategies. Target is to unify display language, switch to discrete threshold coloring, and extend to three time windows with consistent 90-bar history rows.
 
-Features users assume exist. Missing these = install script feels broken.
+### Current Codebase State (Baseline)
+
+| View | Current Window | Layout | Bar Coloring | Split Circle | Check Count |
+|------|---------------|--------|-------------|-------------|-------------|
+| cards.ts | 30 × 1-min | Per-pair cards, left-border color | HSL gradient (red→green) | No | No |
+| day30.ts | 30 × 1-day | Per-day rows grouped by node | HSL gradient (red→green) | Yes (per-day) | Yes (per-day) |
+
+### Target State
+
+| View | Window | Bars | Layout | Bar Coloring | Split Circle | Check Count |
+|------|--------|------|--------|-------------|-------------|-------------|
+| 90m | 90 × 1-min | 90 bars | Unified cards | Discrete threshold | Yes (per-window) | Yes (per-window) |
+| 90h | 90 × 1-hour | 90 bars | Unified cards | Discrete threshold | Yes (per-window) | Yes (per-window) |
+| 90d | 90 × 1-day | 90 bars | Dense cards | Discrete threshold | Yes (per-window) | Yes (per-window) |
+
+---
+
+## Table Stakes
+
+Features users expect from a monitoring dashboard. Missing these = product feels incomplete.
 
 | Feature | Why Expected | Complexity | Notes |
 |---------|--------------|------------|-------|
-| **Prerequisite check** | Script must validate `uv` and `git` exist before proceeding | LOW | `command -v uv` and `command -v git`; bail with clear message pointing to install docs for each |
-| **Idempotent re-install** | Running install.sh twice should update, not error | MEDIUM | Detect existing install dir → `git pull` or `git checkout` tag instead of fresh clone. nvm pattern: `if [ -d "$INSTALL_DIR/.git" ]; then ... update; fi` |
-| **Version pinning** | User must be able to install a specific release tag | MEDIUM | Accept `MESH_STATUS_VERSION= v0.8.0` env var or `--version` flag. Default to latest tag from GitHub API or main branch |
-| **Non-interactive mode** | CI/CD and automation need `-y` / `--yes` flag | LOW | Skip confirmation prompts, use defaults. All flags must work without stdin (since pipe mode has no stdin) |
-| **`--help` flag** | Standard discoverability | LOW | Print usage: options, env vars, examples |
-| **Success banner** | User needs to know it worked and what to do next | LOW | Print install path, start command, URL for dashboard. nvm/rustup both do this |
-| **`start.sh` basic start** | `start.sh --leader` runs the leader process | LOW | Launch `uv run python -m mesh_status` with proper working directory and logging |
-| **`start.sh` basic node start** | `start.sh --node` runs the node agent | LOW | Launch `uv run python node.py --leader-url ... --node-url ...` |
-| **Log output to file** | Daemon output must persist, not disappear with terminal | LOW | Redirect stdout/stderr to `$INSTALL_DIR/var/leader.log` or similar |
-| **Install directory convention** | Users expect a standard location | LOW | Default to `~/.local/opt/mesh-status` (XDG-compatible, no sudo). Allow override via `MESH_STATUS_HOME` |
-| **Config file bootstrapping** | First install must create a usable config | MEDIUM | Generate `.env` or config file with sensible defaults; print instructions for override |
-| **Clean uninstall** | Users must be able to remove the install cleanly | MEDIUM | `start.sh --uninstall` or separate script. Remove install dir, optionally remove config, print PATH cleanup instructions |
+| **Multiple time windows** | Monitoring requires both recent signal (minutes) and trend (days) | LOW | Already exists (30m/30d). Adding 90h is incremental |
+| **Per-pair card layout** | User needs to see connectivity between specific node pairs | LOW | Already exists in cards.ts. Standard for mesh/network monitoring |
+| **Status at a glance** | Green/amber/red for healthy/degraded/down — color is the primary signal | LOW | Already exists with different strategies in each view. Need unified thresholds |
+| **History bar rows** | The universal "uptime timeline" pattern — small colored bars showing availability over time | LOW | Already exists in bars.ts. Need threshold recoloring |
+| **Uptime percentage** | Numeric certainty alongside visual signal | LOW | Already exists in both views |
+| **Auto-refresh** | Short-window views must stay current without manual reload | LOW | Already exists (10s interval in main.ts). 90h/90d may use longer intervals |
+| **Node identity** | IP or hostname for each pair | LOW | Already displayed |
+| **Source-group grouping** | Cards grouped by source node with sticky header | LOW | Already exists in cards.ts. Works well |
+| **No-data handling** | Gaps in data shown as gray bars, not missing rows | LOW | Already exists (percent: -1 → gray bar) |
+| **Responsive bar wrapping** | Bars wrap gracefully when viewport is narrow | MEDIUM | Currently inline spans wrap naturally. 90 bars is wider — may need overflow-x on long windows |
 
-### Differentiators (Nice-to-Have for v0.8)
+### Table Stakes Derived from Industry Monitoring Dashboards
 
-Features that improve the experience but aren't strictly necessary for v0.8.
+| Feature | Why Expected | Source |
+|---------|-------------|--------|
+| **Threshold-based colors** not gradients | Discrete boundaries (green/amber/red) give actionable signal vs pretty gradients | Grafana best practices, every major uptime tool |
+| **Consistent layout across time windows** | Switching windows shouldn't reorient the user — same visual hierarchy | Grafana "consistency by design" principle |
+| **Same information hierarchy per window** | Split circle, badge, uptime %, check count, bar row — in that order, every time | shadcn/ui uptime blocks, IsDown, Uptime Kuma |
+| **Clickable to drill down** | 90d → 90h → 90m drill-down path for incident investigation | Standard observability UX (Grafana, Datadog) |
+
+---
+
+## Differentiators
+
+Features that set mesh-status apart. Not universally expected, but valued by users of a mesh connectivity monitoring tool.
 
 | Feature | Value Proposition | Complexity | Notes |
 |---------|-------------------|------------|-------|
-| **Offline detection** | Users on unreliable connections get actionable feedback | MEDIUM | Check connectivity to GitHub before attempting clone. `curl -I` to github.com with timeout |
-| **Progress indicators** | Long operations need visible feedback | MEDIUM | `git clone --progress` can be verbose; `uv sync` outputs its own progress |
-| **Pre-built frontend** | Skip Node.js/npm build requirement for install | MEDIUM | Ship pre-built frontend in release archive. NPM + Vite build is heavy for an install step |
-| **Systemd service unit** | Production deployments need auto-start on boot | HIGH | Generate `mesh-status-leader.service` and `mesh-status-node@.service` unit files during install |
-| **Health check after start** | Verify process actually started and responds | MEDIUM | After launching leader, poll `GET /livez` with timeout before reporting success |
-| **`start.sh config wizard`** | Interactive first-run setup for config | MEDIUM | Needs `bash -c "$(curl ...)"` style (pipe mode has no stdin). Has implications for curl-pipe-bash mode |
-| **Update check** | Notify user when new version is available | LOW | On `start.sh`, check latest GitHub tag vs installed version. Non-blocking warning |
-| **Docker-based install verification** | Automated CI test of install.sh | HIGH | Docker-in-Docker test: `FROM ubuntu:24.04`, install uv+git, run install.sh, verify binaries, run start.sh, healthcheck. See below for complexity details |
+| **Split circle (ping | HTTP)** | Instant visual of both protocol health in one glyph. Unique to this tool — most monitors show single protocol | LOW | Already exists in day30.ts. Reuse pattern, move to per-pair-card level (not per-day) |
+| **Discrete threshold bar coloring** | More actionable than gradient. Every bar is green (≥99%), amber (≥95%), or red (<95%). At 30ft you can count red vs green | LOW | Requires changing ~4 lines in bars.ts. High value for low cost |
+| **90-bar consistency across windows** | Same bar count for 90m, 90h, 90d creates muscle memory. User learns "90 bars = one full window" | LOW | Just math — same aggregate logic, different bucket sizes |
+| **Ping + HTTP dual metrics per card** | Two protocol views in one card (ping bars row, HTTP bars row). Richer signal than single-protocol monitors | LOW | Already exists. Just needs layout consistency |
+| **Check count in card header** | Total checks in window gives confidence signal — "100% from 1 check" vs "100% from 500 checks" are different signals | LOW | Already in day30.ts per-day. Move to per-pair-card level |
+| **Status badge with discrete color** | "OK" / "Degraded" / "Down" label with matching color in a pill badge | LOW | Already in cards.ts. Ensure consistent threshold logic across all views |
+| **Source-group headers sticky** | Scroll through many pairs, always know which source node you're looking at | LOW | Already works in both views |
 
-### Anti-Features (Commonly Requested, Often Problematic)
+### Additional Differentiators to Consider
 
-Features that seem good but create problems for a curl-pipe-bash installer.
+| Feature | Value Proposition | Complexity | Notes |
+|---------|-------------------|------------|-------|
+| **Summary row per source group** | At top of each source-group, show aggregate: "3 of 5 pairs degraded" or "All OK" | LOW | Currently per-source summary shows text only. Could make it a clickable pivot |
+| **Card left-border color matches status** | Strong left-edge color stripe that matches the badge. Fast scan signal for OK/NotAvailable/Pending | LOW | Already in cards.ts, will need to carry forward |
+| **Empty state differentiation** | "No data yet" vs "No nodes registered" vs "Window has no data" | LOW | Already partially exists. Standardize across all views |
+| **Window label in card** | Subtle "90m" / "90h" / "90d" label so user knows what window they're viewing | LOW | Helpful when screenshotting or sharing |
 
-| Feature | Why Requested | Why Problematic | Alternative |
-|---------|---------------|-----------------|-------------|
-| **`sudo` auto-escalation** | Simpler UX, no permission errors | **Security risk** — piped scripts should NEVER auto-sudo. Users lose control. codecov breach (2021) is canonical example | Fail with clear message: "Install as non-root to ~/.local/opt or run sudo MESH_STATUS_HOME=/opt ./install.sh" |
-| **Modify shell rc files** | Make `start.sh` available in PATH automatically | **User trust issue** — modifying `.bashrc`/`.zshrc` without consent is invasive. nvm does this, but it's controversial | Print PATH export instructions in success banner. Let users choose |
-| **Auto-detect leader vs node** | Simpler startup, no flag needed | **Ambiguity** — a machine could be both or neither. Heuristics are fragile | Require explicit `--leader` / `--node` flag. Machine identity is a deployment decision |
-| **Install system-wide by default** | More "professional" feel | **Requires sudo** — creates permission friction for curl-pipe-bash. FHS recommends `/opt` for add-on packages but requires root | Default to `~/.local/opt/` (user-writable). Support `MESH_STATUS_HOME=/opt` override for sysadmins |
-| **Package manager integration** | dpkg/rpm/brew for production | **Scope creep** — substantial work for each platform. curl-pipe-bash is intentionally distribution-agnostic | Provide install.sh as primary. Document manual steps for packagers. Defer official packages |
-| **Prompt for config during install** | "Set it and forget it" | **Pipe mode has no stdin** — `curl ... | bash` literally cannot prompt. Non-interactive mode would still break | Config file + env vars. Print "edit /path/to/config" in success banner |
+---
+
+## Anti-Features
+
+Features to explicitly NOT build for this milestone.
+
+| Anti-Feature | Why Avoid | What to Do Instead |
+|--------------|-----------|-------------------|
+| **HSL gradient bars** | Pretty but less actionable than thresholds. A bar at 97% (amber threshold) may look nearly green in gradient (hue ~116°) | Discrete threshold coloring — every user sees the same color for the same data value |
+| **Animated bar transitions** | Added visual load with zero information gain. Monitoring is quiet scanning, not a screensaver | Static colors, instant render. No fade-in, no pulse |
+| **Custom chart library (Chart.js, D3)** | 90 history bars are colored `<span>` elements. Adding a chart library for this is massive overkill | Current approach (pure DOM + CSS) handles this perfectly. No dependencies needed |
+| **Per-second granularity** | 90 bars at sub-minute granularity is too dense for human perception. Bars must represent meaningful intervals | 1-min (90m), 1-hour (90h), 1-day (90d) buckets — each bar is a clearly understandable unit |
+| **3D or gauge visualizations** | Gauges look impressive in demos but tell on-call engineers nothing actionable about mesh connectivity per-pair | Bar rows + percentage text. Simple, honest, actionable |
+| **Dark mode** (for this milestone) | Scope creep. Requires theming all cards, badges, bars, headers. Zero behavioral change | Defer to dedicated UI polish milestone. Current light theme is consistent |
+| **Sorting/filtering/pagination** (for this milestone) | Would need per-pair state management, sort controls, search. Substantial scope increase. | Defer. Current alphabetical ordering is predictable. Can add later without layout redesign |
+| **Interactive bar hover tooltips** | Nice to have but 90 tooltips per bar row creates cognitive density. User can estimate from bar color | Keep current hover tooltip style (shows exact time + percentage) |
+| **Clickable bars to zoom** | Full drill-down (90d → 90h → 90m → raw data) requires backend time-series queries that don't exist yet | Defer to future milestone when backend supports window-scoped data endpoints |
+
+---
+
+## Feature Definitions: The Three Views
+
+### 90m View (Short Window — "What's happening right now?")
+
+**Purpose:** Near-real-time mesh connectivity status. Answers "Is the mesh healthy right now?"
+
+**Refresh interval:** 10s (same as current)
+
+**Data source:** `GET /data?window=90m` — returns per-minute aggregate of raw checks
+
+**Card layout (per pair):**
+
+```
+┌───────────────────────────────────────────────────────────────┐
+│ [○]  OK  192.168.1.10                                   90m  │
+│ Ping: 12.3ms  100%   HTTP: 45.6ms  99.2%   Checks: 540      │
+│ Last: 14:32:01                                              │
+│ ████████████████████████████████████████████████████████████  │  ← 90 bars, ping
+│ ████████████████████████████████████████████████████████████  │  ← 90 bars, http
+└───────────────────────────────────────────────────────────────┘
+```
+
+**Card elements (left to right, top to bottom):**
+
+| Element | Position | Description |
+|---------|----------|-------------|
+| **Split circle** | Far left, first visual | Diagonal split (135° gradient): ping on top-left, HTTP on bottom-right. Each half colored by window uptime threshold |
+| **Status badge** | Right of split circle | "OK" / "Not Available" / "Pending" pill with discrete color. Derived from latest live check |
+| **Target IP** | Right of badge | Monospace, the remote node IP |
+| **Window label** | Far right of top row | "90m" in subtle muted text — context for the bar count |
+| **Latency line** | Row 2 | Ping latency + uptime %, HTTP latency + uptime %, total check count |
+| **Last seen** | Row 2, right side | `HH:MM:SS` or "—" if never seen |
+| **Ping bar row** | Row 3 | 90 × 1-minute bars, threshold colored, wrapped |
+| **HTTP bar row** | Row 4 | 90 × 1-minute bars, threshold colored, wrapped |
+
+**Behavior:**
+- Latency is meaningful here (recent data within seconds)
+- Status badge reflects live check (could differ from window uptime)
+- Scroll within source-group for many pairs
+- Card left-border color matches status badge
+
+### 90h View (Medium Window — "How's the mesh been today?")
+
+**Purpose:** Intra-day trend visibility. Answers "Has the mesh been stable through this shift?"
+
+**Refresh interval:** 60s (hourly aggregation doesn't change quickly)
+
+**Data source:** `GET /data?window=90h` — returns per-hour aggregate
+
+**Card layout (per pair):**
+
+```
+┌───────────────────────────────────────────────────────────────┐
+│ [○]  Degraded  192.168.1.10                             90h  │
+│ Ping: 97.2%   HTTP: 94.8%   Checks: 3,240                 │
+│ ████████████████████████████████████████████████████████████  │
+│ ████████████████████████████████████████████████████████████  │
+└───────────────────────────────────────────────────────────────┘
+```
+
+**Card elements:**
+
+| Element | Position | Description |
+|---------|----------|-------------|
+| **Split circle** | Far left | Aggregate ping+HTTP uptime for the 90h window |
+| **Status badge** | Right of circle | Window-level status: "OK" if both ≥99%, "Degraded" if either <99%, "Down" if either <95% |
+| **Target IP** | Right of badge | Same format |
+| **Window label** | Far right | "90h" |
+| **Uptime line** | Row 2 | Ping uptime %, HTTP uptime %, total check count. No latency (too aggregated to be meaningful) |
+| **Ping bar row** | Row 3 | 90 × 1-hour bars |
+| **HTTP bar row** | Row 4 | 90 × 1-hour bars |
+
+**Behavior:**
+- No latency shown — hourly aggregates blur latency into averages, which is misleading
+- Status badge reflects WINDOW status, not live status (unlike 90m)
+- Bars represent 1-hour windows — a red bar means that hour had <95% uptime
+
+### 90d View (Long Window — "Is the mesh trending down?")
+
+**Purpose:** Long-term trend and SLA monitoring. Answers "Is reliability improving or degrading?"
+
+**Refresh interval:** 300s (5 min) — daily data changes infrequently
+
+**Data source:** `GET /data?window=90d` — returns per-day aggregate
+
+**Card layout (per pair) — compact variant:**
+
+```
+┌─────────────────────────────────────────────────────────┐
+│ [○]  99.2%  192.168.1.10  Checks: 25,920  90d         │
+│ ████████████████████████████████████████████████████████ │  ← 90 bars, 6px width
+│ ████████████████████████████████████████████████████████ │
+└─────────────────────────────────────────────────────────┘
+```
+
+**Card elements:**
+
+| Element | Position | Description |
+|---------|----------|-------------|
+| **Split circle** | Far left | Overall 90d ping+HTTP uptime |
+| **Badge (uptime %)** | Right of circle | Numeric badge showing the WORST of ping/http uptime, threshold colored (e.g., "99.2%" in green) |
+| **Target IP** | Right of badge | Same format |
+| **Check count + window** | Right of IP | "Checks: 25,920" + "90d" |
+| **Ping bar row** | Row 2 | 90 × 1-day bars, **6px width** for compactness |
+| **HTTP bar row** | Row 3 | 90 × 1-day bars, **6px width** |
+
+**Behavior:**
+- More compact card (single header row, no secondary metrics row)
+- **6px bars** instead of 8px to fit 90 bars in the card width (90 × 8px = 720px vs 90 × 6px = 540px)
+- Bar border reduced or removed for compact bars
+- No latency (meaningless at daily granularity)
+- The badge is the window uptime percentage (numeric), not the live status label
+- Split circle + badge gives "instant read + exact number" pairing
+
+### Layout Comparison: Cards vs Rows
+
+| Criterion | Cards (90m/90h) | Dense Cards (90d) | Rows (current 30d approach) |
+|-----------|-----------------|-------------------|------------------------------|
+| Visual separation per pair | ✅ Strong — border + whitespace isolates each pair | ✅ Strong — border isolates each pair | ❌ Weaker — rows run together |
+| Per-pair identity | ✅ Header makes pair identity clear | ✅ Header makes pair identity clear | ❌ Target IP is a column value, easy to misalign |
+| Dense long-window display | ❌ 90 × 2 bars + padding = tall cards | ✅ Tighter = fits more pairs on screen | ✅ Most compact (day rows grouped by date) |
+| Cross-pair comparison | ❌ Pairs are stacked, harder to compare | ❌ Same limitation | ✅ Same row structure makes date-aligned comparison easy |
+| Scanning for anomalies | ✅ Each card has left-border color as scan signal | ✅ Same | ❌ Must scan multiple rows |
+| Familiar mental model | ✅ Users know "one card = one pair" | ✅ Same | ❌ Row model requires visual tracking |
+
+**Recommendation: Use cards for all three views.** The "dense cards" variant for 90d adjusts bar width and removes the redundant secondary metric line, but maintains the same card-based layout. This satisfies the "unify display" requirement while being practical for long-window density.
+
+---
 
 ## Feature Dependencies
 
+### Component Dependency Graph
+
 ```
-install.sh
-    ├──requires──> git (prerequisite)
-    ├──requires──> uv (prerequisite)
-    ├──requires──> GitHub repository URL (hardcoded or env overridable)
-    │
-    ├────enhances──> Version pinning (MESH_STATUS_VERSION env var or tag-based clone)
-    │
-    └────enhances──> Pre-built frontend (ship dist/ in repo or GitHub release artifact)
-                        │
-                        └──alternative──> Node.js + npm for building frontend (if no pre-built)
-                                                └──requires──> node/npm installed
+shared/barColor()
+    └── required by: all views (bars.ts → threshold coloring)
+    └── replaces: current HSL gradient
 
-start.sh
-    ├──requires──> install.sh has completed (start.sh lives in install dir)
-    │
-    ├────enhances──> PID file management (/var/run/mesh-status/ or INSTALL_DIR/var/)
-    │
-    ├────enhances──> Signal trapping (SIGTERM → graceful shutdown, SIGINT → stop)
-    │
-    ├────enhances──> Log rotation awareness (separate stdout/stderr logs)
-    │
-    └────enhances──> Health check (verify /livez responds after start)
+shared/uptimeColor()  -- already exists in cards.ts and day30.ts
+    └── used by: splitCircle(), badgeHtml(), uptimeSpan()
+    └── needs: single source of truth (extract to shared)
 
-Config bootstrapping
-    ├──requires──> INSTALL_DIR is writable (to create config file)
-    │
-    ├────enhances──> Environment variable override (all config values overridable via env)
-    │
-    └────conflicts──> Interactive prompts (pipe mode has no stdin)
-                         │
-                         └──solution──> bash -c "$(curl ...)" style OR config file only
+views/splitCircle()  -- exists in day30.ts
+    └── needs: extract from day30.ts to shared utility
+    └── used by: all three views
 
-CI testing
-    └──requires──> Docker available
-        └──requires──> install.sh works without tty/stdin
+views/bars.ts  -- shared component
+    └── needs: barColor() → discrete threshold (replacing HSL)
+    └── needs: accept bar-width option (8px default, 6px for 90d)
+    └── used by: all three views with barEntry[] data
+
+View 90m (replaces cards.ts / 30m tab)
+    ├── data: GET /data?window=90m  (backend must serve 90m window)
+    ├── layout: card per pair
+    ├── requires: aggregateByMinute() → aggregateByInterval(window=90m, 60 buckets)
+    ├── shows: split circle, badge (live), IP, latencies, uptime %, check count, bar rows
+    └── uses: bars.ts (8px width), splitCircle()
+
+View 90h (new)
+    ├── data: GET /data?window=90h  (backend must serve 90h window)
+    ├── layout: card per pair
+    ├── shows: split circle, badge (window), IP, uptime %, check count, bar rows (no latency)
+    ├── uses: bars.ts (8px width), splitCircle()
+    └── needs: aggregateByInterval(window=90h, 3600 buckets → hourly groups)
+
+View 90d (replaces day30.ts / 30d tab)
+    ├── data: GET /data?window=90d  (backend must serve 90d window)
+    ├── layout: card per pair (compact variant)
+    ├── shows: split circle, badge (window %), IP, check count, bar rows (no latency)
+    ├── uses: bars.ts (6px width), splitCircle()
+    └── needs: aggregateByInterval(window=90d, 86400 buckets → daily groups)
 ```
 
-### Dependency Notes
+### Data Dependency Notes
 
-- **Version pinning enhances install.sh:** Without it, install.sh always clones HEAD (main branch). Version pinning allows reproducible installs for production.
-- **Pre-built frontend vs Node.js build:** Two alternative paths. Pre-built is simpler for the install script (just copy `dist/`) but requires maintainers to commit build artifacts or attach to releases. Building during install requires user to have Node.js installed.
-- **PID file management enhances start.sh:** Without PID file, `start.sh` cannot track the process for stop/restart/status operations. Required for proper daemon management.
-- **Interactive config conflicts with pipe mode:** This is the fundamental gotcha of curl-pipe-bash. Design config bootstrapping to work WITHOUT stdin (env vars + config file generation with defaults).
-- **CI testing requires all non-interactive features:** The Docker-based test must run install.sh with `-y` and pass all config via env vars/flags.
+| Dependency | Current State | Needed Change | Impact |
+|-----------|---------------|---------------|--------|
+| `/data?window=90m` | Returns checks array | Must return 90-min window of checks | Backend change (likely just parameter) |
+| `/data?window=90h` | Does not exist | New endpoint or new parameter | Backend change |
+| `/data?window=90d` | Returns per-day DayData[] | Must return 90 days | Possibly already correct if query is dynamic |
+| `aggregateByMinute()` | Hardcoded to 30 buckets | Make generic: `aggregateByInterval(checks, src, tgt, bucketSize, count)` | Refactor |
+| `dailyBarsForPair()` | Hardcoded to 30 days | Change to 90 days | Trivial |
+| `BarEntry` type | Works | No change needed | — |
 
-## MVP Definition
+### UI Tab / Navigation Dependencies
 
-### Launch With (v0.8)
+```
+Tab bar layout (main.ts)
+    ├── 90m tab (was 30m tab)
+    │   ├── matrix container (unchanged)
+    │   └── cards-90m container (was cards-container)
+    │
+    ├── 90h tab (new)
+    │   └── cards-90h container (new, same layout as 90m)
+    │
+    └── 90d tab (was 30d tab)
+        └── cards-90d container (was day30-container, now cards layout)
 
-Minimum viable install experience — what's needed for INST-01 through INST-04.
+main.ts refresh():
+    ├── fetches all three windows
+    ├── renders matrix (from latest view's data)
+    └── renders cards for active tab
 
-- [x] **Prerequisite checks** (uv, git) — bail early with actionable messages
-- [x] **Git clone to install dir** — `git clone --depth 1 --branch v0.8.0` with version pinning support
-- [x] **`uv sync`** — install Python dependencies
-- [x] **Frontend build** — `npm ci && npm run build` (or use pre-built `dist/`)
-- [x] **Config file bootstrap** — generate default `.env` config in install dir
-- [x] **`start.sh --leader`** — start the leader with hypercorn, PID tracking, log to file
-- [x] **`start.sh --node`** — start the node agent with proper args, PID tracking, log to file
-- [x] **`start.sh --help`** — print usage for all flags
-- [x] **`-y` / `--yes` flag** — skip all confirmations, use defaults
-- [x] **`--version` flag** — print installed version
-- [x] **Idempotent reinstall** — running `install.sh` again updates in-place via `git pull`
-- [x] **Success banner** — print install location, start commands, dashboard URL
-- [x] **Uninstall** — `start.sh --uninstall` removes files, prints cleanup instructions
-- [x] **Signal handling** — SIGTERM/SIGINT trap for graceful shutdown of started processes
-- [x] **Default install to `~/.local/opt/mesh-status/`** with `MESH_STATUS_HOME` override
-- [x] **Docker CI test** — verify full install flow in `ubuntu:24.04` container
+BuildUptimeMap():
+    ├── currently uses 30d data for cards.ts uptime numbers
+    └── 90m view should use 90m window data (not cross-window data)
+        → uptime % in 90m card should reflect THE 90m WINDOW, not 30d data
+```
 
-### Add After Validation (v0.8.x)
+**❗ Critical dependency:** Currently `cards.ts` uses 30d uptime data for its uptime percentages. This is a cross-window bleed. For the unified approach, **each view's uptime % must be computed from its own window's data**, not borrowed from another window. This means:
+- 90m uptime % = computed from 90m checks
+- 90h uptime % = computed from 90h aggregates
+- 90d uptime % = computed from 90d aggregates
 
-Features to add once core install is working.
+The current `buildUptimeMap()` in main.ts pulls 30d data for display in the 30m cards view. This must change.
 
-- [ ] **Systemd service unit generation** — `install.sh --with-systemd` that templates and installs service files
-- [ ] **Health check after start** — `start.sh` polls `/livez` before reporting success
-- [ ] **Offline detection** — check GitHub reachability before attempting clone
-- [ ] **Pre-built dist archive** — GitHub release contains `frontend-dist.tar.gz` to skip Node.js build
-- [ ] **Mutual TLS support skeleton** — config stubs for future mTLS between nodes
+---
 
-### Future Consideration (v0.9+)
+## Shared Components to Extract
 
-Features to defer until the install flow is proven.
+Several utilities exist in duplicate or view-specific locations. For the unified approach, extract to shared:
 
-- [ ] **Official apt/homebrew/brew packages** — distribution-specific packaging
-- [ ] **Docker-based install verification in CI** — expand to test uninstall, upgrade paths, multiple OS distros
-- [ ] **Auto-update mechanism** — `start.sh` periodically checks for new version and prompts
-- [ ] **Install telemetry** — opt-in anonymous usage stats (controversial, handle carefully)
-- [ ] **Windows support** — PowerShell installer for Windows nodes (separate scope)
-- [ ] **Container-native install** — `docker run mesh-status` instead of bare-metal install
+### 1. `shared/color.ts` (or `views/_shared.ts`)
 
-## Feature Prioritization Matrix
+```typescript
+// Discrete threshold colors — single source of truth
+const GREEN = "#22c55e";   // mesh-green
+const AMBER = "#f59e0b";   // mesh-amber
+const RED   = "#ef4444";   // mesh-red
+const GRAY  = "#9ca3af";   // mesh-gray (no data/pending)
+const TINT  = "#e5e7eb";   // mesh-border (no-data bar background)
 
-| Feature | User Value | Implementation Cost | Priority |
-|---------|------------|---------------------|----------|
-| Prerequisite checks | HIGH | LOW (10 LOC) | P1 |
-| Git clone + version pin | HIGH | LOW (15 LOC) | P1 |
-| uv sync deps | HIGH | LOW (5 LOC) | P1 |
-| Frontend build | HIGH | MEDIUM (npm may not be installed; need fallback or doc) | P1 |
-| Config file bootstrap | HIGH | MEDIUM (generate .env with comments) | P1 |
-| start.sh --leader | HIGH | MEDIUM (~50 LOC for PID mgmt, signals, logging) | P1 |
-| start.sh --node | HIGH | MEDIUM (~50 LOC, shares infra with leader) | P1 |
-| -y / --yes flag | HIGH | LOW (10 LOC) | P1 |
-| --help flag | MEDIUM | LOW (5 LOC) | P1 |
-| Success banner | MEDIUM | LOW (5 LOC) | P1 |
-| Idempotent reinstall | HIGH | MEDIUM (detect existing clone, git pull) | P1 |
-| Uninstall | MEDIUM | LOW (rm -rf + print instructions) | P1 |
-| Signal handling in start.sh | MEDIUM | MEDIUM (trap + graceful shutdown) | P1 |
-| Docker CI test | HIGH | HIGH (full Dockerfile + compose for test) | P1 |
-| --version flag | MEDIUM | LOW (read from pyproject.toml or git tag) | P1 |
-| Offline detection | LOW | LOW (curl -I check before clone) | P2 |
-| Health check after start | MEDIUM | MEDIUM (poll endpoint with timeout) | P2 |
-| Systemd service generation | MEDIUM | HIGH (template writing, enable/disable logic) | P2 |
-| Pre-built frontend dist | HIGH | MEDIUM (CI workflow to attach to release) | P2 |
-| Package manager support | MEDIUM | VERY HIGH | P3 |
-| Auto-update | LOW | HIGH (background check, user prompting) | P3 |
-| Windows support | LOW | VERY HIGH | P3 |
+export function uptimeColor(pct: number): string {
+  if (pct >= 99) return GREEN;
+  if (pct >= 95) return AMBER;
+  return RED;
+}
 
-**Priority key:**
-- P1: Must have for v0.8
-- P2: Should have, add in v0.8.x
-- P3: Future consideration
+export function barColor(percent: number): string {
+  if (percent < 0) return TINT;
+  const pct = percent * 100;
+  if (pct >= 99) return GREEN;
+  if (pct >= 95) return AMBER;
+  return RED;
+}
+```
 
-## Competitor Feature Analysis
+**Change from current:** `bars.ts` currently uses HSL gradient. Replace with discrete threshold call. This is the **single most impactful change** for the milestone — it swaps gradient for threshold-coloring everywhere.
 
-Comparing against well-known install scripts for similar tools:
+### 2. `shared/splitCircle.ts`
 
-| Feature | rustup-init | nvm install.sh | pyenv-installer | mesh-status (planned) |
-|---------|-------------|----------------|-----------------|----------------------|
-| Shell | sh (POSIX) | bash only | bash | sh (POSIX subset) |
-| Prerequisite checks | `need_cmd` for uname, mktemp, etc. | `nvm_has` for git/curl/wget | `command -v git` | `command -v uv`, `command -v git` |
-| Idempotent reinstall | Yes (re-downloads installer) | Yes (git pull if .git exists) | No (exits if dir exists) | Yes (git pull in existing repo) |
-| Version pinning | `RUSTUP_VERSION` env var | `NVM_INSTALL_VERSION` env var | `PYENV_GIT_TAG` env var | `MESH_STATUS_VERSION` env var + `--version` |
-| Non-interactive | `-y` / `--yes` flag | env var `NVM_ENV=testing` | No `-y` flag | `-y` / `--yes` flag |
-| Uninstall | Not in installer (separate `rustup self uninstall`) | Not in installer | Manual `rm -rf ~/.pyenv` | `start.sh --uninstall` |
-| Install dir | Platform-specific (no override documented in script) | `NVM_DIR` or `~/.nvm` | `PYENV_ROOT` or `~/.pyenv` | `MESH_STATUS_HOME` or `~/.local/opt/mesh-status` |
-| Config bootstrapping | None (config managed by rustup binary) | PATH injection into shell rc | PATH instructions printed | `.env` file generation with defaults |
-| Success banner | "Rust is installed now. Great!" | "Close and reopen your terminal" | PATH warning | Install path + start commands + dashboard URL |
-| Signal handling | N/A (installs, doesn't run) | N/A | N/A | SIGTERM/SIGINT traps for graceful stop |
-| PID management | N/A | N/A | N/A | PID file in `$INSTALL_DIR/var/` |
-| Logging | Download progress only | Download progress only | Download progress only | stdout/stderr to `$INSTALL_DIR/var/*.log` |
+```typescript
+// Diagonal split circle: ping (top-left) / http (bottom-right)
+export function splitCircle(pingPct: number, httpPct: number): string {
+  const pingColor = uptimeColor(pingPct);
+  const httpColor = uptimeColor(httpPct);
+  // 135deg gradient = diagonal split
+  return `<span style="display:inline-block;width:24px;height:24px;
+    border-radius:50%;background:linear-gradient(135deg,${pingColor} 50%,${httpColor} 50%);
+    vertical-align:middle;" title="Ping: ${pingPct.toFixed(1)}% | HTTP: ${httpPct.toFixed(1)}%"></span>`;
+}
+```
+
+### 3. `views/cardLayout.ts` — shared card wrapper
+
+```typescript
+// Common card structure used by all 3 views
+export function cardFrame(
+  leftBorderColor: string,
+  innerHtml: string,
+  compact?: boolean,
+): string {
+  const p = compact ? 'p-2' : 'p-3';
+  return `<div class="border border-mesh-border border-l-4 rounded-lg ${p} mb-2 bg-white"
+    style="border-left-color:${leftBorderColor}">${innerHtml}</div>`;
+}
+```
+
+---
+
+## State Evolution: Before vs After
+
+### Before (Current)
+
+| Aspect | 30m (cards.ts) | 30d (day30.ts) |
+|--------|---------------|----------------|
+| Layout | Cards | Rows per-day |
+| Bars | 30 × 1-min, HSL gradient | 30 × 1-day, HSL gradient |
+| Split circle | ❌ | ✅ per-day |
+| Check count | ❌ | ✅ per-day |
+| Latency | ✅ (ping/HTTP ms) | ❌ |
+| Coloring | Discrete (badge/uptime text) | Discrete (split circle, badge) |
+| Bar width | 8px | 8px |
+| Data source | 90m checks + uptime borrowed from 30d | DayData[] |
+| Scrollable bars | Wraps naturally | Wraps naturally |
+
+### After (Target)
+
+| Aspect | 90m | 90h | 90d |
+|--------|-----|-----|-----|
+| Layout | Cards | Cards | Dense cards |
+| Bars | 90 × 1-min, threshold | 90 × 1-hour, threshold | 90 × 1-day, threshold |
+| Split circle | ✅ per-pair | ✅ per-pair | ✅ per-pair |
+| Check count | ✅ per-pair (total in window) | ✅ per-pair | ✅ per-pair |
+| Latency | ✅ (ping/HTTP ms) | ❌ | ❌ |
+| Status badge | Live status | Window status (aggregate) | Window uptime % |
+| Coloring | Discrete (ALL elements) | Discrete (ALL elements) | Discrete (ALL elements) |
+| Bar width | 8px | 8px | 8px → 6px recommended |
+| Data source | 90m checks (self-contained) | 90h aggregates (new) | 90d aggregates (new) |
+
+---
+
+## Signal Density Analysis
+
+The composition of split circle + bar row + check count produces specific signal per element:
+
+| Signal Element | What It Communicates | Time to Read | Decision It Enables |
+|---------------|---------------------|--------------|---------------------|
+| **Split circle** | Is ping and HTTP both healthy? | <0.5s | "Everything OK" vs "Look closer" |
+| **Status badge** | What's the current or aggregate status? | <0.5s | "Need to investigate this pair" |
+| **Bar row (overall color distribution)** | Is there a recent pattern of failures? | 1s | "Is this a blip or a trend?" |
+| **Uptime %** | Exactly how reliable is this link? | 0.5s | "Is this within SLO?" |
+| **Check count** | How much confidence do we have in the uptime %? | 0.5s | "99% from 10 checks vs 99% from 10K checks" |
+| **Individual bars (hover)** | When exactly did failures happen? | 2-3s per bar | "Drill into timeline for incident correlation" |
+
+### Why 90 Bars Works
+
+The 90-bar count is not arbitrary — it aligns with dashboard best practices:
+- **90 minutes** = standard "last hour and a half" for near-real-time (Grafana default often "last 1 hour")
+- **90 hours** ≈ 3.75 days — covers a long weekend
+- **90 days** = standard SLA reporting quarter
+- **Same bar count** across windows creates predictable visual density. User develops muscle memory for "90 bars = one full window"
+
+### Bar Width Decision
+
+| Width | 90 bars total width | Best for | Tradeoff |
+|-------|--------------------|----------|----------|
+| 8px (current) | 720px + gaps ≈ 765px | 90m, 90h (detail views) | May overflow on <768px viewport |
+| 6px (compact) | 540px + gaps ≈ 585px | 90d (dense view) | Fits most tablets, still readable |
+| 5px (very compact) | 450px + gaps ≈ 495px | Mobile | Bar details hard to distinguish |
+| 4px (minimum) | 360px + gaps ≈ 405px | Not recommended | Color signal lost at small size |
+
+**Recommendation: 8px for 90m/90h, 6px for 90d.** This matches the use case — short windows are detail-oriented (need readable bars), long windows are overview-oriented (need compactness).
+
+---
+
+## MVP Recommendation
+
+### Build First (Core of the Milestone)
+
+1. **`shared/color.ts`** — single `uptimeColor()` and `barColor()` with discrete thresholds. **This is the foundation.**
+2. **`shared/splitCircle.ts`** — extract from day30.ts for reuse in all views
+3. **`bars.ts` refactor** — replace HSL gradient with discrete threshold from shared color module
+4. **`cards.ts` → `view90m.ts`** — update to 90 bars, add split circle + check count. Remove dependency on cross-window uptime data
+5. **`day30.ts` → `view90d.ts`** — rewrite to cards layout (dense variant), 90 bars, same component hierarchy as 90m
+6. **`view90h.ts`** — new view, cards layout, 90 × 1-hour bars, no latency
+7. **`main.ts` update** — three tabs (90m/90h/90d), three data fetches, consistent rendering pipeline
+
+### Defer (Post-MVP Polish)
+
+| Feature | Reason to Defer |
+|---------|----------------|
+| Horizontal scroll containers for bar overflow | May not be needed if bars wrap naturally. Test first |
+| 90d 6px bar variant | Can add after core 90m/90h/90d cards work. Start all at 8px |
+| Cross-view click-to-drill-down (e.g., click 90d → 90h → 90m) | Requires data-stack coordination between views. Complex |
+| Source-group summary bar (aggregate health per source) | Pure addition — no rework needed. Can layer on later |
+| Responsive layout for mobile | Scope for a separate UI polish pass |
+
+---
 
 ## Sources
 
-### Real-world install scripts analyzed
-- [rustup-init.sh](https://raw.githubusercontent.com/rust-lang/rustup/master/rustup-init.sh) — Rust toolchain installer, canonical example of production curl-pipe-bash (HIGH confidence — read full source)
-- [nvm install.sh](https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.1/install.sh) — Node Version Manager installer, handles idempotent update via git (HIGH confidence — read full source)
-- [pyenv-installer](https://raw.githubusercontent.com/pyenv/pyenv-installer/master/bin/pyenv-installer) — Python version manager installer, multi-plugin git clone pattern (HIGH confidence — read full source)
+### Industry Dashboard Design (HIGH confidence)
+- [Grafana Dashboard Best Practices](https://grafana.com/docs/grafana/latest/visualizations/dashboards/build-dashboards/best-practices/) — "Consistency by design," threshold-based coloring, reduce cognitive load (verified — official docs)
+- [Grafana Dashboard Design: Patterns That Don't Suck](https://devopsil.com/articles/2026-03-29-grafana-dashboard-design-patterns) — Three-layer model (overview → triage → debug), panel type selection (MEDIUM confidence — blog post, aligns with Grafana docs)
+- [Designing Grafana Dashboards That SREs Actually Use](https://devopsil.com/articles/2026-03-21-grafana-dashboard-design-principles) — "Every panel should answer a question," anti-patterns (MEDIUM confidence — blog post, aligns with SRE book)
 
-### Init script / daemon management patterns
-- [OpenRC service script guide](https://github.com/martinetd/openrc/blob/bd5cdaafadf997c0ab3c4ad362dbdfd7dc6fd987/service-script-guide.md) — PID files, signal handling, foreground/background daemon management (HIGH confidence — official docs)
-- [start-stop-daemon man page](https://man7.org/linux/man-pages/man8/start-stop-daemon.8.html) — PID matching, process management conventions (HIGH confidence — official man page)
-- [Init script template](https://github.com/fhd/init-script-template/blob/master/template) — Classic SysV init script pattern with PID file, log handling, stop/start/restart (MEDIUM confidence — community template, pattern verified against OpenRC docs)
+### Uptime Monitoring UI Patterns (HIGH confidence)
+- [shadcn/ui — Uptime Status Block](https://www.shadcn.io/blocks/monitoring-uptime-status) — Multi-region status bars, historical uptime tracking, "barbell" visualization (verified — live component source)
+- [shadcn/ui — Status Matrix Grid](https://www.shadcn.io/blocks/stats-status-matrix-grid) — Column/row status grid, threshold cell colors, uptime % summaries (verified — live component source)
+- [shadcn/ui — Dashboard Status Page](https://www.shadcn.io/blocks/dashboard-status-page) — Service cards with 30-day history bars, colored dot indicators (verified — live component source)
+- [shadcn/ui — Timeline Server Uptime](https://www.shadcn.io/blocks/timeline-server-uptime) — Color-coded timeline segments, duration labels (verified — live component source)
+- [shadcn/ui — Live Connectivity Status Banner](https://www.shadcn.io/blocks/banner-live-connectivity) — Pulsing status dot pattern (verified — live component source)
 
-### Security best practices
-- [Better CLI: Self-executing installation scripts](https://bettercli.org/design/distribution/self-executing-installer/) — curl-pipe-bash design guidance, security considerations (MEDIUM confidence — dedicated guide, aligns with industry practices)
-- [Why `curl | bash` is dangerous](https://tferdinand.net/en/why-curl-bash-is-a-dangerous-bad-habit/) — curl-pipe-bash risks, mitigations, server-side detection (MEDIUM confidence — well-researched article, cites real incidents)
-- [VNX-BASH-002: curl/wget piped to shell](https://docs.cli.vulnetix.com/docs/sast-rules/vnx-bash-002/) — SAST rule for detecting unsafe pipe patterns (MEDIUM confidence — SAST vendor documentation)
-- [Security SE: Is `curl | sudo bash` safe?](https://security.stackexchange.com/questions/213401/is-curl-something-sudo-bash-a-reasonably-safe-installation-method) — Community consensus on pipe-to-shell risks (MEDIUM confidence — curated discussion, multiple expert perspectives)
+### Uptime Monitoring Tools (MEDIUM confidence)
+- [IsDown — What to Include in a Monitoring Dashboard](https://isdown.app/blog/third-party-monitoring-dashboard) — Rolling 30/90-day uptime, consistent color coding, vendor grouping (MEDIUM — blog post, aligns with observed patterns)
+- [codewizdevs/uptime](https://github.com/codewizdevs/uptime) — Open source uptime monitor with 90-day daily bars, compact monitor cards, status stripes (MEDIUM — GitHub README, open source tool design)
+- [Xandeum LATTICE Dashboard](https://xandeum-lattice.vercel.app/doc) — Node monitoring with 3-column layout, uptime thresholds, green/amber/red status cards (MEDIUM — documentation, specific to blockchain node monitoring)
 
-### FHS / Directory conventions
-- [Filesystem Hierarchy Standard 3.0 — /opt](https://refspecs.linuxfoundation.org/FHS_3.0/fhs/ch03s13.html) — Add-on application package directory standard (HIGH confidence — official FHS)
-- [Filesystem Hierarchy Standard 3.0 — /usr/local](https://refspecs.linuxfoundation.org/FHS_3.0/fhs/ch04s09.html) — Locally installed software hierarchy (HIGH confidence — official FHS)
-- [XDG Base Directory Specification / file-hierarchy](https://freedesktop.org/software/systemd/man/latest/file-hierarchy.html) — User-specific install paths under `~/.local/` (HIGH confidence — freedesktop.org standard)
-- [Unix SE: ~/.local/bin vs /usr/local vs /opt](https://unix.stackexchange.com/questions/36871/where-should-a-local-user-executable-be-placed-under-home) — Community guidance on install directory choice (MEDIUM confidence — community knowledge, verified against FHS)
-
-### Additional conventions
-- [Writing init scripts pattern](https://wiki.alpinelinux.org/wiki/Writing_Init_Scripts) — Alpine Linux init script conventions (HIGH confidence — official wiki)
-- [PID file handling reference](https://stackoverflow.com/questions/688343/reference-for-proper-handling-of-pid-file-on-unix) — Atomic PID file creation, O_EXCL, stale PID detection (MEDIUM confidence — community knowledge, references Kerrisk's "The Linux Programming Interface")
+### Color and Accessibility (HIGH confidence)
+- [Aceternity UI — Uptime Status Illustration](https://ui.aceternity.com/blocks/illustrations/uptime-status-illustration) — 45 vertical bars with green/amber/orange/red coloring pattern (verified — live component)
+- WCAG 2.1 contrast ratios — Current threshold colors (#22c55e green, #f59e0b amber, #ef4444 red) all pass AA on white backgrounds
 
 ---
-*Feature research for: mesh-status install & start scripts*
+
+*Feature research for: mesh-status v0.9 UI consolidation (three-view unified cards with threshold coloring)*
 *Researched: 2026-06-20*
