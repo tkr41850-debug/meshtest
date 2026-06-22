@@ -2,14 +2,11 @@ import type { StatusEntry } from "../types";
 
 function computeStatus(
   s: StatusEntry,
-): "OK" | "NotAvailable" | "Pending" {
+): "OK" | "Degraded" | "NotAvailable" | "Pending" {
   if (s.ping_status === "OK" && s.http_status === "OK") return "OK";
-  if (
-    s.ping_status === "NotAvailable" ||
-    s.http_status === "NotAvailable"
-  )
-    return "NotAvailable";
-  return "Pending";
+  if (s.ping_status === "Pending" && s.http_status === "Pending") return "Pending";
+  if (s.ping_status === "NotAvailable" && s.http_status === "NotAvailable") return "NotAvailable";
+  return "Degraded";
 }
 
 function shortLabel(ip: string): string {
@@ -23,13 +20,15 @@ function shortLabel(ip: string): string {
 
 const STATUS_DOT: Record<string, string> = {
   OK: "●",
+  Degraded: "●",
   NotAvailable: "●",
   Pending: "●",
 };
 
 const STATUS_COLOR: Record<string, string> = {
   OK: "text-mesh-green",
-  NotAvailable: "text-mesh-amber",
+  Degraded: "text-mesh-amber",
+  NotAvailable: "text-mesh-red",
   Pending: "text-mesh-gray",
 };
 

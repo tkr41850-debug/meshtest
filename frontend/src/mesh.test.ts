@@ -53,7 +53,7 @@ describe("renderMatrix", () => {
     expect(dot?.textContent).toBe("●");
   });
 
-  it("shows amber dot for NotAvailable status", () => {
+  it("shows amber dot for Degraded status", () => {
     const container = document.createElement("div");
     renderMatrix(container, ["10.0.0.1", "10.0.0.2"], [
       {
@@ -64,6 +64,20 @@ describe("renderMatrix", () => {
       },
     ]);
     const dot = container.querySelector(".text-mesh-amber");
+    expect(dot?.textContent).toBe("●");
+  });
+
+  it("shows red dot for NotAvailable status", () => {
+    const container = document.createElement("div");
+    renderMatrix(container, ["10.0.0.1", "10.0.0.2"], [
+      {
+        node_ip: "10.0.0.1",
+        target_ip: "10.0.0.2",
+        ping_status: "NotAvailable",
+        http_status: "NotAvailable",
+      },
+    ]);
+    const dot = container.querySelector(".text-mesh-red");
     expect(dot?.textContent).toBe("●");
   });
 

@@ -71,8 +71,8 @@ function computeStatus(
   httpUp: number,
 ): string {
   if (pingUp >= 99.9 && httpUp >= 99.9) return "OK";
-  if (pingUp < 99.9 && httpUp < 99.9) return "Pending";
-  return "NotAvailable";
+  if (pingUp >= 99.9 || httpUp >= 99.9) return "Degraded";
+  return "Pending";
 }
 
 export function renderDay30(

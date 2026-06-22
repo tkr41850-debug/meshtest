@@ -89,12 +89,9 @@ export function renderCards(
     const http = s.http_status === "OK";
     let st: string;
     if (ping && http) st = "OK";
-    else if (
-      s.ping_status === "NotAvailable" ||
-      s.http_status === "NotAvailable"
-    )
-      st = "NotAvailable";
-    else st = "Pending";
+    else if (s.ping_status === "Pending" && s.http_status === "Pending") st = "Pending";
+    else if (!ping && !http) st = "NotAvailable";
+    else st = "Degraded";
     combined.set(`${s.node_ip}|${s.target_ip}`, st);
   }
 

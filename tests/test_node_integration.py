@@ -1,4 +1,5 @@
 import asyncio
+import contextlib
 from argparse import Namespace
 from collections import deque
 from unittest.mock import AsyncMock, Mock, patch
@@ -9,7 +10,12 @@ import node
 
 
 class _StopLoop(BaseException):
-    pass
+    """Halt the infinite `node.run()` loop during testing.
+
+    Inherits from `BaseException` rather than `Exception` so that it is NOT
+    caught by the broad `except Exception` in the run loop (node.py:238),
+    ensuring the test can cleanly break out on the next `asyncio.sleep`.
+    """
 
 
 class TestCheckExecutionIntegration:
@@ -62,7 +68,7 @@ class TestCheckExecutionIntegration:
 
             async def communicate_with_timeout():
                 communicate_calls[0] += 1
-                raise asyncio.TimeoutError()
+                raise TimeoutError()
 
             mock_proc = AsyncMock()
             mock_proc.returncode = 1
@@ -391,21 +397,21 @@ class TestCycleIntegration:
                 with patch("node.run_check_cycle") as mock_check:
                     mock_check.return_value = [{"target_ip": "10.0.0.3", "ping_ok": True}]
 
-                    with patch("node.submit_results", AsyncMock(return_value=True)) as mock_sub:
-                        with patch("node.asyncio.sleep", side_effect=_StopLoop()):
-                            try:
-                                await node.run()
-                            except _StopLoop:
-                                pass
+                    with (
+                        patch("node.submit_results", AsyncMock(return_value=True)) as mock_sub,
+                        patch("node.asyncio.sleep", side_effect=_StopLoop()),
+                        contextlib.suppress(_StopLoop),
+                    ):
+                        await node.run()
 
-                            assert mock_inst.post.called
-                            assert mock_inst.get.called
-                            assert mock_check.called
-                            assert mock_sub.called
+                    assert mock_inst.post.called
+                    assert mock_inst.get.called
+                    assert mock_check.called
+                    assert mock_sub.called
 
-                            mock_check.assert_called_once()
-                            call_peers = mock_check.call_args[0][1]
-                            assert any(p["ip"] == "10.0.0.1" for p in call_peers)
+                    mock_check.assert_called_once()
+                    call_peers = mock_check.call_args[0][1]
+                    assert any(p["ip"] == "10.0.0.1" for p in call_peers)
 
     async def test_full_cycle_with_buffer_retry(self):
         with patch("node.parse_args") as mock_args:
@@ -439,18 +445,16 @@ class TestCycleIntegration:
 
                     async def submit_side_effect(*args, **kwargs):
                         submit_results_call_count[0] += 1
-                        if submit_results_call_count[0] <= 2:
-                            return False
-                        return True
+                        return not submit_results_call_count[0] <= 2
 
-                    with patch("node.submit_results", side_effect=submit_side_effect):
-                        with patch("node.asyncio.sleep", side_effect=[None, None, _StopLoop()]):
-                            try:
-                                await node.run()
-                            except _StopLoop:
-                                pass
+                    with (
+                        patch("node.submit_results", side_effect=submit_side_effect),
+                        patch("node.asyncio.sleep", side_effect=[None, None, _StopLoop()]),
+                        contextlib.suppress(_StopLoop),
+                    ):
+                        await node.run()
 
-                            assert submit_results_call_count[0] >= 2
+                    assert submit_results_call_count[0] >= 2
 
     async def test_current_cycle_not_lost_when_buffered_data_submitted(self):
         """NODE-01: Current cycle results not lost when buffer has old data"""
@@ -489,20 +493,18 @@ class TestCycleIntegration:
 
                     async def submit_side(*args, **kwargs):
                         submit_calls.append(args[0])
-                        if len(submit_calls) == 1:
-                            return False
-                        return True
+                        return len(submit_calls) != 1
 
-                    with patch("node.submit_results", side_effect=submit_side):
-                        with patch("node.asyncio.sleep", side_effect=[None, _StopLoop()]):
-                            try:
-                                await node.run()
-                            except _StopLoop:
-                                pass
+                    with (
+                        patch("node.submit_results", side_effect=submit_side),
+                        patch("node.asyncio.sleep", side_effect=[None, _StopLoop()]),
+                        contextlib.suppress(_StopLoop),
+                    ):
+                        await node.run()
 
-                            assert len(submit_calls) == 2
-                            # Second submit must include BOTH cycles' data
-                            assert submit_calls[1] == [
-                                {"target_ip": "10.0.0.2", "ping_ok": True},
-                                {"target_ip": "10.0.0.3", "ping_ok": False},
-                            ]
+                    assert len(submit_calls) == 2
+                    # Second submit must include BOTH cycles' data
+                    assert submit_calls[1] == [
+                        {"target_ip": "10.0.0.2", "ping_ok": True},
+                        {"target_ip": "10.0.0.3", "ping_ok": False},
+                    ]

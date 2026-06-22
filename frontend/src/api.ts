@@ -32,4 +32,4 @@ export function fetchNodeList(): Promise<NodeListResponse | null> {
   return fetchWithTimeout<NodeListResponse>("/node-list");
 }
 
-export { fetchData90m as fetchData30m, fetchData90d as fetchData30d };
+

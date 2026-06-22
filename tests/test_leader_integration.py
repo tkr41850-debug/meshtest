@@ -275,9 +275,9 @@ class TestDataApiIntegration:
         assert resp.status_code == 200
         data = await resp.get_json()
         assert len(data["checks"]) >= 2, (
-            "Expected checks from both submissions (accumulated history), "
-            "got only %d. If this fails, `_results[node_ip] = checks` "
-            "is still replacing instead of appending." % len(data["checks"])
+            f"Expected checks from both submissions (accumulated history), "
+            f"got only {len(data['checks'])}. If this fails, `_results[node_ip] = checks` "
+            f"is still replacing instead of appending."
         )
 
     async def test_data_without_window_returns_400(self, client):
@@ -304,8 +304,8 @@ class TestCorsIntegration:
 
 class TestDataReloadIntegration:
     async def test_90h_after_load_returns_from_memory(self, client):
-        from mesh_status.leader import _results, _day_aggregates
         from mesh_status import persistence
+        from mesh_status.leader import _day_aggregates, _results
 
         now = time.time()
         dt = datetime.now()
@@ -333,8 +333,8 @@ class TestDataReloadIntegration:
         assert len(data["hours"]) > 0
 
     async def test_90d_after_load_returns_from_both_sources(self, client):
-        from mesh_status.leader import _results, _day_aggregates
         from mesh_status import persistence
+        from mesh_status.leader import _day_aggregates, _results
 
         now = time.time()
         today = datetime.now()
@@ -380,7 +380,7 @@ class TestDataReloadIntegration:
         assert len(data["days"]) >= 2
 
     async def test_90d_aggregate_merging(self, client):
-        from mesh_status.leader import _results, _day_aggregates
+        from mesh_status.leader import _day_aggregates, _results
 
         today_str = datetime.now().strftime("%Y-%m-%d")
         _day_aggregates[today_str] = {

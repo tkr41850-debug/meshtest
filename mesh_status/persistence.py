@@ -152,7 +152,7 @@ async def flush_loop(interval: int = 3600):
     After flushing, moves data older than 90h to daily aggregates
     and removes it from _results.
     """
-    from mesh_status.leader import _results, _day_aggregates, _results_lock
+    from mesh_status.leader import _day_aggregates, _results, _results_lock
 
     while True:
         await asyncio.sleep(interval)

@@ -57,8 +57,9 @@ class TestPersistence:
         assert len(tests) == 2
 
     def test_malformed_json_line_skipped_with_warning(self, caplog):
-        from mesh_status.persistence import _append_results, _read_results
         import logging
+
+        from mesh_status.persistence import _append_results, _read_results
 
         caplog.set_level(logging.WARNING)
         d = date(2026, 6, 18)
@@ -246,7 +247,7 @@ class TestLoadIntoMemory:
                     "timestamp": now - i * 3600,
                 },
             )
-        for i in range(5):
+        for _i in range(5):
             self._write_result(
                 old_day,
                 {

@@ -17,3 +17,5 @@ build/
 .coverage
 htmlcov/
 data/
+frontend/node_modules/
+frontend/dist/

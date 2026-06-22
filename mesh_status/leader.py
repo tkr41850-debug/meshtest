@@ -13,10 +13,9 @@ from hypercorn.config import Config
 from quart import Quart, request, send_from_directory
 from quart_cors import cors
 
-from mesh_status import config
-from mesh_status.models import NodeInfo
-from mesh_status import persistence
+from mesh_status import config, persistence
 from mesh_status import status as status_module
+from mesh_status.models import NodeInfo
 
 app = Quart(__name__)
 cors(app, allow_origin="*")
@@ -345,7 +344,7 @@ async def get_data():
 
     else:
         return {
-            "error": "Invalid or missing window parameter. Use ?window=90m, ?window=90h, or ?window=90d",
+            "error": "Invalid or missing window parameter. Use ?window=90m, ?window=90h, or ?window=90d",  # noqa: E501
             "status": 400,
         }, 400
 

@@ -4,7 +4,8 @@ import { uptimeColor } from "./colors";
 
 export const BADGE_MAP: Record<string, { color: string; label: string }> = {
   OK: { color: "#22c55e", label: "OK" },
-  NotAvailable: { color: "#f59e0b", label: "Not Available" },
+  Degraded: { color: "#f59e0b", label: "Degraded" },
+  NotAvailable: { color: "#ef4444", label: "Not Available" },
   Pending: { color: "#9ca3af", label: "Pending" },
 };
 

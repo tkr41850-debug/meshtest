@@ -1,12 +1,13 @@
 import os
 import shutil
+from unittest.mock import AsyncMock, Mock, patch
+
 import pytest
-from unittest.mock import Mock, patch, AsyncMock
 
 
 @pytest.fixture(autouse=True)
 def reset_leader_state():
-    from mesh_status.leader import _registry, _results, _day_aggregates
+    from mesh_status.leader import _day_aggregates, _registry, _results
 
     _registry.clear()
     _results.clear()

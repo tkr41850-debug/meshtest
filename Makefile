@@ -1,4 +1,4 @@
-.PHONY: ci test-frontend test-backend lint format build check
+.PHONY: ci test test-frontend test-backend lint format format-check build check typecheck-frontend
 
 # ── Full CI pipeline (runs everything CI would check) ─────────────
 ci: lint format-check test-backend test-frontend build

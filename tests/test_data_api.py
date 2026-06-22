@@ -1,6 +1,7 @@
 class TestDataAPI:
     async def test_data_90h_includes_raw_counts(self, client):
         import time
+
         from mesh_status.leader import _results
 
         _results.clear()
@@ -75,8 +76,9 @@ class TestDataAPI:
         assert resp.headers.get("access-control-allow-origin") == "*"
 
     async def test_data_90d_no_duplicate_dates(self, client):
-        from mesh_status.leader import _results, _day_aggregates
         import time
+
+        from mesh_status.leader import _day_aggregates, _results
 
         _results.clear()
         _day_aggregates.clear()
@@ -125,7 +127,7 @@ class TestDataAPI:
         assert conn["http_uptime_pct"] == 0.0
 
     async def test_data_90d_infers_node_ip_from_results(self, client):
-        from mesh_status.leader import _results, _day_aggregates
+        from mesh_status.leader import _day_aggregates, _results
 
         _results.clear()
         _day_aggregates.clear()

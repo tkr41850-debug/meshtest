@@ -2,10 +2,11 @@
 """Register a node with a mesh-status leader."""
 
 import argparse
+import ipaddress
 import json
 import sys
-import urllib.request
 import urllib.error
+import urllib.request
 
 
 def parse_args():
@@ -28,6 +29,18 @@ def main():
         node_ip = input("Enter node IP: ").strip()
     if not leader_ip:
         leader_ip = input("Enter leader IP: ").strip()
+
+    try:
+        ipaddress.ip_address(node_ip)
+    except ValueError:
+        print(f"Invalid node IP: {node_ip}", file=sys.stderr)
+        sys.exit(1)
+
+    try:
+        ipaddress.ip_address(leader_ip)
+    except ValueError:
+        print(f"Invalid leader IP: {leader_ip}", file=sys.stderr)
+        sys.exit(1)
 
     url = f"http://{leader_ip}:{args.port}/register"
     payload = json.dumps({"node_ip": node_ip}).encode("utf-8")

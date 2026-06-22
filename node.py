@@ -3,6 +3,7 @@
 
 import argparse
 import asyncio
+import contextlib
 import logging
 import os
 import re
@@ -13,9 +14,9 @@ from collections import deque
 from urllib.parse import urlparse
 
 import httpx
+from aiohttp import web
 
 from mesh_status import config
-from aiohttp import web
 
 logging.basicConfig(
     level=getattr(logging, config.LOG_LEVEL),
@@ -85,7 +86,7 @@ async def check_node(target_ip: str, port: int = config.DEFAULT_PORT, timeout: f
             match = re.search(r"time=(\d+\.?\d*)\s*ms", stdout.decode(errors="replace"))
             if match:
                 ping_latency_ms = float(match.group(1))
-    except asyncio.TimeoutError:
+    except TimeoutError:
         proc.kill()
         await proc.wait()
 
@@ -241,10 +242,8 @@ async def run():
 
             await asyncio.sleep(shared_state["interval"])
     finally:
-        try:
+        with contextlib.suppress(Exception):
             await http_runner.cleanup()
-        except Exception:
-            pass
 
 
 if __name__ == "__main__":

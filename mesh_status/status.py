@@ -25,9 +25,10 @@ def calculate_status(
     # Find latest result for this target
     latest = None
     for r in node_results:
-        if r.get("target_ip") == target_ip:
-            if latest is None or r.get("timestamp", 0) > latest.get("timestamp", 0):
-                latest = r
+        if r.get("target_ip") == target_ip and (
+            latest is None or r.get("timestamp", 0) > latest.get("timestamp", 0)
+        ):
+            latest = r
 
     if latest is None:
         return {
