@@ -17,6 +17,7 @@ A distributed mesh connectivity testing tool for monitoring network health acros
 - ✅ **v0.9** — UI Consolidation: History Bars, Color & Windows (3 phases)
 - ✅ **v0.10** — Custom Hover Tooltips (Phase 24, Phase 25)
 - ✅ **v0.10.1** — Code Review Cleanup (Phases 26-30) — SHIPPED 2026-06-22
+- 🚧 **v0.11** — Go Rewrite (Phases 31-35) — in progress
 
 ## Phases
 
@@ -31,6 +32,120 @@ A distributed mesh connectivity testing tool for monitoring network health acros
 
 </details>
 
+### 🚧 v0.11 Go Rewrite (In Progress)
+
+- [ ] **Phase 31: Go Leader — Core HTTP API** — Implement core leader HTTP endpoints, registry, and results storage in Go
+- [ ] **Phase 32: Go Leader — Persistence & Peer Push** — Add JSON Lines disk persistence, flush loop, peer push notification
+- [ ] **Phase 33: Go Node — Agent** — Implement ICMP ping, HTTP checks, result submission, and cycle orchestration in Go
+- [ ] **Phase 34: Go Node — Peer Listener** — Add HTTP server to receive peer push and config updates from leader
+- [ ] **Phase 35: Docker & Integration Tests** — Create minimal Docker images, Docker Compose, validate against spec/ tests
+
+## Phase Details
+
+### Phase 31: Go Leader — Core HTTP API
+
+**Goal**: Go leader serves the same HTTP API as the Python version — registration, submission, data queries, health endpoints, node-list, and config updates.
+
+**Depends on**: Nothing (Go project scaffold)
+
+**Requirements**: GO-LEAD-API, GO-LEAD-REGISTRY
+
+**Success Criteria** (what must be TRUE):
+1. Go leader starts on port 58080 and responds to GET /livez, /readyz, /healthz with 200
+2. POST /register accepts node registration and returns peer list
+3. Registration is thread-safe — concurrent requests handled without data races
+4. POST /submit accepts check results with validation (missing fields return 400)
+5. GET /data?window=90m returns checks and statuses; 90h returns hours; 90d returns days
+6. GET /data with missing/invalid window returns 400
+7. POST /updateConfig accepts check_interval/buffer_size values with validation
+8. All Go tests pass with `go test ./...`
+
+**Plans**: TBD
+
+---
+
+### Phase 32: Go Leader — Persistence & Peer Push
+
+**Goal**: Go leader persists results to disk in the same JSON Lines format as the Python version and pushes peer/config updates to registered nodes.
+
+**Depends on**: Phase 31
+
+**Requirements**: GO-LEAD-PERSIST, GO-LEAD-PEER-PUSH
+
+**Success Criteria** (what must be TRUE):
+1. Results are written to date-partitioned JSON Lines files (same path format as Python)
+2. Background flush loop writes in-memory results to disk on configurable interval
+3. On startup, data from disk is loaded into memory (raw results + daily aggregates)
+4. After registration, leader pushes full peer list and config to all registered nodes via HTTP POST
+5. After config update, leader pushes new config to all registered nodes
+6. Data format is interchangeable with Python version — files written by Go can be read by Python and vice versa
+7. All Go tests pass with `go test ./...`
+
+**Plans**: TBD
+
+---
+
+### Phase 33: Go Node — Agent
+
+**Goal**: Go node runs ICMP ping and HTTP health checks against all peers, submits results to the leader, and orchestrates the full check cycle.
+
+**Depends on**: Phase 31 (leader API must exist to submit against)
+
+**Requirements**: GO-NODE-PING, GO-NODE-HTTP-CHECK, GO-NODE-SUBMIT, GO-NODE-CYCLE
+
+**Success Criteria** (what must be TRUE):
+1. Go node runs ICMP ping via os/exec against all peers with configurable timeout
+2. Ping stdout is decoded safely (no crash on non-UTF-8 output)
+3. HTTP GET /healthz runs against all peers concurrently with semaphore limiting
+4. Check results are submitted to the leader after each cycle
+5. On submission failure, results are buffered and retried on next cycle
+6. Buffer combines accumulated results with current cycle into a single submit payload
+7. Full cycle: fetch peers → ping all → HTTP check all → submit results, on configurable interval
+8. All Go tests pass with `go test ./...`
+
+**Plans**: TBD
+
+---
+
+### Phase 34: Go Node — Peer Listener
+
+**Goal**: Go node runs an HTTP server to receive peer list pushes and config updates from the leader.
+
+**Depends on**: Phase 33 (node must exist to add listener)
+
+**Requirements**: GO-NODE-PEER-LISTENER
+
+**Success Criteria** (what must be TRUE):
+1. Go node listens on configurable port for HTTP POST /update-peers
+2. POST /update-peers accepts peer list and check_interval/buffer_size and updates node state
+3. Node uses updated peer list for subsequent check cycles
+4. Node uses updated check_interval for subsequent cycle timing
+5. All Go tests pass with `go test ./...`
+
+**Plans**: TBD
+
+---
+
+### Phase 35: Docker & Integration Tests
+
+**Goal**: Minimal Docker images for Go leader and Go node, Docker Compose for full stack, and spec/ integration tests validating the entire setup.
+
+**Depends on**: Phases 31-34 (all Go code must exist)
+
+**Requirements**: GO-DOCKER-LEADER, GO-DOCKER-NODE, GO-DOCKER-COMPOSE, GO-SPEC-TESTS, GO-KEEP-PYTHON
+
+**Success Criteria** (what must be TRUE):
+1. Dockerfile for Go leader produces a minimal image (<10MB) using multi-stage build with scratch/distroless base
+2. Dockerfile for Go node produces a minimal image (<10MB) using multi-stage build with scratch/distroless base
+3. docker-compose.yml runs Go leader + Go node (if configured) + frontend served from same port
+4. spec/ integration tests pass against Docker-hosted Go leader (make test-integration)
+5. Python source files remain in the repository — no files deleted
+6. `docker images` shows binary-only images (no Python runtime, no OS layer)
+
+**Plans**: TBD
+
+---
+
 ## Progress
 
 | Phase | Milestone | Plans Complete | Status | Completed |
@@ -40,5 +155,10 @@ A distributed mesh connectivity testing tool for monitoring network health acros
 | 28 — Shell Scripts | v0.10.1 | — | ✅ Complete | 2026-06-22 |
 | 29 — Config, Frontend & Test Infra | v0.10.1 | — | ✅ Complete | 2026-06-22 |
 | 30 — Setup Integration Tests (spec) | v0.10.1 | — | ✅ Complete | 2026-06-22 |
+| 31 — Go Leader Core API | v0.11 | 0/0 | Not started | — |
+| 32 — Go Leader Persistence & Peer Push | v0.11 | 0/0 | Not started | — |
+| 33 — Go Node Agent | v0.11 | 0/0 | Not started | — |
+| 34 — Go Node Peer Listener | v0.11 | 0/0 | Not started | — |
+| 35 — Docker & Integration Tests | v0.11 | 0/0 | Not started | — |
 
-See `.planning/milestones/v0.10.1-ROADMAP.md` for full phase details.
+See `.planning/milestones/v0.10.1-ROADMAP.md` for previous milestone details.

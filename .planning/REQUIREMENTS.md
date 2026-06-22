@@ -50,25 +50,25 @@ Rewrite both mesh-leader and mesh-node in Go for minimal container image size an
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| GO-LEAD-API | TBD | Pending |
-| GO-LEAD-PERSIST | TBD | Pending |
-| GO-LEAD-PEER-PUSH | TBD | Pending |
-| GO-LEAD-REGISTRY | TBD | Pending |
-| GO-NODE-PING | TBD | Pending |
-| GO-NODE-HTTP-CHECK | TBD | Pending |
-| GO-NODE-SUBMIT | TBD | Pending |
-| GO-NODE-PEER-LISTENER | TBD | Pending |
-| GO-NODE-CYCLE | TBD | Pending |
-| GO-DOCKER-LEADER | TBD | Pending |
-| GO-DOCKER-NODE | TBD | Pending |
-| GO-DOCKER-COMPOSE | TBD | Pending |
-| GO-SPEC-TESTS | TBD | Pending |
-| GO-KEEP-PYTHON | TBD | Pending |
+| GO-LEAD-API | Phase 31 | Pending |
+| GO-LEAD-REGISTRY | Phase 31 | Pending |
+| GO-LEAD-PERSIST | Phase 32 | Pending |
+| GO-LEAD-PEER-PUSH | Phase 32 | Pending |
+| GO-NODE-PING | Phase 33 | Pending |
+| GO-NODE-HTTP-CHECK | Phase 33 | Pending |
+| GO-NODE-SUBMIT | Phase 33 | Pending |
+| GO-NODE-CYCLE | Phase 33 | Pending |
+| GO-NODE-PEER-LISTENER | Phase 34 | Pending |
+| GO-DOCKER-LEADER | Phase 35 | Pending |
+| GO-DOCKER-NODE | Phase 35 | Pending |
+| GO-DOCKER-COMPOSE | Phase 35 | Pending |
+| GO-SPEC-TESTS | Phase 35 | Pending |
+| GO-KEEP-PYTHON | Phase 35 | Pending |
 
 **Coverage:**
 - v0.11 requirements: 14 total
-- Mapped to phases: 0
-- Unmapped: 14 ⚠️
+- Mapped to phases: 14
+- Unmapped: 0 ✓
 
 ---
 
