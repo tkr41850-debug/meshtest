@@ -87,49 +87,49 @@ Fix all code review findings across the codebase. Every behavioral fix must foll
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| DATA-01 | — | Pending |
-| DATA-02 | — | Pending |
-| DATA-03 | — | Pending |
-| DATA-04 | — | Pending |
-| LEAD-01 | — | Pending |
-| LEAD-02 | — | Pending |
-| LEAD-03 | — | Pending |
-| LEAD-04 | — | Pending |
-| NODE-01 | — | Pending |
-| NODE-02 | — | Pending |
-| NODE-03 | — | Pending |
-| NODE-04 | — | Pending |
-| SHELL-01 | — | Pending |
-| SHELL-02 | — | Pending |
-| SHELL-03 | — | Pending |
-| SHELL-04 | — | Pending |
-| SHELL-05 | — | Pending |
-| SHELL-06 | — | Pending |
-| SHELL-07 | — | Pending |
-| SHELL-08 | — | Pending |
-| SHELL-09 | — | Pending |
-| SHELL-10 | — | Pending |
-| CI-01 | — | Pending |
-| CI-02 | — | Pending |
-| CI-03 | — | Pending |
-| CI-04 | — | Pending |
-| CI-05 | — | Pending |
-| UI-01 | — | Pending |
-| UI-02 | — | Pending |
-| TEST-01 | — | Pending |
-| TEST-02 | — | Pending |
-| TEST-03 | — | Pending |
-| TEST-04 | — | Pending |
-| CLI-01 | — | Pending |
-| DEAD-01 | — | Pending |
-| DEAD-02 | — | Pending |
-| DEAD-03 | — | Pending |
-| DEAD-04 | — | Pending |
+| DATA-01 | Phase 26 | Pending |
+| DATA-02 | Phase 26 | Pending |
+| DATA-03 | Phase 26 | Pending |
+| DATA-04 | Phase 26 | Pending |
+| LEAD-01 | Phase 26 | Pending |
+| LEAD-02 | Phase 26 | Pending |
+| LEAD-03 | Phase 26 | Pending |
+| LEAD-04 | Phase 26 | Pending |
+| NODE-01 | Phase 27 | Pending |
+| NODE-02 | Phase 27 | Pending |
+| NODE-03 | Phase 27 | Pending |
+| NODE-04 | Phase 27 | Pending |
+| SHELL-01 | Phase 28 | Pending |
+| SHELL-02 | Phase 28 | Pending |
+| SHELL-03 | Phase 28 | Pending |
+| SHELL-04 | Phase 28 | Pending |
+| SHELL-05 | Phase 28 | Pending |
+| SHELL-06 | Phase 28 | Pending |
+| SHELL-07 | Phase 28 | Pending |
+| SHELL-08 | Phase 28 | Pending |
+| SHELL-09 | Phase 28 | Pending |
+| SHELL-10 | Phase 28 | Pending |
+| CI-01 | Phase 29 | Pending |
+| CI-02 | Phase 29 | Pending |
+| CI-03 | Phase 29 | Pending |
+| CI-04 | Phase 29 | Pending |
+| CI-05 | Phase 29 | Pending |
+| UI-01 | Phase 29 | Pending |
+| UI-02 | Phase 29 | Pending |
+| TEST-01 | Phase 29 | Pending |
+| TEST-02 | Phase 29 | Pending |
+| TEST-03 | Phase 29 | Pending |
+| TEST-04 | Phase 29 | Pending |
+| CLI-01 | Phase 29 | Pending |
+| DEAD-01 | Phase 26 | Pending |
+| DEAD-02 | Phase 26 | Pending |
+| DEAD-03 | Phase 26 | Pending |
+| DEAD-04 | Phase 26 | Pending |
 
 **Coverage:**
 - v0.10.1 requirements: 38 total
-- Mapped to phases: 0
-- Unmapped: 38 ⚠️
+- Mapped to phases: 38
+- Unmapped: 0 ✓
 
 ---
 *Requirements defined: 2026-06-21*

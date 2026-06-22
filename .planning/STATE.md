@@ -10,10 +10,10 @@ See: .planning/PROJECT.md (updated 2026-06-21)
 ## Current Position
 
 Milestone: v0.10.1 (Code Review Cleanup)
-Phase: Not started (defining requirements)
-Plan: —
-Status: Defining requirements
-Last activity: 2026-06-21 — Milestone v0.10.1 started
+Phase: 26 — Persistence & Leader Core
+Plan: Code Review Cleanup roadmap (Phases 26-29)
+Status: Ready to plan
+Last activity: 2026-06-21 — Roadmap created for v0.10.1
 
 ## Performance Metrics
 
@@ -98,6 +98,7 @@ Phase 4 (CI/CD) decisions:
 - Phase **4** added to v0.2: GitHub Actions CI/CD — Build & Push to Docker Hub
 - v0.4 replaces original v3.5+ deferred items with dashboard UI polish
 - Phase **25** added to v0.10: Add the tests (restart/data-reload integration + unit tests)
+- v0.10.1 starts at Phase 26: Code Review Cleanup — 38 requirements across 4 phases (26-29)
 
 ### Milestone v0.7 Status
 
@@ -150,6 +151,16 @@ Phase 4 (CI/CD) decisions:
 - **Phase numbering**: v0.10 starts at Phase 24 (continuing from v0.9's Phase 23)
 - **All changes TDD**: Write Vitest tests first, then implementation
 
+### Decisions (v0.10.1 — roadmap creation)
+
+- **Phase numbering**: v0.10.1 starts at Phase 26 (continuing from v0.10's Phase 25)
+- **Granularity**: Coarse — 4 phases for 38 requirements (DATA, LEAD, DEAD, NODE, SHELL, CI, UI, TEST, CLI)
+- **Phase 26 combines**: DATA, LEAD, and DEAD requirements — all are leader-side code fixes (data integrity, API robustness, dead code removal)
+- **Phase 27 standalone**: NODE requirements — node agent fixes (buffer retry, subprocess/HTTP error handling)
+- **Phase 28 standalone**: SHELL requirements — shell script fixes (install.sh, start.sh)
+- **Phase 29 combines**: CI, UI, TEST, and CLI requirements — smaller groupings combined into one phase covering config, frontend, test infra, and register CLI
+- **All changes TDD**: Every behavioral fix must follow TDD (write failing test first)
+
 ### Blockers/Concerns
 
 None.
@@ -157,6 +168,6 @@ None.
 ## Session Continuity
 
 Last session: 2026-06-21
-Stopped at: v0.10 requirements defined, Phase 24 planned
+Stopped at: v0.10.1 Code Review Cleanup roadmap created (Phases 26-29)
 Resume file: None
-Next action: Execute Phase 24 — Custom Hover Tooltips
+Next action: Plan Phase 26 — Persistence & Leader Core (/gsd-plan-phase 26)
