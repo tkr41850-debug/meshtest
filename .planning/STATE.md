@@ -5,15 +5,15 @@
 See: .planning/PROJECT.md (updated 2026-06-22)
 
 **Core value:** A node must be able to detect and report whether it can reach every other node in the mesh, and the leader must present an accurate, up-to-date connectivity view.
-**Current focus:** Planning next milestone
+**Current focus:** Go Rewrite (Leader + Node)
 
 ## Current Position
 
-Milestone: v0.10.1 (Code Review Cleanup)
-Phase: — (complete)
-Plan: — (complete)
-Status: Shipped
-Last activity: 2026-06-22 — v0.10.1 milestone completed, tagged
+Milestone: v0.11 (Go Rewrite)
+Phase: Not started (defining requirements)
+Plan: —
+Status: Defining requirements
+Last activity: 2026-06-22 — Milestone v0.11 started
 
 ## Performance Metrics
 
@@ -101,6 +101,7 @@ Phase 4 (CI/CD) decisions:
 - v0.10.1 starts at Phase 26: Code Review Cleanup — 38 requirements across 4 phases (26-29)
 - Phase **30** added: Setup Integration Tests (spec) — HTTP-only integration tests against local mesh-leader
 - v0.10.1 complete: Phases 26-30 shipped 2026-06-22, tagged v0.10.1
+- v0.11 starts at Phase 31: Go Rewrite — leader + node in Go, minimal Docker images, TDD
 
 ### Milestone v0.7 Status
 
@@ -163,6 +164,16 @@ Phase 4 (CI/CD) decisions:
 - **Phase 29 combines**: CI, UI, TEST, and CLI requirements — smaller groupings combined into one phase covering config, frontend, test infra, and register CLI
 - **All changes TDD**: Every behavioral fix must follow TDD (write failing test first)
 
+### Decisions (v0.11 — milestone initialization)
+
+- **Phase numbering**: v0.11 starts at Phase 31 (continuing from v0.10.1's Phase 30)
+- **Both leader + node rewritten**: mesh-leader (API + persistence) and mesh-node (ping/HTTP checks + submit) both in Go
+- **TDD required**: write failing Go test first for every behavioral change
+- **Python code preserved**: existing Python source files remain in the repository
+- **Minimal Docker images**: scratch or distroless base for Go binaries (<10MB)
+- **JSON persistence format preserved**: same date-partitioned JSON Lines format so data is interchangeable
+- **spec/ integration tests validate equivalence**: same HTTP-level tests run against both Python and Go versions
+
 ### Blockers/Concerns
 
 None.
@@ -170,6 +181,6 @@ None.
 ## Session Continuity
 
 Last session: 2026-06-22
-Stopped at: v0.10.1 milestone complete — all Phases 26-30 shipped
+Stopped at: v0.11 milestone initialized — defining requirements and roadmap
 Resume file: None
-Next action: Start next milestone (/gsd-new-milestone)
+Next action: Create requirements and roadmap for v0.11 Go Rewrite

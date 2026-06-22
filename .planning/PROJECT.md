@@ -12,13 +12,22 @@ A node must be able to detect and report whether it can reach every other node i
 
 **Shipped:** v0.10.1 — Code Review Cleanup (2026-06-22)
 
-**Current:** Planning next milestone
+**Current:** v0.11 — Go Rewrite
 
-**Context:** All 38 code review findings fixed across persistence, leader API, node agent, shell scripts, CI/Docker config, frontend, test infrastructure, and register CLI. 23 spec-based integration tests added for HTTP-only leader testing. Test count: 84 backend + 53 frontend = 137 total.
+**Context:** Both mesh-leader and mesh-node rewritten in Go for minimal container image size and memory footprint. Docker images use scratch/distroless base. Existing Python code preserved alongside. 23 spec/ integration tests validate HTTP API equivalence.
 
-## Current Milestone
+## Current Milestone: v0.11 Go Rewrite
 
-Planning next milestone. Use `/gsd-new-milestone` to define the next set of goals.
+**Goal:** Rewrite both mesh-leader and mesh-node in Go, produce minimal Docker images, and validate against the spec/ integration tests.
+
+**Target features:**
+- Go leader with full HTTP API equivalence (register, submit, data, health, updateConfig, peer push)
+- Go node with ICMP ping + HTTP health checks, result submission, peer push listener
+- JSON file persistence (same data format as Python version)
+- Dockerfiles for Go leader and Go node (scratch/distroless base, <10MB images)
+- Docker Compose config for full stack with Go backend + existing frontend
+- spec/ integration tests pass against Docker-hosted Go leader
+- TDD throughout — write failing Go test first
 
 ## Requirements
 
@@ -164,6 +173,23 @@ Now part of validated requirements — see v0.5 validated section.
 - ✓ **FIX-DEADCODE**: Remove dead code (`_peers_by_node`, `_ensure_data_dir`, dead TS exports, unused registry param, duplicate push functions) — v0.10.1
 - ✓ **FIX-SPEC-INTEGRATION**: HTTP-only integration tests under spec/ with optional restart-to-persistence — v0.10.1
 
+### v0.11 Active
+
+- [ ] **GO-LEAD-API**: Go leader implements POST /register, POST /submit, GET /data (90m/90h/90d), GET /node-list, GET /livez, GET /readyz, GET /healthz, POST /updateConfig — matching Python endpoint behavior
+- [ ] **GO-LEAD-PERSIST**: Go leader persists results to date-partitioned JSON Lines files (same format as Python implementation)
+- [ ] **GO-LEAD-PEER-PUSH**: Go leader pushes peer list and config updates to all registered nodes after registration/config changes
+- [ ] **GO-LEAD-REGISTRY**: Go leader maintains thread-safe in-memory node registry with asyncio-equivalent synchronization
+- [ ] **GO-NODE-PING**: Go node runs ICMP ping via os/exec against all peers with configurable timeout
+- [ ] **GO-NODE-HTTP-CHECK**: Go node runs HTTP GET /healthz against all peers concurrently with configurable timeout
+- [ ] **GO-NODE-SUBMIT**: Go node submits check results to leader after each cycle, buffers on failure and retries
+- [ ] **GO-NODE-PEER-LISTENER**: Go node runs HTTP server to receive peer push and config updates from leader
+- [ ] **GO-NODE-CYCLE**: Go node orchestrates full check cycle: fetch peers → run checks → submit results, on configurable interval
+- [ ] **GO-DOCKER-LEADER**: Dockerfile for Go leader producing minimal (<10MB) image
+- [ ] **GO-DOCKER-NODE**: Dockerfile for Go node producing minimal (<10MB) image
+- [ ] **GO-DOCKER-COMPOSE**: docker-compose.yml running Go leader + Go node + existing frontend
+- [ ] **GO-SPEC-TESTS**: spec/ integration tests pass against Docker-hosted Go leader
+- [ ] **GO-KEEP-PYTHON**: Python source files remain in the repository (not deleted)
+
 ### Out of Scope
 
 - Authentication / access control — VPN is trusted network for prototype
@@ -180,6 +206,7 @@ Now part of validated requirements — see v0.5 validated section.
 ## Context
 
 - Python backend (Quart) on port 58080, frontend (Vite + TS + Tailwind) served from same port
+- Go backend being built alongside (same API, same data format)
 - Deployed across multiple VMs on different geographies connected via VPN WAN
 - Data is small per check, retained in memory on nodes between submissions
 - Leader writes JSON files hourly to avoid memory/disk pressure
@@ -189,10 +216,10 @@ Now part of validated requirements — see v0.5 validated section.
 ## Constraints
 
 - **Port**: Leader must listen on 58080 (serving both API and frontend)
-- **Language**: Python (Quart) + TypeScript (React/Vanilla TS frontend)
-- **Framework**: Quart (async HTTP server), Vite + Tailwind CSS (frontend)
-- **Deployment**: Multi-VM over VPN WAN
-- **Base image**: python:3.12-slim with Node.js build stage
+- **Language**: Go (new backend) + Python (existing, preserved) + TypeScript (frontend)
+- **Framework**: Go standard library / Chi (backend), Vite + Tailwind CSS (frontend)
+- **Deployment**: Multi-VM over VPN WAN, minimal Docker images
+- **Base image**: scratch or distroless for Go binaries
 
 ## Key Decisions
 
@@ -231,4 +258,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-06-22 after v0.10.1 milestone completion*
+*Last updated: 2026-06-22 after v0.11 milestone initialization*
