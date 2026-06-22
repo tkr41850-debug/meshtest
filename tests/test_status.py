@@ -11,8 +11,7 @@ class TestStatus:
                 {"target_ip": "10.0.0.2", "ping_ok": True, "http_ok": True, "timestamp": 995.0}
             ]
         }
-        registry = {"10.0.0.1": {}, "10.0.0.2": {}}
-        status = calculate_status("10.0.0.1", "10.0.0.2", results, registry, now)
+        status = calculate_status("10.0.0.1", "10.0.0.2", results, now)
         assert status["ping_status"] == "OK"
         assert status["http_status"] == "OK"
 
@@ -21,8 +20,7 @@ class TestStatus:
 
         now = 1000.0
         results = {}
-        registry = {"10.0.0.1": {}}
-        status = calculate_status("10.0.0.1", "10.0.0.2", results, registry, now)
+        status = calculate_status("10.0.0.1", "10.0.0.2", results, now)
         assert status["ping_status"] == "Pending"
         assert status["http_status"] == "Pending"
 
@@ -37,8 +35,7 @@ class TestStatus:
                 {"target_ip": "10.0.0.2", "ping_ok": True, "http_ok": True, "timestamp": old_time}
             ]
         }
-        registry = {"10.0.0.1": {}}
-        status = calculate_status("10.0.0.1", "10.0.0.2", results, registry, now)
+        status = calculate_status("10.0.0.1", "10.0.0.2", results, now)
         assert status["ping_status"] == "NotAvailable"
         assert status["http_status"] == "NotAvailable"
 
@@ -51,8 +48,7 @@ class TestStatus:
                 {"target_ip": "10.0.0.2", "ping_ok": True, "http_ok": False, "timestamp": 995.0}
             ]
         }
-        registry = {"10.0.0.1": {}, "10.0.0.2": {}}
-        status = calculate_status("10.0.0.1", "10.0.0.2", results, registry, now)
+        status = calculate_status("10.0.0.1", "10.0.0.2", results, now)
         assert status["ping_status"] == "OK"
         assert status["http_status"] == "NotAvailable"  # http check failed
 
@@ -61,6 +57,5 @@ class TestStatus:
 
         now = 1000.0
         results = {}
-        registry = {"10.0.0.1": {}}
-        status = calculate_status("10.0.0.1", "10.0.0.2", results, registry, now)
+        status = calculate_status("10.0.0.1", "10.0.0.2", results, now)
         assert status["ping_status"] in ("Pending", "NotAvailable")

@@ -123,9 +123,11 @@ class TestConfigPushIntegration:
 
     async def test_config_change_updates_state(self, client, mock_httpx):
         old_interval = config.CHECK_INTERVAL
-        await client.post("/updateConfig", json={"check_interval": 99})
-        assert config.CHECK_INTERVAL == 99
-        config.CHECK_INTERVAL = old_interval
+        try:
+            await client.post("/updateConfig", json={"check_interval": 99})
+            assert config.CHECK_INTERVAL == 99
+        finally:
+            config.CHECK_INTERVAL = old_interval
 
     async def test_config_push_notifies_registered_nodes(self, client, mock_httpx):
         await client.post("/register", json={"node_ip": "10.0.0.1"})

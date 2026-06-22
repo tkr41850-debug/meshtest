@@ -79,11 +79,10 @@ async def check_node(target_ip: str, port: int = config.DEFAULT_PORT, timeout: f
         stderr=asyncio.subprocess.PIPE,
     )
     try:
-        await asyncio.wait_for(proc.wait(), timeout=timeout + 0.5)
-        stdout, _ = await proc.communicate()
+        stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=timeout + 0.5)
         if proc.returncode == 0:
             ping_ok = True
-            match = re.search(r"time=(\d+\.?\d*)\s*ms", stdout.decode())
+            match = re.search(r"time=(\d+\.?\d*)\s*ms", stdout.decode(errors="replace"))
             if match:
                 ping_latency_ms = float(match.group(1))
     except asyncio.TimeoutError:
@@ -97,8 +96,8 @@ async def check_node(target_ip: str, port: int = config.DEFAULT_PORT, timeout: f
             http_latency_ms = (time.time() - http_start) * 1000
             http_ok = resp.is_success
             http_status = resp.status_code
-    except Exception:
-        pass
+    except Exception as e:
+        logger.debug("HTTP check to %s:%d failed: %s", target_ip, port, e)
 
     return {
         "target_ip": target_ip,
@@ -224,16 +223,18 @@ async def run():
                 combined = list(result_buffer)
                 combined.append(results)
 
+                all_checks: list[dict] = []
                 for batch in combined:
-                    ok = await submit_results(batch, node_ip, leader_url, node_url)
-                    if ok:
-                        result_buffer.clear()
-                        if len(combined) > 1:
-                            logger.info("Buffered data submitted successfully")
-                        break
-                    else:
-                        result_buffer.append(batch)
-                        logger.warning("Buffer size: %d cycles", len(result_buffer))
+                    all_checks.extend(batch)
+
+                ok = await submit_results(all_checks, node_ip, leader_url, node_url)
+                if ok:
+                    result_buffer.clear()
+                    if len(combined) > 1:
+                        logger.info("Buffered data submitted successfully")
+                else:
+                    result_buffer.append(results)
+                    logger.warning("Buffer size: %d cycles", len(result_buffer))
 
             except Exception as e:
                 logger.error("Check cycle error: %s", e)

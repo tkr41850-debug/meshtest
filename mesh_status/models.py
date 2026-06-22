@@ -1,11 +1,10 @@
 from dataclasses import dataclass, field
-from typing import Optional
 
 
 @dataclass
 class NodeRegistration:
     node_ip: str
-    hostname: Optional[str] = None
+    hostname: str | None = None
 
 
 @dataclass
@@ -13,10 +12,10 @@ class CheckResult:
     node_ip: str
     target_ip: str
     ping_ok: bool
-    ping_latency_ms: Optional[float] = None
+    ping_latency_ms: float | None = None
     http_ok: bool = False
-    http_latency_ms: Optional[float] = None
-    http_status: Optional[int] = None
+    http_latency_ms: float | None = None
+    http_status: int | None = None
     timestamp: float = 0.0
 
 
@@ -30,7 +29,7 @@ class SubmitPayload:
 @dataclass
 class NodeInfo:
     node_ip: str
-    hostname: Optional[str] = None
+    hostname: str | None = None
     last_seen: float = 0.0
     listen_port: int = 58080
-    node_url: Optional[str] = None
+    node_url: str | None = None

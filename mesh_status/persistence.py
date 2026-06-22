@@ -11,12 +11,6 @@ logger = logging.getLogger("mesh-status-persistence")
 DATA_ROOT = Path(os.environ.get("DATA_DIR", "data"))
 
 
-def _ensure_data_dir(d: date) -> Path:
-    path = DATA_ROOT / str(d.year) / f"{d.month:02d}" / f"{d.day:02d}"
-    path.parent.mkdir(parents=True, exist_ok=True)
-    return path
-
-
 def _date_path(d: date) -> Path:
     return DATA_ROOT / str(d.year) / f"{d.month:02d}" / f"{d.day:02d}.json"
 
@@ -26,14 +20,11 @@ def _append_results(d: date, results: list[dict]):
         return
     path = _date_path(d)
     path.parent.mkdir(parents=True, exist_ok=True)
-    tmp_path = path.with_suffix(".tmp")
-    mode = "a" if path.exists() else "w"
-    with open(tmp_path, mode) as f:
+    with open(path, "a") as f:
         for item in results:
             f.write(json.dumps(item, default=str) + "\n")
         f.flush()
         os.fsync(f.fileno())
-    os.replace(tmp_path, path)
 
 
 def _read_results(start_date: date, end_date: date) -> list[dict]:
@@ -55,7 +46,6 @@ def _read_results(start_date: date, end_date: date) -> list[dict]:
                                 line[:80],
                             )
         current += timedelta(days=1)
-    results.sort(key=lambda r: r.get("timestamp", 0))
     return results
 
 
@@ -162,17 +152,18 @@ async def flush_loop(interval: int = 3600):
     After flushing, moves data older than 90h to daily aggregates
     and removes it from _results.
     """
-    from mesh_status.leader import _results, _day_aggregates
+    from mesh_status.leader import _results, _day_aggregates, _results_lock
 
     while True:
         await asyncio.sleep(interval)
-        if _results:
-            batch = dict(_results)
-            _flush_results(batch)
-            cutoff_90h = time.time() - 90 * 3600
-            _move_old_to_aggregates(_results, _day_aggregates, cutoff_90h)
-            logger.debug(
-                "Flush complete: %d nodes in _results, %d days in _day_aggregates",
-                len(_results),
-                len(_day_aggregates),
-            )
+        async with _results_lock:
+            if _results:
+                batch = dict(_results)
+                _flush_results(batch)
+                cutoff_90h = time.time() - 90 * 3600
+                _move_old_to_aggregates(_results, _day_aggregates, cutoff_90h)
+                logger.debug(
+                    "Flush complete: %d nodes in _results, %d days in _day_aggregates",
+                    len(_results),
+                    len(_day_aggregates),
+                )

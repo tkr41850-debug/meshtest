@@ -12,15 +12,6 @@ def test_config_has_defaults():
 
 
 class TestPersistence:
-    def test_ensure_data_dir_creates_path(self):
-        from mesh_status.persistence import _ensure_data_dir
-
-        d = date(2026, 6, 18)
-        path = _ensure_data_dir(d)
-        assert path.parent.exists()
-        assert path.parent.name == "06"
-        assert path.parent.parent.name == "2026"
-
     def test_append_and_read_results(self):
         from mesh_status.persistence import _append_results, _read_results
 
@@ -42,16 +33,52 @@ class TestPersistence:
         results = _read_results(d, d)
         assert results == []
 
-    def test_atomic_write_no_corrupt(self):
+    def test_append_preserves_across_multiple_calls(self):
         from mesh_status.persistence import _append_results, _read_results
 
         d = date(2026, 6, 18)
-        data = [{"test": "atomic", "n": i, "timestamp": 200.0 + i} for i in range(5)]
-        _append_results(d, data)
-        read_back = _read_results(d, d)
-        assert len(read_back) >= 5
-        atomic_items = [r for r in read_back if r.get("test") == "atomic"]
-        assert len(atomic_items) == 5
+        _append_results(
+            d,
+            [
+                {"test": "first_batch", "n": 1, "timestamp": 100.0},
+            ],
+        )
+        _append_results(
+            d,
+            [
+                {"test": "second_batch", "n": 2, "timestamp": 101.0},
+            ],
+        )
+
+        results = _read_results(d, d)
+        tests = [r["test"] for r in results if "test" in r]
+        assert "first_batch" in tests, "First batch data lost by second append!"
+        assert "second_batch" in tests
+        assert len(tests) == 2
+
+    def test_malformed_json_line_skipped_with_warning(self, caplog):
+        from mesh_status.persistence import _append_results, _read_results
+        import logging
+
+        caplog.set_level(logging.WARNING)
+        d = date(2026, 6, 18)
+        _append_results(
+            d,
+            [
+                {"test": "valid", "timestamp": 100.0},
+            ],
+        )
+
+        from mesh_status.persistence import _date_path
+
+        path = _date_path(d)
+        with open(path, "a") as f:
+            f.write("not valid json\n")
+
+        results = _read_results(d, d)
+        valid = [r for r in results if r.get("test") == "valid"]
+        assert len(valid) == 1
+        assert "malformed" in caplog.text.lower() or "Skipping" in caplog.text
 
     def test_flush_results(self):
         from mesh_status.persistence import _flush_results, _read_results

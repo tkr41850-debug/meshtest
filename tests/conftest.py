@@ -6,11 +6,11 @@ from unittest.mock import Mock, patch, AsyncMock
 
 @pytest.fixture(autouse=True)
 def reset_leader_state():
-    from mesh_status.leader import _registry, _results, _peers_by_node
+    from mesh_status.leader import _registry, _results, _day_aggregates
 
     _registry.clear()
     _results.clear()
-    _peers_by_node.clear()
+    _day_aggregates.clear()
     # Remove stale disk data from previous runs
     data_dir = os.path.join(os.path.dirname(__file__), "..", "data")
     if os.path.isdir(data_dir):

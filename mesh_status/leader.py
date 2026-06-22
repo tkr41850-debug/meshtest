@@ -31,7 +31,7 @@ logger = logging.getLogger("mesh-status")
 _registry: dict[str, NodeInfo] = {}
 _registry_lock = asyncio.Lock()
 _results: dict[str, list[dict]] = {}
-_peers_by_node: dict[str, list[str]] = {}
+_results_lock = asyncio.Lock()
 _day_aggregates: dict[str, dict] = {}
 
 
@@ -134,10 +134,11 @@ async def submit_results():
     if not isinstance(timestamp, (int, float)):
         return {"error": "Invalid payload: timestamp must be a number", "status": 400}, 400
 
-    if node_ip in _results:
-        _results[node_ip].extend(checks)
-    else:
-        _results[node_ip] = list(checks)
+    async with _results_lock:
+        if node_ip in _results:
+            _results[node_ip].extend(checks)
+        else:
+            _results[node_ip] = list(checks)
     logger.info("Results submitted from %s: %d checks", node_ip, len(checks))
 
     async with _registry_lock:
@@ -163,11 +164,17 @@ async def update_config():
         return {"error": "Empty body", "status": 400}, 400
 
     if "check_interval" in data:
-        config.CHECK_INTERVAL = int(data["check_interval"])
+        val = data["check_interval"]
+        if not isinstance(val, int) or val < 1:
+            return {"error": "check_interval must be a positive integer", "status": 400}, 400
+        config.CHECK_INTERVAL = val
     if "buffer_size" in data:
-        config.BUFFER_SIZE = int(data["buffer_size"])
+        val = data["buffer_size"]
+        if not isinstance(val, int) or val < 1:
+            return {"error": "buffer_size must be a positive integer", "status": 400}, 400
+        config.BUFFER_SIZE = val
 
-    await _push_config_to_all()
+    await _push_peer_list_to_all()
     return {
         "status": "config_updated",
         "config": {"check_interval": config.CHECK_INTERVAL, "buffer_size": config.BUFFER_SIZE},
@@ -182,17 +189,18 @@ async def get_data():
     if window == "90m":
         cutoff = now - 5400
         checks = []
-        for node_ip, node_results in _results.items():
-            for r in node_results:
-                if r.get("timestamp", 0) >= cutoff:
-                    check = dict(r)
-                    check["node_ip"] = node_ip
-                    checks.append(check)
+        async with _results_lock:
+            for node_ip, node_results in _results.items():
+                for r in node_results:
+                    if r.get("timestamp", 0) >= cutoff:
+                        check = dict(r)
+                        check["node_ip"] = node_ip
+                        checks.append(check)
         statuses = []
         for src_ip in list(_registry.keys()):
             for dst_ip in list(_registry.keys()):
                 if src_ip != dst_ip:
-                    s = status_module.calculate_status(src_ip, dst_ip, _results, _registry, now)
+                    s = status_module.calculate_status(src_ip, dst_ip, _results, now)
                     statuses.append(s)
         return {"window": "90m", "checks": checks, "statuses": statuses, "timestamp": now}, 200
 
@@ -201,60 +209,86 @@ async def get_data():
         cutoff_ts = (datetime.now() - timedelta(days=days)).timestamp()
         days_list: list[dict] = []
 
-        for day_str in sorted(_day_aggregates.keys()):
-            day_ts = datetime.strptime(day_str, "%Y-%m-%d").timestamp()
-            if day_ts < cutoff_ts:
-                continue
-            connections = []
-            for (src, dst), stats in _day_aggregates[day_str].items():
-                connections.append(
-                    {
-                        "node_ip": src,
-                        "target_ip": dst,
-                        "total_checks": stats["total"],
-                        "ping_ok": stats["ping_ok"],
-                        "http_ok": stats["http_ok"],
-                        "ping_uptime_pct": round(stats["ping_ok"] / stats["total"] * 100, 1),
-                        "http_uptime_pct": round(stats["http_ok"] / stats["total"] * 100, 1),
-                    }
-                )
-            days_list.append({"date": day_str, "connections": connections})
-
-        recent_by_day: dict[str, dict] = {}
-        for node_ip, node_results in _results.items():
-            for r in node_results:
-                ts = r.get("timestamp", 0)
-                if ts < cutoff_ts:
+        async with _results_lock:
+            for day_str in sorted(_day_aggregates.keys()):
+                day_ts = datetime.strptime(day_str, "%Y-%m-%d").timestamp()
+                if day_ts < cutoff_ts:
                     continue
-                day = datetime.fromtimestamp(ts).strftime("%Y-%m-%d")
-                key = (node_ip, r.get("target_ip", ""))
-                if day in _day_aggregates and key in _day_aggregates[day]:
-                    continue
-                if day not in recent_by_day:
-                    recent_by_day[day] = {}
-                if key not in recent_by_day[day]:
-                    recent_by_day[day][key] = {"total": 0, "ping_ok": 0, "http_ok": 0}
-                recent_by_day[day][key]["total"] += 1
-                if r.get("ping_ok"):
-                    recent_by_day[day][key]["ping_ok"] += 1
-                if r.get("http_ok"):
-                    recent_by_day[day][key]["http_ok"] += 1
+                connections = []
+                for (src, dst), stats in _day_aggregates[day_str].items():
+                    p_pct = (
+                        round(stats["ping_ok"] / stats["total"] * 100, 1)
+                        if stats["total"] > 0
+                        else 0.0
+                    )
+                    h_pct = (
+                        round(stats["http_ok"] / stats["total"] * 100, 1)
+                        if stats["total"] > 0
+                        else 0.0
+                    )
+                    connections.append(
+                        {
+                            "node_ip": src,
+                            "target_ip": dst,
+                            "total_checks": stats["total"],
+                            "ping_ok": stats["ping_ok"],
+                            "http_ok": stats["http_ok"],
+                            "ping_uptime_pct": p_pct,
+                            "http_uptime_pct": h_pct,
+                        }
+                    )
+                days_list.append({"date": day_str, "connections": connections})
 
-        for day_str in sorted(recent_by_day.keys()):
-            connections = []
-            for (src, dst), stats in recent_by_day[day_str].items():
-                connections.append(
-                    {
-                        "node_ip": src,
-                        "target_ip": dst,
-                        "total_checks": stats["total"],
-                        "ping_ok": stats["ping_ok"],
-                        "http_ok": stats["http_ok"],
-                        "ping_uptime_pct": round(stats["ping_ok"] / stats["total"] * 100, 1),
-                        "http_uptime_pct": round(stats["http_ok"] / stats["total"] * 100, 1),
-                    }
-                )
-            days_list.append({"date": day_str, "connections": connections})
+            days_by_date = {d["date"]: d for d in days_list}
+
+            recent_by_day: dict[str, dict] = {}
+            for node_ip, node_results in _results.items():
+                for r in node_results:
+                    ts = r.get("timestamp", 0)
+                    if ts < cutoff_ts:
+                        continue
+                    day = datetime.fromtimestamp(ts).strftime("%Y-%m-%d")
+                    key = (node_ip, r.get("target_ip", ""))
+                    if day in _day_aggregates and key in _day_aggregates[day]:
+                        continue
+                    if day not in recent_by_day:
+                        recent_by_day[day] = {}
+                    if key not in recent_by_day[day]:
+                        recent_by_day[day][key] = {"total": 0, "ping_ok": 0, "http_ok": 0}
+                    recent_by_day[day][key]["total"] += 1
+                    if r.get("ping_ok"):
+                        recent_by_day[day][key]["ping_ok"] += 1
+                    if r.get("http_ok"):
+                        recent_by_day[day][key]["http_ok"] += 1
+
+            for day_str in sorted(recent_by_day.keys()):
+                connections = []
+                for (src, dst), stats in recent_by_day[day_str].items():
+                    p_pct = (
+                        round(stats["ping_ok"] / stats["total"] * 100, 1)
+                        if stats["total"] > 0
+                        else 0.0
+                    )
+                    h_pct = (
+                        round(stats["http_ok"] / stats["total"] * 100, 1)
+                        if stats["total"] > 0
+                        else 0.0
+                    )
+                    connections.append(
+                        {
+                            "node_ip": src,
+                            "target_ip": dst,
+                            "total_checks": stats["total"],
+                            "ping_ok": stats["ping_ok"],
+                            "http_ok": stats["http_ok"],
+                            "ping_uptime_pct": p_pct,
+                            "http_uptime_pct": h_pct,
+                        }
+                    )
+                if day_str in days_by_date:
+                    days_by_date[day_str]["connections"].extend(connections)
+                else:
+                    days_list.append({"date": day_str, "connections": connections})
 
         days_list.sort(key=lambda d: d["date"])
         return {"window": window, "days": days_list, "timestamp": now}, 200
@@ -262,12 +296,13 @@ async def get_data():
     elif window == "90h":
         start = now - 90 * 3600
         raw = []
-        for node_ip, node_results in _results.items():
-            for r in node_results:
-                if r.get("timestamp", 0) >= start:
-                    check = dict(r)
-                    check["node_ip"] = node_ip
-                    raw.append(check)
+        async with _results_lock:
+            for node_ip, node_results in _results.items():
+                for r in node_results:
+                    if r.get("timestamp", 0) >= start:
+                        check = dict(r)
+                        check["node_ip"] = node_ip
+                        raw.append(check)
 
         by_hour: dict[str, dict] = {}
         for r in raw:
@@ -288,6 +323,12 @@ async def get_data():
         for hour_str in sorted(by_hour.keys()):
             connections = []
             for (src, dst), stats in by_hour[hour_str].items():
+                p_pct = (
+                    round(stats["ping_ok"] / stats["total"] * 100, 1) if stats["total"] > 0 else 0.0
+                )
+                h_pct = (
+                    round(stats["http_ok"] / stats["total"] * 100, 1) if stats["total"] > 0 else 0.0
+                )
                 connections.append(
                     {
                         "node_ip": src,
@@ -295,8 +336,8 @@ async def get_data():
                         "total_checks": stats["total"],
                         "ping_ok": stats["ping_ok"],
                         "http_ok": stats["http_ok"],
-                        "ping_uptime_pct": round(stats["ping_ok"] / stats["total"] * 100, 1),
-                        "http_uptime_pct": round(stats["http_ok"] / stats["total"] * 100, 1),
+                        "ping_uptime_pct": p_pct,
+                        "http_uptime_pct": h_pct,
                     }
                 )
             hours_list.append({"date": hour_str, "connections": connections})
@@ -341,15 +382,6 @@ async def _notify_node(node_ip: str, peers: list[dict]):
 
 
 async def _push_peer_list_to_all():
-    async with _registry_lock:
-        all_ips = list(_registry.keys())
-        peer_dicts = _peer_dicts()
-        tasks = [_notify_node(ip, peer_dicts) for ip in all_ips]
-    if tasks:
-        await asyncio.gather(*tasks, return_exceptions=True)
-
-
-async def _push_config_to_all():
     async with _registry_lock:
         all_ips = list(_registry.keys())
         peer_dicts = _peer_dicts()
