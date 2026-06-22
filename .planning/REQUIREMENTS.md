@@ -1,144 +1,136 @@
 # Requirements: mesh-status
 
-**Defined:** 2026-06-20
+**Defined:** 2026-06-21
 **Core Value:** A node must be able to detect and report whether it can reach every other node in the mesh, and the leader must present an accurate, up-to-date connectivity view.
 
-## v0.8 Requirements
+## v0.10.1 Requirements
 
-### Install Script (INST)
+Fix all code review findings across the codebase. Every behavioral fix must follow TDD (write failing test first).
 
-- [x] **INST-01**: `deploy/install.sh` installs mesh-status to `~/.local/meshtest`
-- [x] **INST-02**: Prerequisite checks for `uv` and `git` with actionable messages
-- [x] **INST-03**: Version-pinned git clone via `MESH_STATUS_VERSION` env var
-- [x] **INST-04**: `uv sync` installs Python dependencies
-- [x] **INST-05**: Frontend build during install (npm ci + npm run build)
-- [x] **INST-06**: Idempotent reinstall — git pull in existing clone on re-run
-- [x] **INST-07**: Success banner with install path, start commands, dashboard URL
-- [x] **INST-08**: `-y` / `--yes` flag for non-interactive mode
-- [x] **INST-09**: `--help` flag for install.sh
+### Persistence & Data Integrity
 
-### Start Script (START)
+- [ ] **DATA-01**: `_append_results` appends new data to existing file instead of overwriting (direct append mode, discard invalid lines with warning on read)
+- [ ] **DATA-02**: `_read_results` does not sort (sole caller `load_into_memory` re-sorts anyway)
+- [ ] **DATA-03**: `_ensure_data_dir` removed (dead code, never called)
+- [ ] **DATA-04**: Default `DATA_ROOT` relative path documented or resolved to absolute
 
-- [x] **START-01**: `start.sh --leader` starts the leader via `uv run`
-- [x] **START-02**: `start.sh --node` starts the node agent
-- [x] **START-03**: Log output redirected to `$INSTALL_DIR/var/*.log`
-- [x] **START-04**: PID file management for process tracking
-- [x] **START-05**: Signal handling (SIGTERM/SIGINT traps for graceful shutdown)
-- [x] **START-06**: `start.sh --help` flag
-- [x] **START-07**: `start.sh --version` flag
-- [x] **START-08**: `start.sh --uninstall` removes install and prints PATH cleanup
+### Leader API
 
-### Config & Setup (CONF)
+- [ ] **LEAD-01**: `/data?window=90d` response deduplicates days with data split across `_day_aggregates` and `_results`
+- [ ] **LEAD-02**: `_results` and `_day_aggregates` accesses synchronized with `asyncio.Lock`
+- [ ] **LEAD-03**: `/updateConfig` validates input types and bounds (returns 400 on invalid input)
+- [ ] **LEAD-04**: Uptime percentage division by zero guarded (3 sites in `leader.py`)
 
-- [x] **CONF-01**: `.env` config file generation with defaults during install
-- [x] **CONF-02**: Interactive config wizard for first-run setup
-- [x] **CONF-03**: `MESH_STATUS_HOME` env var to override install directory
-- [x] **CONF-04**: CLI flag override for non-interactive config
+### Node Agent
 
-### Docker CI Test (TEST)
+- [ ] **NODE-01**: Buffer retry submits all current checks together instead of dropping current cycle on partial success
+- [ ] **NODE-02**: Ping stdout decoded with `errors="replace"` to prevent `UnicodeDecodeError`
+- [ ] **NODE-03**: `proc.wait()` before `communicate()` replaced with single `communicate(timeout=...)`
+- [ ] **NODE-04**: Bare `except: pass` in HTTP health check replaced with logged exception
 
-- [x] **TEST-01**: Docker-based CI test verifies full install flow in fresh container
-- [x] **TEST-02**: CI test runs `install.sh -y` with env vars for non-interactive mode
-- [x] **TEST-03**: CI test verifies `start.sh` launches and process is healthy
+### Install Script
 
-### Infrastructure Fix (FIX)
+- [ ] **SHELL-01**: `command -v npm` checked alongside uv/git/curl
+- [ ] **SHELL-02**: `MESH_STATUS_HOME` resolved to absolute path before use
+- [ ] **SHELL-03**: Install URL in usage text points to `raw.githubusercontent.com`
+- [ ] **SHELL-04**: Temp file `/tmp/_mesh_env_backup` cleaned up after successful restore
+- [ ] **SHELL-05**: `-h` short flag added as alias for `--help`
 
-- [x] **FIX-05**: Fix `persistence.py` to respect `DATA_DIR` env var instead of hardcoded `Path("data")`
+### Start Script
 
-## v0.9 Requirements
+- [ ] **SHELL-06**: `LEADER_PORT` and `NODE_URL` persisted to `.env` by `persist_env`
+- [ ] **SHELL-07**: Dead trap handler removed (PID file not cleaned on exec)
+- [ ] **SHELL-08**: `NODE_ARGS` uses bash array instead of unquoted string concatenation
+- [ ] **SHELL-09**: `--leader-url` validates next arg exists and doesn't start with `--`
+- [ ] **SHELL-10**: `.env` template is role-specific (leader vs node)
 
-### COLOR — Consistent Color Scheme
+### CI/Docker Config
 
-- [x] **COLOR-01**: Extract shared `uptimeColor()` function from `cards.ts`/`day30.ts` into `views/colors.ts` — single source of truth
-- [x] **COLOR-02**: Update `bars.ts` `barColor()` to use HSL gradient with <90%→red, 90–99%→amber ramp, ≥99.9%→green — same scheme applied to bars AND percentage numbers
-- [x] **COLOR-03**: Remove duplicated `uptimeColor()` and `BADGE_MAP` color logic from individual view files — all views use `colors.ts`
-- [x] **COLOR-04**: Test color consistency — bars and numbers use matching colors at boundary values (0%, 50%, 89.9%, 90%, 95%, 99%, 99.9%, 100%)
+- [ ] **CI-01**: Makefile declares all phony targets in `.PHONY`
+- [ ] **CI-02**: `.dockerignore` excludes `frontend/node_modules/` and `frontend/dist/`
+- [ ] **CI-03**: `.gitignore` covers `.env`, `*.sw?`, and `*.log`
+- [ ] **CI-04**: uv version pinned in CI workflow and Dockerfile
+- [ ] **CI-05**: Explicit ruff lint rules in `pyproject.toml`
 
-### WINDOW — 90m/90h/90d Windows
+### Frontend
 
-- [x] **WINDOW-01**: Backend extends in-memory retention from 1800s to 5400s in `persistence.py` to support 90-minute window
-- [x] **WINDOW-02**: Backend adds `/data?window=90h` endpoint with hourly aggregation (reuses 30d aggregation pattern, groups by hour instead of day)
-- [x] **WINDOW-03**: Frontend increases bar count from 30 to 90 in all time-window views
-- [x] **WINDOW-04**: `api.ts` adds `fetchData90h()`, renames existing fetch functions to reflect new window sizes
-- [x] **WINDOW-05**: `types.ts` adds 90h response/entry types (HourData with same shape as DayData)
-- [x] **WINDOW-06**: `main.ts` wires up third tab for 90h view alongside 90m and 90d tabs
+- [ ] **UI-01**: Frontend shows `Degraded` (amber) status when one metric is below threshold and the other is above
+- [ ] **UI-02**: Dead TypeScript exports (`fetchData30m`, `Data30mResponse`) removed
 
-### UNIFY — Unified Cards Layout
+### Test Infrastructure
 
-- [x] **UNIFY-01**: Extract shared card template from `cards.ts` into `views/card.ts` — reusable across all three time windows
-- [x] **UNIFY-02**: Refactor 30m `cards.ts` to include split circle + total check count on each card (adds missing info to existing card layout)
-- [x] **UNIFY-03**: Refactor 90d `day30.ts` to render each pair as a card (not per-day rows), reusing the shared card template with same density as 30m view
-- [x] **UNIFY-04**: Create `views/hourly.ts` for 90h view using the shared card template
+- [ ] **TEST-01**: `reset_leader_state` fixture clears `_day_aggregates`
+- [ ] **TEST-02**: `test_config_change_updates_state` restores global config on assertion failure (try/finally)
+- [ ] **TEST-03**: `test_data_api` tests use `client` fixture instead of `app.test_client()`
+- [ ] **TEST-04**: `_StopLoop` documented with comment or restructured
 
-Archived: `.planning/milestones/v0.10-REQUIREMENTS.md`
+### Register CLI
 
-## v2 Requirements
+- [ ] **CLI-01**: `register.py` validates IP input with `ipaddress.ip_address()`
 
-None deferred.
+### Dead Code Removal
+
+- [ ] **DEAD-01**: `_peers_by_node` removed from `leader.py` (declared but never populated)
+- [ ] **DEAD-02**: `_push_peer_list_to_all` and `_push_config_to_all` consolidated (duplicate code)
+- [ ] **DEAD-03**: Unused `registry` parameter removed from `calculate_status`
+- [ ] **DEAD-04**: `Optional[str]` replaced with `str | None` syntax (Python 3.12+)
 
 ## Out of Scope
 
 | Feature | Reason |
 |---------|--------|
-| Systemd service units | Deferred to v0.8.x or v0.9 — install.sh + start.sh are sufficient for v0.8 |
-| Package manager support (apt/brew) | Distribution-specific packaging deferred — curl-pipe-bash is the primary path |
-| Auto-update mechanism | Requires background process coordination — future milestone |
-| Windows/Git Bash support | Python ecosystem on Windows is a separate concern |
-| Mutual TLS between nodes | Config stubs deferred — no auth in prototype |
-| Pre-built frontend artifact | Requires release CI workflow — build from source in v0.8 |
-| Performance safeguards for 50+ nodes | Beyond current deployment scale — CSS containment deferred |
+| HTTPS/TLS support | Infrastructure feature, not a code review fix |
+| Systemd service units | Feature request, not a bug fix |
+| Auto-update mechanism | Feature request, not a bug fix |
 
 ## Traceability
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| INST-01 | Phase 18 | Complete |
-| INST-02 | Phase 18 | Complete |
-| INST-03 | Phase 18 | Complete |
-| INST-04 | Phase 18 | Complete |
-| INST-05 | Phase 18 | Complete |
-| INST-06 | Phase 18 | Complete |
-| INST-07 | Phase 18 | Complete |
-| INST-08 | Phase 18 | Complete |
-| INST-09 | Phase 18 | Complete |
-| START-01 | Phase 19 | Complete |
-| START-02 | Phase 19 | Complete |
-| START-03 | Phase 19 | Complete |
-| START-04 | Phase 19 | Complete |
-| START-05 | Phase 19 | Complete |
-| START-06 | Phase 19 | Complete |
-| START-07 | Phase 19 | Complete |
-| START-08 | Phase 19 | Complete |
-| CONF-01 | Phase 18 | Complete |
-| CONF-02 | Phase 19 | Complete |
-| CONF-03 | Phase 18 | Complete |
-| CONF-04 | Phase 19 | Complete |
-| TEST-01 | Phase 20 | Complete |
-| TEST-02 | Phase 20 | Complete |
-| TEST-03 | Phase 20 | Complete |
-| FIX-05 | Phase 19 | Complete |
- | COLOR-01 | Phase 21 | Complete |
- | COLOR-02 | Phase 21 | Complete |
- | COLOR-03 | Phase 21 | Complete |
- | COLOR-04 | Phase 21 | Complete |
- | WINDOW-01 | Phase 22 | Complete |
-| WINDOW-02 | Phase 22 | Complete |
-| WINDOW-03 | Phase 22 | Complete |
-| WINDOW-04 | Phase 22 | Complete |
-| WINDOW-05 | Phase 22 | Complete |
-| WINDOW-06 | Phase 22 | Complete |
-| UNIFY-01 | Phase 23 | Complete |
-| UNIFY-02 | Phase 23 | Complete |
-| UNIFY-03 | Phase 23 | Complete |
-| UNIFY-04 | Phase 23 | Complete |
+| DATA-01 | — | Pending |
+| DATA-02 | — | Pending |
+| DATA-03 | — | Pending |
+| DATA-04 | — | Pending |
+| LEAD-01 | — | Pending |
+| LEAD-02 | — | Pending |
+| LEAD-03 | — | Pending |
+| LEAD-04 | — | Pending |
+| NODE-01 | — | Pending |
+| NODE-02 | — | Pending |
+| NODE-03 | — | Pending |
+| NODE-04 | — | Pending |
+| SHELL-01 | — | Pending |
+| SHELL-02 | — | Pending |
+| SHELL-03 | — | Pending |
+| SHELL-04 | — | Pending |
+| SHELL-05 | — | Pending |
+| SHELL-06 | — | Pending |
+| SHELL-07 | — | Pending |
+| SHELL-08 | — | Pending |
+| SHELL-09 | — | Pending |
+| SHELL-10 | — | Pending |
+| CI-01 | — | Pending |
+| CI-02 | — | Pending |
+| CI-03 | — | Pending |
+| CI-04 | — | Pending |
+| CI-05 | — | Pending |
+| UI-01 | — | Pending |
+| UI-02 | — | Pending |
+| TEST-01 | — | Pending |
+| TEST-02 | — | Pending |
+| TEST-03 | — | Pending |
+| TEST-04 | — | Pending |
+| CLI-01 | — | Pending |
+| DEAD-01 | — | Pending |
+| DEAD-02 | — | Pending |
+| DEAD-03 | — | Pending |
+| DEAD-04 | — | Pending |
 
 **Coverage:**
-- v0.8 requirements: 25 total
-- v0.9 requirements: 14 total
-- v0.10 (archived): 6 total
-- Mapped to phases: 6
-- Unmapped: 0
+- v0.10.1 requirements: 38 total
+- Mapped to phases: 0
+- Unmapped: 38 ⚠️
 
 ---
 *Requirements defined: 2026-06-21*
-*Last updated: 2026-06-21 — v0.10 requirements archived to `.planning/milestones/v0.10-REQUIREMENTS.md`*
+*Last updated: 2026-06-21 after initial definition*
