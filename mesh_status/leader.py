@@ -225,11 +225,11 @@ async def get_data():
                 if ts < cutoff_ts:
                     continue
                 day = datetime.fromtimestamp(ts).strftime("%Y-%m-%d")
-                if day in _day_aggregates:
+                key = (node_ip, r.get("target_ip", ""))
+                if day in _day_aggregates and key in _day_aggregates[day]:
                     continue
                 if day not in recent_by_day:
                     recent_by_day[day] = {}
-                key = (node_ip, r.get("target_ip", ""))
                 if key not in recent_by_day[day]:
                     recent_by_day[day][key] = {"total": 0, "ping_ok": 0, "http_ok": 0}
                 recent_by_day[day][key]["total"] += 1

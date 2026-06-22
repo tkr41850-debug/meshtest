@@ -1,3 +1,8 @@
+import json
+import time
+from datetime import datetime, timedelta
+from pathlib import Path
+
 from mesh_status import config
 from mesh_status.leader import _registry
 
@@ -293,3 +298,108 @@ class TestCorsIntegration:
         )
         cors_header = resp.headers.get("access-control-allow-origin")
         assert cors_header == "*" or cors_header is not None
+
+
+class TestDataReloadIntegration:
+    async def test_90h_after_load_returns_from_memory(self, client):
+        from mesh_status.leader import _results, _day_aggregates
+        from mesh_status import persistence
+
+        now = time.time()
+        dt = datetime.now()
+        path = Path("data") / str(dt.year) / f"{dt.month:02d}" / f"{dt.day:02d}.json"
+        path.parent.mkdir(parents=True, exist_ok=True)
+        with open(path, "w") as f:
+            f.write(
+                json.dumps(
+                    {
+                        "node_ip": "10.0.0.1",
+                        "target_ip": "10.0.0.2",
+                        "ping_ok": True,
+                        "http_ok": True,
+                        "timestamp": now - 3600,
+                    }
+                )
+                + "\n"
+            )
+
+        await persistence.load_into_memory(_results, _day_aggregates)
+
+        resp = await client.get("/data?window=90h")
+        assert resp.status_code == 200
+        data = await resp.get_json()
+        assert len(data["hours"]) > 0
+
+    async def test_90d_after_load_returns_from_both_sources(self, client):
+        from mesh_status.leader import _results, _day_aggregates
+        from mesh_status import persistence
+
+        now = time.time()
+        today = datetime.now()
+        old_day = datetime.now() - timedelta(days=5)
+
+        path = Path("data") / str(today.year) / f"{today.month:02d}" / f"{today.day:02d}.json"
+        path.parent.mkdir(parents=True, exist_ok=True)
+        with open(path, "w") as f:
+            f.write(
+                json.dumps(
+                    {
+                        "node_ip": "10.0.0.1",
+                        "target_ip": "10.0.0.2",
+                        "ping_ok": True,
+                        "timestamp": now - 3600,
+                    }
+                )
+                + "\n"
+            )
+
+        old_path = (
+            Path("data") / str(old_day.year) / f"{old_day.month:02d}" / f"{old_day.day:02d}.json"
+        )
+        old_path.parent.mkdir(parents=True, exist_ok=True)
+        with open(old_path, "w") as f:
+            f.write(
+                json.dumps(
+                    {
+                        "node_ip": "10.0.0.3",
+                        "target_ip": "10.0.0.4",
+                        "ping_ok": True,
+                        "timestamp": old_day.timestamp(),
+                    }
+                )
+                + "\n"
+            )
+
+        await persistence.load_into_memory(_results, _day_aggregates)
+
+        resp = await client.get("/data?window=90d")
+        assert resp.status_code == 200
+        data = await resp.get_json()
+        assert len(data["days"]) >= 2
+
+    async def test_90d_aggregate_merging(self, client):
+        from mesh_status.leader import _results, _day_aggregates
+
+        today_str = datetime.now().strftime("%Y-%m-%d")
+        _day_aggregates[today_str] = {
+            ("10.0.0.1", "10.0.0.2"): {"total": 10, "ping_ok": 10, "http_ok": 10},
+        }
+        _results["10.0.0.3"] = [
+            {
+                "target_ip": "10.0.0.4",
+                "ping_ok": True,
+                "http_ok": True,
+                "timestamp": time.time() - 100,
+            },
+        ]
+
+        resp = await client.get("/data?window=90d")
+        assert resp.status_code == 200
+        data = await resp.get_json()
+        all_targets = set()
+        for d in data["days"]:
+            if d["date"] == today_str:
+                for c in d["connections"]:
+                    all_targets.add(c["target_ip"])
+        assert "10.0.0.2" in all_targets
+        assert "10.0.0.4" in all_targets
