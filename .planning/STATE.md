@@ -2,18 +2,18 @@
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-06-21)
+See: .planning/PROJECT.md (updated 2026-06-22)
 
 **Core value:** A node must be able to detect and report whether it can reach every other node in the mesh, and the leader must present an accurate, up-to-date connectivity view.
-**Current focus:** Code Review Cleanup
+**Current focus:** Planning next milestone
 
 ## Current Position
 
 Milestone: v0.10.1 (Code Review Cleanup)
-Phase: 30 — Setup Integration Tests (spec)
-Plan: Code Review Cleanup roadmap (Phases 26-30)
-Status: Phase 29 complete, Phase 30 added
-Last activity: 2026-06-22 — Phase 30 added to roadmap
+Phase: — (complete)
+Plan: — (complete)
+Status: Shipped
+Last activity: 2026-06-22 — v0.10.1 milestone completed, tagged
 
 ## Performance Metrics
 
@@ -100,6 +100,7 @@ Phase 4 (CI/CD) decisions:
 - Phase **25** added to v0.10: Add the tests (restart/data-reload integration + unit tests)
 - v0.10.1 starts at Phase 26: Code Review Cleanup — 38 requirements across 4 phases (26-29)
 - Phase **30** added: Setup Integration Tests (spec) — HTTP-only integration tests against local mesh-leader
+- v0.10.1 complete: Phases 26-30 shipped 2026-06-22, tagged v0.10.1
 
 ### Milestone v0.7 Status
 
@@ -168,7 +169,7 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-06-21
-Stopped at: v0.10.1 Code Review Cleanup roadmap created (Phases 26-29)
+Last session: 2026-06-22
+Stopped at: v0.10.1 milestone complete — all Phases 26-30 shipped
 Resume file: None
-Next action: Plan Phase 26 — Persistence & Leader Core (/gsd-plan-phase 26)
+Next action: Start next milestone (/gsd-new-milestone)

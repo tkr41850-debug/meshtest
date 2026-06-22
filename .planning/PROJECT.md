@@ -10,25 +10,15 @@ A node must be able to detect and report whether it can reach every other node i
 
 ## Current State
 
-**Shipped:** v0.10 — Custom Hover Tooltips (2026-06-21)
+**Shipped:** v0.10.1 — Code Review Cleanup (2026-06-22)
 
-**Current:** v0.10.1 — Code Review Cleanup
+**Current:** Planning next milestone
 
-**Context:** Native HTML `title` tooltips replaced with custom CSS-only per-bar tooltip containers in the unified card template and matrix view. CI pipeline fixes (ruff deps, Makefile, heredoc quoting). `total_checks` summing bug fixed in hourly/daily views. Code reviews completed across phases 18-25 identified ~40 findings — this milestone fixes all of them with TDD.
+**Context:** All 38 code review findings fixed across persistence, leader API, node agent, shell scripts, CI/Docker config, frontend, test infrastructure, and register CLI. 23 spec-based integration tests added for HTTP-only leader testing. Test count: 84 backend + 53 frontend = 137 total.
 
-## Current Milestone: v0.10.1 Code Review Cleanup
+## Current Milestone
 
-**Goal:** Fix all ~40 code review findings across persistence, leader API, node agent, shell scripts, CI/Docker config, frontend views, and test infrastructure.
-
-**Target features:**
-- Data integrity fixes (data loss in `_append_results`, node buffer retry drops results)
-- Crash/error handling fixes (unhandled `UnicodeDecodeError`, zero-division, `/updateConfig` validation)
-- Race condition fix (locks on shared mutable state)
-- Degraded status for partially-available nodes in frontend
-- Shell script robustness (prerequisite checks, quoting, path resolution, config persistence)
-- CI/Docker config hardening (Makefile PHONY, dockerignore, gitignore)
-- Test infrastructure fixes (fixture pollution, try/finally, client fixture usage)
-- Dead code removal and minor quality improvements
+Planning next milestone. Use `/gsd-new-milestone` to define the next set of goals.
 
 ## Requirements
 
@@ -153,25 +143,26 @@ Now part of validated requirements — see v0.5 validated section.
 - ✓ **TEST-03**: CI test verifies `start.sh` launches and process is healthy — v0.8
 - ✓ **FIX-05**: Fix `persistence.py` to respect `DATA_DIR` env var — v0.8
 
-### v0.10.1 Active
+### v0.10.1 Validated
 
-- [ ] **FIX-APPEND**: `_append_results` preserves existing data across append calls (direct append mode, discard invalid lines with warning)
-- [ ] **FIX-BUFFER**: Node buffer retry submits all-or-nothing instead of dropping current cycle results on partial success
-- [ ] **FIX-LOCKS**: `_results` and `_day_aggregates` accesses synchronized with `asyncio.Lock`
-- [ ] **FIX-DECODE**: Ping output handled with `errors="replace"` to prevent `UnicodeDecodeError`
-- [ ] **FIX-WAIT**: `proc.wait()` before `communicate()` replaced with single `communicate(timeout=...)`
-- [ ] **FIX-HTTP-EXCEPT**: Bare `except: pass` in HTTP check replaced with logged exception
-- [ ] **FIX-UNGUARDED**: Uptime division by zero guarded (3 sites in `leader.py`)
-- [ ] **FIX-UPGRADE**: `/updateConfig` validates input types and bounds
-- [ ] **FIX-90D-DEDUP**: 90d API response deduplicates days with data in both `_day_aggregates` and `_results`
-- [ ] **FIX-DEGRADED**: Frontend adds `Degraded` (amber) status for partially-available nodes
-- [ ] **FIX-INSTALL**: Install script fixes (npm prereq, relative path, install URL, temp cleanup, -h flag)
-- [ ] **FIX-START**: Start script fixes (persist LEADER_PORT/NODE_URL, dead trap, quoting, arg validation, role-specific .env)
-- [ ] **FIX-CI**: CI/Docker fixes (Makefile PHONY, dockerignore, gitignore, uv pinning, ruff rules)
-- [ ] **FIX-REGISTER**: Register CLI validates IP input
-- [ ] **FIX-TEST-FIXTURES**: Test fixture clears `_day_aggregates`, config test uses try/finally
-- [ ] **FIX-TEST-CLIENT**: `test_data_api` uses client fixture instead of creating own
-- [ ] **FIX-DEADCODE**: Remove dead code (`_peers_by_node`, `_ensure_data_dir`, dead TS exports, unused registry param, duplicate push functions)
+- ✓ **FIX-APPEND**: `_append_results` preserves existing data across append calls (direct append mode, discard invalid lines with warning) — v0.10.1
+- ✓ **FIX-BUFFER**: Node buffer retry submits all-or-nothing instead of dropping current cycle results on partial success — v0.10.1
+- ✓ **FIX-LOCKS**: `_results` and `_day_aggregates` accesses synchronized with `asyncio.Lock` — v0.10.1
+- ✓ **FIX-DECODE**: Ping output handled with `errors="replace"` to prevent `UnicodeDecodeError` — v0.10.1
+- ✓ **FIX-WAIT**: `proc.wait()` before `communicate()` replaced with single `communicate(timeout=...)` — v0.10.1
+- ✓ **FIX-HTTP-EXCEPT**: Bare `except: pass` in HTTP check replaced with logged exception — v0.10.1
+- ✓ **FIX-UNGUARDED**: Uptime division by zero guarded (3 sites in `leader.py`) — v0.10.1
+- ✓ **FIX-UPGRADE**: `/updateConfig` validates input types and bounds — v0.10.1
+- ✓ **FIX-90D-DEDUP**: 90d API response deduplicates days with data in both `_day_aggregates` and `_results` — v0.10.1
+- ✓ **FIX-DEGRADED**: Frontend adds `Degraded` (amber) status for partially-available nodes — v0.10.1
+- ✓ **FIX-INSTALL**: Install script fixes (npm prereq, relative path, install URL, temp cleanup, -h flag) — v0.10.1
+- ✓ **FIX-START**: Start script fixes (persist LEADER_PORT/NODE_URL, dead trap, quoting, arg validation, role-specific .env) — v0.10.1
+- ✓ **FIX-CI**: CI/Docker fixes (Makefile PHONY, dockerignore, gitignore, uv pinning, ruff rules) — v0.10.1
+- ✓ **FIX-REGISTER**: Register CLI validates IP input — v0.10.1
+- ✓ **FIX-TEST-FIXTURES**: Test fixture clears `_day_aggregates`, config test uses try/finally — v0.10.1
+- ✓ **FIX-TEST-CLIENT**: `test_data_api` uses client fixture instead of creating own — v0.10.1
+- ✓ **FIX-DEADCODE**: Remove dead code (`_peers_by_node`, `_ensure_data_dir`, dead TS exports, unused registry param, duplicate push functions) — v0.10.1
+- ✓ **FIX-SPEC-INTEGRATION**: HTTP-only integration tests under spec/ with optional restart-to-persistence — v0.10.1
 
 ### Out of Scope
 
@@ -207,13 +198,20 @@ Now part of validated requirements — see v0.5 validated section.
 
 | Decision | Rationale | Outcome |
 |----------|-----------|---------|
-| Quart instead of FastAPI | Simpler async server, fewer dependencies for prototype | — Pending |
-| JSON file persistence | Quick to implement, inspectable, no DB setup | — Pending |
-| System ping binary | Avoids root/capabilities for raw ICMP sockets | — Pending |
-| No auth | VPN is trusted, prototype speed | — Pending |
+| Quart instead of FastAPI | Simpler async server, fewer dependencies for prototype | ✓ Good |
+| JSON file persistence | Quick to implement, inspectable, no DB setup | ✓ Good |
+| System ping binary | Avoids root/capabilities for raw ICMP sockets | ✓ Good |
+| No auth | VPN is trusted, prototype speed | ⚠️ Revisit |
 | Port 58080 | Avoids privileged ports, unlikely to conflict | ✓ Good |
-| Vite + Tailwind for frontend | Modern tooling, fast dev iteration, type-safe | — Pending |
-| Leader serves frontend from same port | Simpler deployment, no CORS, one port to manage | — Pending |
+| Vite + Tailwind for frontend | Modern tooling, fast dev iteration, type-safe | ✓ Good |
+| Leader serves frontend from same port | Simpler deployment, no CORS, one port to manage | ✓ Good |
+| Degraded (amber) for partial availability | Distinguishes partially-available from fully-unavailable | ✓ Good |
+| TDD for all behavioral changes | Ensures fix is reproducible, prevents regressions | ✓ Good |
+| `_append_results` direct append (not atomic-replace) | Simpler implementation, invalid lines discarded on read with warning | ✓ Good |
+| CORS `*` | Acceptable for prototype; simplifies frontend dev | ⚠️ Revisit |
+| uv version pinned (0.6.10) | Reproducible builds, avoids surprise update breaks | ✓ Good |
+| Explicit ruff lint rules | Consistent linting regardless of env config | ✓ Good |
+| Spec integration tests via external commands | Clean separation from unit tests, truly exercises HTTP layer | ✓ Good |
 
 ## Evolution
 
@@ -233,4 +231,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-06-21 after v0.10.1 milestone initialization*
+*Last updated: 2026-06-22 after v0.10.1 milestone completion*
