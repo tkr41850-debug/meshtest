@@ -2,18 +2,18 @@
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-06-19)
+See: .planning/PROJECT.md (updated 2026-06-21)
 
 **Core value:** A node must be able to detect and report whether it can reach every other node in the mesh, and the leader must present an accurate, up-to-date connectivity view.
-**Current focus:** Planning next milestone
+**Current focus:** Code Review Cleanup
 
 ## Current Position
 
-Milestone: v0.10 (Custom Hover Tooltips)
-Phase: 25
-Plan: Not planned yet
-Status: Phase 25 added (not yet planned)
-Last activity: 2026-06-21 — Phase 25 added: Add the tests
+Milestone: v0.10.1 (Code Review Cleanup)
+Phase: Not started (defining requirements)
+Plan: —
+Status: Defining requirements
+Last activity: 2026-06-21 — Milestone v0.10.1 started
 
 ## Performance Metrics
 

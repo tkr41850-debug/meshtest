@@ -12,7 +12,23 @@ A node must be able to detect and report whether it can reach every other node i
 
 **Shipped:** v0.10 — Custom Hover Tooltips (2026-06-21)
 
-**Context:** Native HTML `title` tooltips replaced with custom CSS-only per-bar tooltip containers in the unified card template and matrix view. CI pipeline fixes (ruff deps, Makefile, heredoc quoting). `total_checks` summing bug fixed in hourly/daily views.
+**Current:** v0.10.1 — Code Review Cleanup
+
+**Context:** Native HTML `title` tooltips replaced with custom CSS-only per-bar tooltip containers in the unified card template and matrix view. CI pipeline fixes (ruff deps, Makefile, heredoc quoting). `total_checks` summing bug fixed in hourly/daily views. Code reviews completed across phases 18-25 identified ~40 findings — this milestone fixes all of them with TDD.
+
+## Current Milestone: v0.10.1 Code Review Cleanup
+
+**Goal:** Fix all ~40 code review findings across persistence, leader API, node agent, shell scripts, CI/Docker config, frontend views, and test infrastructure.
+
+**Target features:**
+- Data integrity fixes (data loss in `_append_results`, node buffer retry drops results)
+- Crash/error handling fixes (unhandled `UnicodeDecodeError`, zero-division, `/updateConfig` validation)
+- Race condition fix (locks on shared mutable state)
+- Degraded status for partially-available nodes in frontend
+- Shell script robustness (prerequisite checks, quoting, path resolution, config persistence)
+- CI/Docker config hardening (Makefile PHONY, dockerignore, gitignore)
+- Test infrastructure fixes (fixture pollution, try/finally, client fixture usage)
+- Dead code removal and minor quality improvements
 
 ## Requirements
 
@@ -137,6 +153,26 @@ Now part of validated requirements — see v0.5 validated section.
 - ✓ **TEST-03**: CI test verifies `start.sh` launches and process is healthy — v0.8
 - ✓ **FIX-05**: Fix `persistence.py` to respect `DATA_DIR` env var — v0.8
 
+### v0.10.1 Active
+
+- [ ] **FIX-APPEND**: `_append_results` preserves existing data across append calls (direct append mode, discard invalid lines with warning)
+- [ ] **FIX-BUFFER**: Node buffer retry submits all-or-nothing instead of dropping current cycle results on partial success
+- [ ] **FIX-LOCKS**: `_results` and `_day_aggregates` accesses synchronized with `asyncio.Lock`
+- [ ] **FIX-DECODE**: Ping output handled with `errors="replace"` to prevent `UnicodeDecodeError`
+- [ ] **FIX-WAIT**: `proc.wait()` before `communicate()` replaced with single `communicate(timeout=...)`
+- [ ] **FIX-HTTP-EXCEPT**: Bare `except: pass` in HTTP check replaced with logged exception
+- [ ] **FIX-UNGUARDED**: Uptime division by zero guarded (3 sites in `leader.py`)
+- [ ] **FIX-UPGRADE**: `/updateConfig` validates input types and bounds
+- [ ] **FIX-90D-DEDUP**: 90d API response deduplicates days with data in both `_day_aggregates` and `_results`
+- [ ] **FIX-DEGRADED**: Frontend adds `Degraded` (amber) status for partially-available nodes
+- [ ] **FIX-INSTALL**: Install script fixes (npm prereq, relative path, install URL, temp cleanup, -h flag)
+- [ ] **FIX-START**: Start script fixes (persist LEADER_PORT/NODE_URL, dead trap, quoting, arg validation, role-specific .env)
+- [ ] **FIX-CI**: CI/Docker fixes (Makefile PHONY, dockerignore, gitignore, uv pinning, ruff rules)
+- [ ] **FIX-REGISTER**: Register CLI validates IP input
+- [ ] **FIX-TEST-FIXTURES**: Test fixture clears `_day_aggregates`, config test uses try/finally
+- [ ] **FIX-TEST-CLIENT**: `test_data_api` uses client fixture instead of creating own
+- [ ] **FIX-DEADCODE**: Remove dead code (`_peers_by_node`, `_ensure_data_dir`, dead TS exports, unused registry param, duplicate push functions)
+
 ### Out of Scope
 
 - Authentication / access control — VPN is trusted network for prototype
@@ -197,4 +233,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-06-20 after v0.9 milestone*
+*Last updated: 2026-06-21 after v0.10.1 milestone initialization*
