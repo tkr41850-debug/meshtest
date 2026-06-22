@@ -24,6 +24,7 @@ A distributed mesh connectivity testing tool for monitoring network health acros
 - [ ] **Phase 27: Node Agent** — Fix buffer retry, subprocess/HTTP error handling in node agent
 - [ ] **Phase 28: Shell Scripts** — Harden install.sh and start.sh with proper validation, quoting, and path handling
 - [ ] **Phase 29: Config, Frontend & Test Infra** — Harden CI/Docker config, add Degraded status, fix test infrastructure, validate register CLI
+- [ ] **Phase 30: Setup Integration Tests (spec)** — HTTP-only integration tests against local mesh-leader, optional restart-to-test-persistence command
 
 ## Phase Details
 
@@ -120,6 +121,26 @@ A distributed mesh connectivity testing tool for monitoring network health acros
 
 ---
 
+### Phase 30: Setup Integration Tests (spec)
+
+**Goal**: Integration tests that exercise the mesh-leader via HTTP requests only (no Python-level mocking), stored under `spec/`. Optionally support a configurable command to force-restart the leader to verify persistence across restarts; if no command is configured, skip restart tests.
+
+**Depends on**: Nothing (independent of code changes — test-only addition)
+
+**Requirements**: TBD
+
+**Success Criteria** (what must be TRUE):
+
+1. Integration tests make HTTP requests to a locally-running mesh-leader process — no direct imports of leader.py or internal state inspection
+2. Tests are stored under `spec/` directory with clear naming and documentation
+3. If a restart command is configured, the test can restart the leader and verify persisted data survives the restart; if not configured, restart tests are gracefully skipped
+4. Tests cover at least: registration, submission, data query (90m/90h/90d)
+5. Tests pass cleanly against a fresh leader instance
+
+**Plans**: TBD
+
+---
+
 ## Progress
 
 | Phase | Plans Complete | Status | Completed |
@@ -128,3 +149,4 @@ A distributed mesh connectivity testing tool for monitoring network health acros
 | 27 — Node Agent | 0/0 | Not started | — |
 | 28 — Shell Scripts | 0/0 | Not started | — |
 | 29 — Config, Frontend & Test Infra | 0/0 | Not started | — |
+| 30 — Setup Integration Tests (spec) | 0/0 | Not started | — |

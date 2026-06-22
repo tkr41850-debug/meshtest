@@ -10,10 +10,10 @@ See: .planning/PROJECT.md (updated 2026-06-21)
 ## Current Position
 
 Milestone: v0.10.1 (Code Review Cleanup)
-Phase: 26 — Persistence & Leader Core
-Plan: Code Review Cleanup roadmap (Phases 26-29)
-Status: Ready to plan
-Last activity: 2026-06-21 — Roadmap created for v0.10.1
+Phase: 30 — Setup Integration Tests (spec)
+Plan: Code Review Cleanup roadmap (Phases 26-30)
+Status: Phase 29 complete, Phase 30 added
+Last activity: 2026-06-22 — Phase 30 added to roadmap
 
 ## Performance Metrics
 
@@ -99,6 +99,7 @@ Phase 4 (CI/CD) decisions:
 - v0.4 replaces original v3.5+ deferred items with dashboard UI polish
 - Phase **25** added to v0.10: Add the tests (restart/data-reload integration + unit tests)
 - v0.10.1 starts at Phase 26: Code Review Cleanup — 38 requirements across 4 phases (26-29)
+- Phase **30** added: Setup Integration Tests (spec) — HTTP-only integration tests against local mesh-leader
 
 ### Milestone v0.7 Status
 
