@@ -306,6 +306,8 @@ describe("renderDay30", () => {
             ping_uptime_pct: 100,
             http_uptime_pct: 99.5,
             total_checks: 8640,
+            ping_ok: 8640,
+            http_ok: 8597,
           },
         ],
       },
@@ -333,6 +335,8 @@ describe("renderDay30", () => {
             ping_uptime_pct: 100,
             http_uptime_pct: 99.5,
             total_checks: 8640,
+            ping_ok: 8640,
+            http_ok: 8597,
           },
         ],
       },
@@ -355,6 +359,8 @@ describe("renderDay30", () => {
             ping_uptime_pct: 100,
             http_uptime_pct: 99.5,
             total_checks: 8640,
+            ping_ok: 8640,
+            http_ok: 8597,
           },
         ],
       },
@@ -386,6 +392,8 @@ describe("renderDay30", () => {
             ping_uptime_pct: 100,
             http_uptime_pct: 99.5,
             total_checks: 8640,
+            ping_ok: 8640,
+            http_ok: 8597,
           },
         ],
       },
@@ -410,6 +418,8 @@ describe("renderDay30", () => {
             ping_uptime_pct: 100,
             http_uptime_pct: 99.5,
             total_checks: 8640,
+            ping_ok: 8640,
+            http_ok: 8597,
           },
         ],
       },
@@ -427,24 +437,35 @@ describe("renderDay30", () => {
       {
         date: "2026-06-01",
         connections: [
-          { node_ip: "10.0.0.1", target_ip: "10.0.0.2", ping_uptime_pct: 100, http_uptime_pct: 100, total_checks: 10 },
+          { node_ip: "10.0.0.1", target_ip: "10.0.0.2", ping_uptime_pct: 100, http_uptime_pct: 100, total_checks: 10, ping_ok: 10, http_ok: 10 },
         ],
       },
       {
         date: "2026-06-02",
         connections: [
-          { node_ip: "10.0.0.1", target_ip: "10.0.0.2", ping_uptime_pct: 99.5, http_uptime_pct: 100, total_checks: 20 },
+          { node_ip: "10.0.0.1", target_ip: "10.0.0.2", ping_uptime_pct: 99.5, http_uptime_pct: 100, total_checks: 20, ping_ok: 20, http_ok: 20 },
         ],
       },
       {
         date: "2026-06-03",
         connections: [
-          { node_ip: "10.0.0.1", target_ip: "10.0.0.2", ping_uptime_pct: 100, http_uptime_pct: 99.9, total_checks: 30 },
+          { node_ip: "10.0.0.1", target_ip: "10.0.0.2", ping_uptime_pct: 100, http_uptime_pct: 99.9, total_checks: 30, ping_ok: 30, http_ok: 30 },
         ],
       },
     ];
     renderDay30(container, ["10.0.0.1", "10.0.0.2"], days);
     expect(container.innerHTML).toContain('Checks: <strong class="text-mesh-dark">60</strong>');
+  });
+
+  it("displays aggregate pct across days instead of first-day value", () => {
+    const container = document.createElement("div");
+    const days = [
+      { date: "2026-06-01", connections: [{ node_ip: "10.0.0.1", target_ip: "10.0.0.2", ping_uptime_pct: 100, http_uptime_pct: 100, total_checks: 100, ping_ok: 100, http_ok: 100 }] },
+      { date: "2026-06-02", connections: [{ node_ip: "10.0.0.1", target_ip: "10.0.0.2", ping_uptime_pct: 83.3, http_uptime_pct: 83.3, total_checks: 6, ping_ok: 5, http_ok: 5 }] },
+    ];
+    renderDay30(container, ["10.0.0.1", "10.0.0.2"], days);
+    expect(container.innerHTML).toContain("99.1%");
+    expect(container.innerHTML).toContain("106");
   });
 });
 
@@ -467,7 +488,7 @@ describe("renderHourly", () => {
       {
         date: "2026-06-01T14:00",
         connections: [
-          { node_ip: "10.0.0.1", target_ip: "10.0.0.2", ping_uptime_pct: 100, http_uptime_pct: 100, total_checks: 100 },
+          { node_ip: "10.0.0.1", target_ip: "10.0.0.2", ping_uptime_pct: 100, http_uptime_pct: 100, total_checks: 100, ping_ok: 100, http_ok: 100 },
         ],
       },
     ];
@@ -483,24 +504,35 @@ describe("renderHourly", () => {
       {
         date: "2026-06-01T14:00",
         connections: [
-          { node_ip: "10.0.0.1", target_ip: "10.0.0.2", ping_uptime_pct: 100, http_uptime_pct: 100, total_checks: 100 },
+          { node_ip: "10.0.0.1", target_ip: "10.0.0.2", ping_uptime_pct: 100, http_uptime_pct: 100, total_checks: 100, ping_ok: 100, http_ok: 100 },
         ],
       },
       {
         date: "2026-06-01T15:00",
         connections: [
-          { node_ip: "10.0.0.1", target_ip: "10.0.0.2", ping_uptime_pct: 99.5, http_uptime_pct: 100, total_checks: 120 },
+          { node_ip: "10.0.0.1", target_ip: "10.0.0.2", ping_uptime_pct: 99.5, http_uptime_pct: 100, total_checks: 120, ping_ok: 119, http_ok: 120 },
         ],
       },
       {
         date: "2026-06-01T16:00",
         connections: [
-          { node_ip: "10.0.0.1", target_ip: "10.0.0.2", ping_uptime_pct: 100, http_uptime_pct: 99.9, total_checks: 140 },
+          { node_ip: "10.0.0.1", target_ip: "10.0.0.2", ping_uptime_pct: 100, http_uptime_pct: 99.9, total_checks: 140, ping_ok: 140, http_ok: 140 },
         ],
       },
     ];
     renderHourly(container, ["10.0.0.1", "10.0.0.2"], hours);
     expect(container.innerHTML).toContain('Checks: <strong class="text-mesh-dark">360</strong>');
+  });
+
+  it("displays aggregate pct across hours instead of first-hour value", () => {
+    const container = document.createElement("div");
+    const hours = [
+      { date: "2026-06-01T10:00", connections: [{ node_ip: "10.0.0.1", target_ip: "10.0.0.2", ping_uptime_pct: 100, http_uptime_pct: 100, total_checks: 100, ping_ok: 100, http_ok: 100 }] },
+      { date: "2026-06-01T11:00", connections: [{ node_ip: "10.0.0.1", target_ip: "10.0.0.2", ping_uptime_pct: 83.3, http_uptime_pct: 83.3, total_checks: 6, ping_ok: 5, http_ok: 5 }] },
+    ];
+    renderHourly(container, ["10.0.0.1", "10.0.0.2"], hours);
+    expect(container.innerHTML).toContain("99.1%");
+    expect(container.innerHTML).toContain("106");
   });
 
   it("shows no-data message when source has no pairs", () => {
@@ -509,7 +541,7 @@ describe("renderHourly", () => {
       {
         date: "2026-06-01T14:00",
         connections: [
-          { node_ip: "10.0.0.3", target_ip: "10.0.0.4", ping_uptime_pct: 100, http_uptime_pct: 100, total_checks: 10 },
+          { node_ip: "10.0.0.3", target_ip: "10.0.0.4", ping_uptime_pct: 100, http_uptime_pct: 100, total_checks: 10, ping_ok: 10, http_ok: 10 },
         ],
       },
     ];

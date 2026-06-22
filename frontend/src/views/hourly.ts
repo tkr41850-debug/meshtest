@@ -34,19 +34,29 @@ function hourlyBarsForPair(
   return { pingBars, httpBars };
 }
 
-function sumHourlyChecks(
+function aggregateHourlyPct(
   hours: HourData[],
   src: string,
   tgt: string,
-): number {
-  let total = 0;
+): { pingPct: number; httpPct: number; totalChecks: number } {
+  let totalOk = 0;
+  let totalHttpOk = 0;
+  let totalChecks = 0;
   for (const hour of hours) {
     const conn = hour.connections.find(
       (c) => c.node_ip === src && c.target_ip === tgt,
     );
-    if (conn) total += conn.total_checks;
+    if (conn) {
+      totalOk += conn.ping_ok;
+      totalHttpOk += conn.http_ok;
+      totalChecks += conn.total_checks;
+    }
   }
-  return total;
+  return {
+    pingPct: totalChecks > 0 ? +(totalOk / totalChecks * 100).toFixed(1) : 0,
+    httpPct: totalChecks > 0 ? +(totalHttpOk / totalChecks * 100).toFixed(1) : 0,
+    totalChecks,
+  };
 }
 
 function computeStatus(
@@ -78,32 +88,32 @@ export function renderHourly(
 
     let hasData = false;
     const seenPairs = new Set<string>();
-    for (const hour of hours) {
-      for (const conn of hour.connections) {
-        if (conn.node_ip !== src) continue;
-        const pairKey = `${src}--${conn.target_ip}`;
-        if (seenPairs.has(pairKey)) continue;
-        seenPairs.add(pairKey);
-        hasData = true;
-        const { pingBars, httpBars } = hourlyBarsForPair(hours, src, conn.target_ip);
-        const st = computeStatus(conn.ping_uptime_pct, conn.http_uptime_pct);
-        const lastSeen = hour.date;
-        const totalChecks = sumHourlyChecks(hours, src, conn.target_ip);
-        html += cardHtml(
-          conn.target_ip,
-          st,
-          `${conn.ping_uptime_pct.toFixed(1)}%`,
-          `${conn.http_uptime_pct.toFixed(1)}%`,
-          lastSeen,
-          conn.ping_uptime_pct,
-          conn.http_uptime_pct,
-          totalChecks,
-          pingBars,
-          httpBars,
-          pairKey,
-        );
+      for (const hour of hours) {
+        for (const conn of hour.connections) {
+          if (conn.node_ip !== src) continue;
+          const pairKey = `${src}--${conn.target_ip}`;
+          if (seenPairs.has(pairKey)) continue;
+          seenPairs.add(pairKey);
+          hasData = true;
+          const { pingBars, httpBars } = hourlyBarsForPair(hours, src, conn.target_ip);
+          const agg = aggregateHourlyPct(hours, src, conn.target_ip);
+          const st = computeStatus(agg.pingPct, agg.httpPct);
+          const lastSeen = hour.date;
+          html += cardHtml(
+            conn.target_ip,
+            st,
+            `${agg.pingPct.toFixed(1)}%`,
+            `${agg.httpPct.toFixed(1)}%`,
+            lastSeen,
+            agg.pingPct,
+            agg.httpPct,
+            agg.totalChecks,
+            pingBars,
+            httpBars,
+            pairKey,
+          );
+        }
       }
-    }
     if (!hasData) {
       html +=
         '<p class="text-xs text-mesh-muted">No data for this node</p>';

@@ -212,6 +212,8 @@ async def get_data():
                         "node_ip": src,
                         "target_ip": dst,
                         "total_checks": stats["total"],
+                        "ping_ok": stats["ping_ok"],
+                        "http_ok": stats["http_ok"],
                         "ping_uptime_pct": round(stats["ping_ok"] / stats["total"] * 100, 1),
                         "http_uptime_pct": round(stats["http_ok"] / stats["total"] * 100, 1),
                     }
@@ -246,6 +248,8 @@ async def get_data():
                         "node_ip": src,
                         "target_ip": dst,
                         "total_checks": stats["total"],
+                        "ping_ok": stats["ping_ok"],
+                        "http_ok": stats["http_ok"],
                         "ping_uptime_pct": round(stats["ping_ok"] / stats["total"] * 100, 1),
                         "http_uptime_pct": round(stats["http_ok"] / stats["total"] * 100, 1),
                     }
@@ -289,6 +293,8 @@ async def get_data():
                         "node_ip": src,
                         "target_ip": dst,
                         "total_checks": stats["total"],
+                        "ping_ok": stats["ping_ok"],
+                        "http_ok": stats["http_ok"],
                         "ping_uptime_pct": round(stats["ping_ok"] / stats["total"] * 100, 1),
                         "http_uptime_pct": round(stats["http_ok"] / stats["total"] * 100, 1),
                     }

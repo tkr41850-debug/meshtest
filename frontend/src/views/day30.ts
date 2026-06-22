@@ -41,19 +41,29 @@ function dailyBarsForPair(
   return { pingBars, httpBars };
 }
 
-function sumDailyChecks(
+function aggregateDailyPct(
   days: DayData[],
   src: string,
   tgt: string,
-): number {
-  let total = 0;
+): { pingPct: number; httpPct: number; totalChecks: number } {
+  let totalOk = 0;
+  let totalHttpOk = 0;
+  let totalChecks = 0;
   for (const day of days) {
     const conn = day.connections.find(
       (c) => c.node_ip === src && c.target_ip === tgt,
     );
-    if (conn) total += conn.total_checks;
+    if (conn) {
+      totalOk += conn.ping_ok;
+      totalHttpOk += conn.http_ok;
+      totalChecks += conn.total_checks;
+    }
   }
-  return total;
+  return {
+    pingPct: totalChecks > 0 ? +(totalOk / totalChecks * 100).toFixed(1) : 0,
+    httpPct: totalChecks > 0 ? +(totalHttpOk / totalChecks * 100).toFixed(1) : 0,
+    totalChecks,
+  };
 }
 
 function computeStatus(
@@ -93,18 +103,18 @@ export function renderDay30(
         seenPairs.add(pairKey);
         hasData = true;
         const { pingBars, httpBars } = dailyBarsForPair(days, src, conn.target_ip);
-        const st = computeStatus(conn.ping_uptime_pct, conn.http_uptime_pct);
+        const agg = aggregateDailyPct(days, src, conn.target_ip);
+        const st = computeStatus(agg.pingPct, agg.httpPct);
         const lastSeen = day.date;
-        const totalChecks = sumDailyChecks(days, src, conn.target_ip);
         html += cardHtml(
           conn.target_ip,
           st,
-          `${conn.ping_uptime_pct.toFixed(1)}%`,
-          `${conn.http_uptime_pct.toFixed(1)}%`,
+          `${agg.pingPct.toFixed(1)}%`,
+          `${agg.httpPct.toFixed(1)}%`,
           lastSeen,
-          conn.ping_uptime_pct,
-          conn.http_uptime_pct,
-          totalChecks,
+          agg.pingPct,
+          agg.httpPct,
+          agg.totalChecks,
           pingBars,
           httpBars,
           pairKey,

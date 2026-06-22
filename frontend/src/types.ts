@@ -33,6 +33,8 @@ export interface DayConnection {
   ping_uptime_pct: number;
   http_uptime_pct: number;
   total_checks: number;
+  ping_ok: number;
+  http_ok: number;
 }
 
 export interface DayData {
