@@ -102,6 +102,3 @@ def managed_leader():
     manager.start()
     yield manager
     manager.stop()
-
-
-
