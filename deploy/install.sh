@@ -3,6 +3,10 @@
 set -e
 
 MESH_STATUS_HOME="${MESH_STATUS_HOME:-$HOME/.local/meshtest}"
+case "$MESH_STATUS_HOME" in
+    /*) ;;  # already absolute
+    *) MESH_STATUS_HOME="$PWD/$MESH_STATUS_HOME" ;;
+esac
 MESH_STATUS_VERSION="${MESH_STATUS_VERSION:-main}"
 MESH_STATUS_LOCAL_SOURCE="${MESH_STATUS_LOCAL_SOURCE:-}"
 REPO_URL="${MESH_STATUS_REPO:-https://github.com/opencode-ai/mesh-status.git}"
@@ -13,7 +17,7 @@ usage() {
     cat <<EOF
 install.sh — Install mesh-status
 
-Usage: curl -fsSL https://github.com/opencode-ai/mesh-status | sh [options]
+Usage: curl -fsSL https://raw.githubusercontent.com/opencode-ai/mesh-status/main/deploy/install.sh | sh [options]
 
 Options:
   -y, --yes              Non-interactive mode (skip all prompts)
@@ -30,7 +34,7 @@ EOF
 for arg in "$@"; do
     case "$arg" in
         -y|--yes) YES=1 ;;
-        --help) usage ;;
+        -h|--help) usage ;;
     esac
 done
 
@@ -53,6 +57,7 @@ missing_prereq() {
 command -v uv >/dev/null 2>&1 || missing_prereq uv
 command -v git >/dev/null 2>&1 || missing_prereq git
 command -v curl >/dev/null 2>&1 || missing_prereq curl
+command -v npm >/dev/null 2>&1 || missing_prereq npm
 
 if [ "$YES" = 0 ]; then
     printf "Install mesh-status to %s? [Y/n] " "$MESH_STATUS_HOME"
@@ -78,6 +83,7 @@ elif [ -n "$MESH_STATUS_LOCAL_SOURCE" ]; then
     if [ -f /tmp/_mesh_env_backup ]; then
         mv /tmp/_mesh_env_backup "$MESH_STATUS_HOME/.env"
         echo "Existing .env preserved"
+        rm -f /tmp/_mesh_env_backup 2>/dev/null || true
     fi
     cd "$MESH_STATUS_HOME"
 else
@@ -91,10 +97,10 @@ echo "Installing Python dependencies..."
 uv sync
 
 echo "Building frontend..."
-cd "$MESH_STATUS_HOME/frontend"
+cd frontend
 npm ci
 npm run build
-cd "$MESH_STATUS_HOME"
+cd ..
 
 echo "$MESH_STATUS_VERSION" > "$MESH_STATUS_HOME/.mesh-status.install"
 
