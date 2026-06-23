@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"log"
+	"net"
 	"os"
 	"os/signal"
 	"strconv"
@@ -11,6 +12,21 @@ import (
 
 	"github.com/tkr41850-debug/meshtest/internal/node"
 )
+
+func getNodeIP() string {
+	if ip := os.Getenv("NODE_IP"); ip != "" {
+		return ip
+	}
+	addrs, err := net.InterfaceAddrs()
+	if err == nil {
+		for _, addr := range addrs {
+			if ipnet, ok := addr.(*net.IPNet); ok && !ipnet.IP.IsLoopback() && ipnet.IP.To4() != nil {
+				return ipnet.IP.String()
+			}
+		}
+	}
+	return "127.0.0.1"
+}
 
 func main() {
 	leaderURL := os.Getenv("LEADER_URL")
@@ -24,10 +40,13 @@ func main() {
 	if listenPortStr != "" {
 		if p, err := strconv.Atoi(listenPortStr); err == nil && p > 0 {
 			listenPort = p
+		} else {
+			log.Printf("Warning: invalid NODE_LISTEN_PORT %q, using default %d", listenPortStr, listenPort)
 		}
 	}
 
 	n := node.NewNode(leaderURL, nodeURL, listenPort)
+	n.NodeIP = getNodeIP()
 
 	srv, err := node.StartListener(n, listenPort)
 	if err != nil {
@@ -47,7 +66,6 @@ func main() {
 
 	done := make(chan struct{})
 	go func() {
-		defer close(done)
 		for {
 			select {
 			case <-done:

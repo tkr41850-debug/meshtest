@@ -8,6 +8,8 @@ import (
 	"time"
 )
 
+var pingRx = regexp.MustCompile(`time=(\d+\.?\d*)\s*ms`)
+
 func PingNode(targetIP string, timeout time.Duration) PingResult {
 	ctx, cancel := context.WithTimeout(context.Background(), timeout+500*time.Millisecond)
 	defer cancel()
@@ -18,7 +20,6 @@ func PingNode(targetIP string, timeout time.Duration) PingResult {
 		return PingResult{}
 	}
 
-	pingRx := regexp.MustCompile(`time=(\d+\.?\d*)\s*ms`)
 	match := pingRx.FindStringSubmatch(string(stdout))
 	if match == nil {
 		return PingResult{OK: true}

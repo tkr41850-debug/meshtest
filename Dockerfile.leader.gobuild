@@ -1,0 +1,11 @@
+FROM golang:1.22-alpine AS builder
+WORKDIR /build
+COPY go.mod ./
+COPY cmd/ ./cmd/
+COPY internal/ ./internal/
+RUN go mod tidy && CGO_ENABLED=0 go build -o /build/mesh-leader ./cmd/leader
+
+FROM scratch
+COPY --from=builder /build/mesh-leader /mesh-leader
+EXPOSE 58080
+ENTRYPOINT ["/mesh-leader"]

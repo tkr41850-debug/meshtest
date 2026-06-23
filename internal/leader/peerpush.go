@@ -35,8 +35,8 @@ func (l *Leader) notifyNode(nodeIP string) {
 
 	payload := PeerPushPayload{
 		Peers:         l.Registry.PeerDicts(),
-		CheckInterval: l.CheckInterval,
-		BufferSize:    l.BufferSize,
+		CheckInterval: l.GetCheckInterval(),
+		BufferSize:    l.GetBufferSize(),
 	}
 
 	var buf bytes.Buffer
@@ -51,7 +51,11 @@ func (l *Leader) notifyNode(nodeIP string) {
 		log.Printf("Failed to notify node %s: %v", nodeIP, err)
 		return
 	}
-	resp.Body.Close()
+	defer resp.Body.Close()
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		log.Printf("Peer notification to %s returned HTTP %d", nodeIP, resp.StatusCode)
+		return
+	}
 	log.Printf("Peer notification sent to %s", nodeIP)
 }
 

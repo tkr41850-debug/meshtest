@@ -2,15 +2,15 @@ services:
   leader:
     build:
       context: .
-      dockerfile: Dockerfile.leader
+      dockerfile: Dockerfile.leader.gobuild
     ports:
       - "58080:58080"
     volumes:
-      - ./data:/app/data
+      - ./data:/data
     networks:
       - mesh-net
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:58080/livez"]
+      test: ["CMD-SHELL", "wget -qO- http://localhost:58080/livez || exit 1"]
       interval: 30s
       timeout: 5s
       retries: 3
@@ -19,12 +19,14 @@ services:
   node1:
     build:
       context: .
-      dockerfile: Dockerfile.node
+      dockerfile: Dockerfile.node.gobuild
     ports:
       - "58081:58081"
     environment:
       LEADER_URL: http://leader:58080
       NODE_URL: http://node1:58081
+    cap_add:
+      - NET_RAW
     depends_on:
       leader:
         condition: service_healthy

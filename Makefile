@@ -1,11 +1,12 @@
-.PHONY: ci test test-frontend test-backend test-integration lint format format-check build check typecheck-frontend
+.PHONY: ci test test-frontend test-backend test-go test-integration lint format-check format build check typecheck-frontend
 
-# ── Full CI pipeline (runs everything CI would check) ─────────────
-ci: lint format-check test-backend test-frontend build
+ci: lint format-check test-backend test-frontend test-go build
 
-# ── Tests ──────────────────────────────────────────────────────────
 test-backend:
 	uv run --extra dev pytest tests/ -v
+
+test-go:
+	go test ./...
 
 test-integration:
 	uv run --extra dev pytest spec/ -v
@@ -13,9 +14,8 @@ test-integration:
 test-frontend:
 	cd frontend && npm test
 
-test: test-backend test-frontend
+test: test-backend test-frontend test-go
 
-# ── Lint & Format ──────────────────────────────────────────────────
 lint:
 	uv run --extra dev ruff check .
 
@@ -25,7 +25,6 @@ format-check:
 format:
 	uv run --extra dev ruff format .
 
-# ── Build ──────────────────────────────────────────────────────────
 build:
 	cd frontend && npm run build
 

@@ -4,14 +4,28 @@ import (
 	"encoding/json"
 	"log"
 	"net/http"
+	"sync"
 )
 
 type Leader struct {
+	mu            sync.RWMutex
 	Registry      *Registry
 	Results       *ResultsStore
 	CheckInterval int
 	BufferSize    int
 	peersCh       chan struct{}
+}
+
+func (l *Leader) GetCheckInterval() int {
+	l.mu.RLock()
+	defer l.mu.RUnlock()
+	return l.CheckInterval
+}
+
+func (l *Leader) GetBufferSize() int {
+	l.mu.RLock()
+	defer l.mu.RUnlock()
+	return l.BufferSize
 }
 
 func NewLeader() *Leader {
@@ -62,9 +76,7 @@ func (l *Leader) HandleRegister(w http.ResponseWriter, r *http.Request) {
 
 	peers, _ := l.Registry.Register(req)
 
-	go func() {
-		l.notifyPeers()
-	}()
+	l.notifyPeers()
 
 	l.writeJSON(w, http.StatusOK, map[string]any{
 		"status": "registered",
@@ -101,16 +113,16 @@ func (l *Leader) HandleSubmit(w http.ResponseWriter, r *http.Request) {
 
 	l.Results.Add(req.NodeIP, req.Checks, *req.Timestamp)
 
-	if req.NodeURL != "" && l.Registry.Get(req.NodeIP) == nil {
+	if req.NodeURL != "" {
 		parsedPort := DefaultListenPort
-		l.Registry.Register(RegisterRequest{
+		_, existing := l.Registry.Register(RegisterRequest{
 			NodeIP: req.NodeIP,
 			NodeURL: req.NodeURL,
 			ListenPort: parsedPort,
 		})
-		go func() {
+		if !existing {
 			l.notifyPeers()
-		}()
+		}
 	}
 
 	l.writeJSON(w, http.StatusAccepted, map[string]any{
@@ -154,27 +166,34 @@ func (l *Leader) HandleUpdateConfig(w http.ResponseWriter, r *http.Request) {
 			l.writeError(w, http.StatusBadRequest, "check_interval must be a positive integer")
 			return
 		}
+		l.mu.Lock()
 		l.CheckInterval = *req.CheckInterval
+		l.mu.Unlock()
 	}
 	if req.BufferSize != nil {
 		if *req.BufferSize < 1 {
 			l.writeError(w, http.StatusBadRequest, "buffer_size must be a positive integer")
 			return
 		}
+		l.mu.Lock()
 		l.BufferSize = *req.BufferSize
+		l.mu.Unlock()
 	}
+
+	l.mu.RLock()
+	ci := l.CheckInterval
+	bs := l.BufferSize
+	l.mu.RUnlock()
 
 	l.writeJSON(w, http.StatusOK, map[string]any{
 		"status": "config_updated",
 		"config": map[string]any{
-			"check_interval": l.CheckInterval,
-			"buffer_size":    l.BufferSize,
+			"check_interval": ci,
+			"buffer_size":    bs,
 		},
 	})
 
-	go func() {
-		l.notifyPeers()
-	}()
+	l.notifyPeers()
 }
 
 func (l *Leader) notifyPeers() {

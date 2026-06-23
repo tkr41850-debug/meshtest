@@ -30,13 +30,7 @@ type HTTPResult struct {
 	LatencyMs float64
 }
 
-type CheckCycleResult struct {
-	TargetIP  string  `json:"target_ip"`
-	PingOK    bool    `json:"ping_ok"`
-	HTTPOK    bool    `json:"http_ok"`
-	Timestamp float64 `json:"timestamp"`
-	LatencyMs float64 `json:"latency_ms,omitempty"`
-}
+type CheckCycleResult = leader.CheckResult
 
 type Node struct {
 	mu            sync.RWMutex
@@ -66,6 +60,22 @@ func NewNode(leaderURL, nodeURL string, listenPort int) *Node {
 }
 
 func (n *Node) SubmitResults(checks []CheckCycleResult, timestamp float64) bool {
+	// Combine buffer with new results
+	n.mu.Lock()
+	if len(n.resultBuffer) > 0 {
+		allChecks := n.resultBuffer
+		space := n.BufferSize - len(allChecks)
+		if space > 0 {
+			if len(checks) < space {
+				space = len(checks)
+			}
+			allChecks = append(allChecks, checks[:space]...)
+		}
+		checks = allChecks
+		n.resultBuffer = nil
+	}
+	n.mu.Unlock()
+
 	var buf bytes.Buffer
 	payload := map[string]interface{}{
 		"node_ip":   n.NodeIP,
@@ -81,14 +91,29 @@ func (n *Node) SubmitResults(checks []CheckCycleResult, timestamp float64) bool 
 	resp, err := n.client.Post(n.LeaderURL+"/submit", "application/json", &buf)
 	if err != nil {
 		log.Printf("Submit failed: %v", err)
+		n.bufferResults(checks)
 		return false
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		log.Printf("Submit failed: HTTP %d", resp.StatusCode)
+		n.bufferResults(checks)
 		return false
 	}
 	return true
+}
+
+func (n *Node) bufferResults(checks []CheckCycleResult) {
+	n.mu.Lock()
+	defer n.mu.Unlock()
+	if n.BufferSize <= 0 {
+		return
+	}
+	n.resultBuffer = append(n.resultBuffer, checks...)
+	if len(n.resultBuffer) > n.BufferSize {
+		excess := len(n.resultBuffer) - n.BufferSize
+		n.resultBuffer = n.resultBuffer[excess:]
+	}
 }
 
 func (n *Node) RunCheckCycle(timeout time.Duration) []CheckCycleResult {
@@ -129,6 +154,7 @@ func (n *Node) RunCheckCycle(timeout time.Duration) []CheckCycleResult {
 				PingOK:    pingRes.OK,
 				HTTPOK:    httpRes.OK,
 				Timestamp: now,
+				LatencyMs: pingRes.LatencyMs,
 			}}
 		}(i, p)
 	}
@@ -236,6 +262,12 @@ func (n *Node) GetCheckInterval() int {
 	n.mu.RLock()
 	defer n.mu.RUnlock()
 	return n.CheckInterval
+}
+
+func (n *Node) GetBufferCount() int {
+	n.mu.RLock()
+	defer n.mu.RUnlock()
+	return len(n.resultBuffer)
 }
 
 func (n *Node) GetPeers() []leader.PeerDict {

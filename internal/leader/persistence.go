@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"encoding/json"
 	"fmt"
+	"io"
 	"log"
 	"os"
 	"path/filepath"
@@ -62,7 +63,9 @@ func AppendResults(results []CheckResultWithNode) {
 				log.Printf("Error encoding result to %s: %v", path, err)
 			}
 		}
-		f.Close()
+		if err := f.Close(); err != nil {
+			log.Printf("Error closing file %s: %v", path, err)
+		}
 	}
 }
 
@@ -91,7 +94,15 @@ func ReadResults(start, end time.Time) []CheckResultWithNode {
 				}
 				results = append(results, r)
 			}
-			f.Close()
+			if err := scanner.Err(); err != nil {
+				log.Printf("Error scanning file %s: %v", path, err)
+			}
+			if _, err := io.Copy(io.Discard, f); err != nil {
+				log.Printf("Error draining file %s: %v", path, err)
+			}
+			if err := f.Close(); err != nil {
+				log.Printf("Error closing file %s: %v", path, err)
+			}
 		}
 		current = current.Add(24 * time.Hour)
 	}
@@ -152,16 +163,7 @@ func LoadIntoMemory(resultsStore *ResultsStore) {
 	}
 }
 
-func FlushLoop(store *ResultsStore, interval time.Duration, stop <-chan struct{}) {
-	for {
-		select {
-		case <-stop:
-			return
-		case <-time.After(interval):
-			flushOnce(store)
-		}
-	}
-}
+var lastFlushTimestamp float64
 
 func flushOnce(store *ResultsStore) {
 	store.mu.Lock()
@@ -171,27 +173,22 @@ func flushOnce(store *ResultsStore) {
 		return
 	}
 
-	var batch []CheckResultWithNode
-	for nodeIP, checks := range store.results {
-		for _, c := range checks {
-			batch = append(batch, CheckResultWithNode{
-				NodeIP:    nodeIP,
-				TargetIP:  c.TargetIP,
-				PingOK:    c.PingOK,
-				HTTPOK:    c.HTTPOK,
-				Timestamp: c.Timestamp,
-				LatencyMs: c.LatencyMs,
-			})
-		}
-	}
-
-	AppendResults(batch)
-	log.Printf("Flushed %d results to disk", len(batch))
-
 	cutoff90h := time.Now().Add(-90 * time.Hour).Unix()
-	for nodeIP := range store.results {
+	var batch []CheckResultWithNode
+
+	for nodeIP, checks := range store.results {
 		var recent []CheckResult
-		for _, c := range store.results[nodeIP] {
+		for _, c := range checks {
+			if c.Timestamp > lastFlushTimestamp && c.Timestamp >= float64(cutoff90h) {
+				batch = append(batch, CheckResultWithNode{
+					NodeIP:    nodeIP,
+					TargetIP:  c.TargetIP,
+					PingOK:    c.PingOK,
+					HTTPOK:    c.HTTPOK,
+					Timestamp: c.Timestamp,
+					LatencyMs: c.LatencyMs,
+				})
+			}
 			if c.Timestamp >= float64(cutoff90h) {
 				recent = append(recent, c)
 			} else {
@@ -218,16 +215,38 @@ func flushOnce(store *ResultsStore) {
 			delete(store.results, nodeIP)
 		}
 	}
+
+	if len(batch) > 0 {
+		AppendResults(batch)
+		log.Printf("Flushed %d results to disk", len(batch))
+	}
+	lastFlushTimestamp = float64(time.Now().Unix())
 }
 
 var (
-	flushStopOnce sync.Once
-	stopFlush     chan struct{}
+	startFlushOnce sync.Once
+	stopFlush      chan struct{}
 )
 
+func FlushLoop(store *ResultsStore, interval time.Duration, stop <-chan struct{}) {
+	timer := time.NewTimer(interval)
+	defer timer.Stop()
+	for {
+		select {
+		case <-stop:
+			return
+		case <-timer.C:
+			flushOnce(store)
+			timer.Reset(interval)
+		}
+	}
+}
+
 func StartFlushLoop(store *ResultsStore) {
-	stopFlush = make(chan struct{})
-	go FlushLoop(store, time.Duration(FlushInterval)*time.Second, stopFlush)
+	startFlushOnce.Do(func() {
+		stopFlush = make(chan struct{})
+		go FlushLoop(store, time.Duration(FlushInterval)*time.Second, stopFlush)
+	})
 }
 
 func StopFlushLoop() {

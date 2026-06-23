@@ -99,15 +99,17 @@ func (s *ResultsStore) Query90m(registry *Registry) QueryResult90m {
 }
 
 func checkPairStatus(results map[string][]CheckResult, srcIP, dstIP string, cutoff float64, checkType string) bool {
-	for _, checks := range results {
-		for _, c := range checks {
-			if c.TargetIP == dstIP && c.Timestamp >= cutoff {
-				if checkType == "ping" && c.PingOK {
-					return true
-				}
-				if checkType == "http" && c.HTTPOK {
-					return true
-				}
+	nodeResults, ok := results[srcIP]
+	if !ok {
+		return false
+	}
+	for _, c := range nodeResults {
+		if c.TargetIP == dstIP && c.Timestamp >= cutoff {
+			if checkType == "ping" && c.PingOK {
+				return true
+			}
+			if checkType == "http" && c.HTTPOK {
+				return true
 			}
 		}
 	}

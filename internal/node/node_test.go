@@ -4,12 +4,20 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
-	"strings"
+	"net/url"
+	"strconv"
 	"testing"
 	"time"
 
 	"github.com/tkr41850-debug/meshtest/internal/leader"
 )
+
+func getPort(server *httptest.Server) int {
+	u, _ := url.Parse(server.URL)
+	portStr := u.Port()
+	port, _ := strconv.Atoi(portStr)
+	return port
+}
 
 func TestCheckHTTPHealthy(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -18,14 +26,8 @@ func TestCheckHTTPHealthy(t *testing.T) {
 	}))
 	defer server.Close()
 
-	port := strings.TrimPrefix(server.URL, "http://")
-	port = port[strings.Index(port, ":")+1:]
-	portInt := 0
-	for _, c := range port {
-		portInt = portInt*10 + int(c-'0')
-	}
-
-	result := CheckHTTP("127.0.0.1", portInt, 5*time.Second)
+	port := getPort(server)
+	result := CheckHTTP("127.0.0.1", port, 5*time.Second)
 	if !result.OK {
 		t.Errorf("expected HTTP OK, got false")
 	}
@@ -40,14 +42,8 @@ func TestCheckHTTPUnhealthy(t *testing.T) {
 	}))
 	defer server.Close()
 
-	port := strings.TrimPrefix(server.URL, "http://")
-	port = port[strings.Index(port, ":")+1:]
-	portInt := 0
-	for _, c := range port {
-		portInt = portInt*10 + int(c-'0')
-	}
-
-	result := CheckHTTP("127.0.0.1", portInt, 5*time.Second)
+	port := getPort(server)
+	result := CheckHTTP("127.0.0.1", port, 5*time.Second)
 	if result.OK {
 		t.Errorf("expected HTTP not OK, got true")
 	}
@@ -62,14 +58,8 @@ func TestCheckHTTPTimeout(t *testing.T) {
 	}))
 	defer server.Close()
 
-	port := strings.TrimPrefix(server.URL, "http://")
-	port = port[strings.Index(port, ":")+1:]
-	portInt := 0
-	for _, c := range port {
-		portInt = portInt*10 + int(c-'0')
-	}
-
-	result := CheckHTTP("127.0.0.1", portInt, 100*time.Millisecond)
+	port := getPort(server)
+	result := CheckHTTP("127.0.0.1", port, 100*time.Millisecond)
 	if result.OK {
 		t.Errorf("expected HTTP not OK on timeout, got true")
 	}
@@ -199,22 +189,16 @@ func TestUpdatePeersAndConfig(t *testing.T) {
 }
 
 func TestRunCheckCycleWithPeers(t *testing.T) {
-	// Start a test HTTP server to check
 	healthServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	}))
 	defer healthServer.Close()
 
-	healthPort := strings.TrimPrefix(healthServer.URL, "http://")
-	healthPort = healthPort[strings.Index(healthPort, ":")+1:]
-	portInt := 0
-	for _, c := range healthPort {
-		portInt = portInt*10 + int(c-'0')
-	}
+	port := getPort(healthServer)
 
 	n := NewNode("http://localhost:58080", "", 0)
 	n.UpdatePeers([]leader.PeerDict{
-		{IP: "127.0.0.1", Port: portInt},
+		{IP: "127.0.0.1", Port: port},
 	})
 
 	results := n.RunCheckCycle(5 * time.Second)
@@ -223,5 +207,38 @@ func TestRunCheckCycleWithPeers(t *testing.T) {
 	}
 	if !results[0].HTTPOK {
 		t.Errorf("expected HTTP OK, got false")
+	}
+}
+
+func TestBufferOnSubmitFailure(t *testing.T) {
+	n := NewNode("http://127.0.0.1:1", "", 0)
+	n.BufferSize = 100
+
+	ok := n.SubmitResults([]CheckCycleResult{
+		{TargetIP: "10.0.0.2", PingOK: true, HTTPOK: true, Timestamp: 1000},
+	}, 1000)
+	if ok {
+		t.Errorf("expected submit failure, got true")
+	}
+
+	bufLen := n.GetBufferCount()
+	if bufLen != 1 {
+		t.Errorf("expected 1 buffered result, got %d", bufLen)
+	}
+}
+
+func TestBufferLimit(t *testing.T) {
+	n := NewNode("http://127.0.0.1:1", "", 0)
+	n.BufferSize = 3
+
+	for i := 0; i < 5; i++ {
+		n.SubmitResults([]CheckCycleResult{
+			{TargetIP: "10.0.0.2", PingOK: true, HTTPOK: true, Timestamp: float64(i)},
+		}, float64(i))
+	}
+
+	bufLen := n.GetBufferCount()
+	if bufLen != 3 {
+		t.Errorf("expected buffer size 3, got %d", bufLen)
 	}
 }
