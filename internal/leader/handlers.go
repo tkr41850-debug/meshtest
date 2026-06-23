@@ -4,8 +4,6 @@ import (
 	"encoding/json"
 	"log"
 	"net/http"
-	"strconv"
-	"time"
 )
 
 type Leader struct {
@@ -17,13 +15,17 @@ type Leader struct {
 }
 
 func NewLeader() *Leader {
-	return &Leader{
+	l := &Leader{
 		Registry:      NewRegistry(),
 		Results:       NewResultsStore(),
 		CheckInterval: DefaultCheckInterval,
 		BufferSize:    DefaultBufferSize,
 		peersCh:       make(chan struct{}, 1),
 	}
+	LoadIntoMemory(l.Results)
+	StartFlushLoop(l.Results)
+	go l.ListenForPeerPush()
+	return l
 }
 
 func (l *Leader) writeJSON(w http.ResponseWriter, status int, v any) {
@@ -182,13 +184,6 @@ func (l *Leader) notifyPeers() {
 	}
 }
 
-func (l *Leader) PeerNotifyURL(node NodeInfo) string {
-	if node.NodeURL != "" {
-		return node.NodeURL + "/update-peers"
-	}
-	return "http://" + node.NodeIP + ":" + strconv.Itoa(node.ListenPort) + "/update-peers"
-}
-
 func (l *Leader) Mux() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /livez", l.HandleLivez)
@@ -211,9 +206,4 @@ func ServeLeader(bind string) error {
 	}
 	log.Printf("Go leader starting on %s", bind)
 	return srv.ListenAndServe()
-}
-
-func init() {
-	// Ensure timestamps are Unix epoch format
-	_ = time.Now().Unix()
 }

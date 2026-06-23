@@ -34,8 +34,8 @@ A distributed mesh connectivity testing tool for monitoring network health acros
 
 ### 🚧 v0.11 Go Rewrite (In Progress)
 
-- [ ] **Phase 31: Go Leader — Core HTTP API** — Implement core leader HTTP endpoints, registry, and results storage in Go
-- [ ] **Phase 32: Go Leader — Persistence & Peer Push** — Add JSON Lines disk persistence, flush loop, peer push notification
+- [x] **Phase 31: Go Leader — Core HTTP API** — Implement core leader HTTP endpoints, registry, and results storage in Go
+- [x] **Phase 32: Go Leader — Persistence & Peer Push** — Add JSON Lines disk persistence, flush loop, peer push notification
 - [ ] **Phase 33: Go Node — Agent** — Implement ICMP ping, HTTP checks, result submission, and cycle orchestration in Go
 - [ ] **Phase 34: Go Node — Peer Listener** — Add HTTP server to receive peer push and config updates from leader
 - [ ] **Phase 35: Docker & Integration Tests** — Create minimal Docker images, Docker Compose, validate against spec/ tests
@@ -155,8 +155,8 @@ A distributed mesh connectivity testing tool for monitoring network health acros
 | 28 — Shell Scripts | v0.10.1 | — | ✅ Complete | 2026-06-22 |
 | 29 — Config, Frontend & Test Infra | v0.10.1 | — | ✅ Complete | 2026-06-22 |
 | 30 — Setup Integration Tests (spec) | v0.10.1 | — | ✅ Complete | 2026-06-22 |
-| 31 — Go Leader Core API | v0.11 | 0/0 | Not started | — |
-| 32 — Go Leader Persistence & Peer Push | v0.11 | 0/0 | Not started | — |
+| 31 — Go Leader Core API | v0.11 | — | ✅ Complete | 2026-06-22 |
+| 32 — Go Leader Persistence & Peer Push | v0.11 | — | ✅ Complete | 2026-06-22 |
 | 33 — Go Node Agent | v0.11 | 0/0 | Not started | — |
 | 34 — Go Node Peer Listener | v0.11 | 0/0 | Not started | — |
 | 35 — Docker & Integration Tests | v0.11 | 0/0 | Not started | — |

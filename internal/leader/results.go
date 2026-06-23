@@ -189,6 +189,22 @@ func (s *ResultsStore) Query90d() QueryResult90d {
 	defer s.mu.RUnlock()
 
 	byDay := make(map[string]map[string]*ConnectionStats)
+
+	// Start with day aggregates (historical data from disk)
+	for dayStr, dayData := range s.dayAggregates {
+		if byDay[dayStr] == nil {
+			byDay[dayStr] = make(map[string]*ConnectionStats)
+		}
+		for key, stats := range dayData {
+			byDay[dayStr][key] = &ConnectionStats{
+				TotalChecks: stats.TotalChecks,
+				PingOK:      stats.PingOK,
+				HTTPOK:      stats.HTTPOK,
+			}
+		}
+	}
+
+	// Merge in-memory results
 	for nodeIP, nodeResults := range s.results {
 		for _, r := range nodeResults {
 			if r.Timestamp < cutoff {
