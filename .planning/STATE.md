@@ -10,10 +10,10 @@ See: .planning/PROJECT.md (updated 2026-06-22)
 ## Current Position
 
 Milestone: v0.11 (Go Rewrite)
-Phase: 33 (Go Node Agent)
+Phase: Complete
 Plan: —
-Status: Plans needed
-Last activity: 2026-06-22 — Phase 32: Go Leader Persistence & Peer Push complete
+Status: Shipped 2026-06-22
+Last activity: 2026-06-22 — v0.11 complete, tagged v0.11
 
 ## Performance Metrics
 
