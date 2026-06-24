@@ -59,7 +59,7 @@ func (s *ResultsStore) Query90m(registry *Registry) QueryResult90m {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
-	var checks []CheckResultWithNode
+	checks := make([]CheckResultWithNode, 0)
 	for nodeIP, nodeResults := range s.results {
 		for _, r := range nodeResults {
 			if r.Timestamp >= cutoff {
@@ -76,7 +76,7 @@ func (s *ResultsStore) Query90m(registry *Registry) QueryResult90m {
 	}
 
 	allIPs := registry.AllIPs()
-	var statuses []StatusInfo
+	statuses := make([]StatusInfo, 0)
 	for _, src := range allIPs {
 		for _, dst := range allIPs {
 			if src != dst {
@@ -152,7 +152,7 @@ func (s *ResultsStore) Query90h() QueryResult90h {
 		}
 	}
 
-	var hours []HourEntry
+	hours := make([]HourEntry, 0)
 	for hourStr := range byHour {
 		var conns []DayConnection
 		for key, stats := range byHour[hourStr] {
@@ -230,7 +230,7 @@ func (s *ResultsStore) Query90d() QueryResult90d {
 		}
 	}
 
-	var days []DayEntry
+	days := make([]DayEntry, 0)
 	for dayStr := range byDay {
 		var conns []DayConnection
 		for key, stats := range byDay[dayStr] {

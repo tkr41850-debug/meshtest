@@ -1,10 +1,15 @@
 package leader
 
 import (
+	"context"
 	"encoding/json"
 	"log"
 	"net/http"
+	"os"
+	"os/signal"
 	"sync"
+	"syscall"
+	"time"
 )
 
 type Leader struct {
@@ -196,6 +201,11 @@ func (l *Leader) HandleUpdateConfig(w http.ResponseWriter, r *http.Request) {
 	l.notifyPeers()
 }
 
+func (l *Leader) Stop() {
+	StopFlushLoop()
+	flushOnce(l.Results)
+}
+
 func (l *Leader) notifyPeers() {
 	select {
 	case l.peersCh <- struct{}{}:
@@ -223,6 +233,22 @@ func ServeLeader(bind string) error {
 		Addr:    bind,
 		Handler: mux,
 	}
+
+	go func() {
+		sigCh := make(chan os.Signal, 1)
+		signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
+		<-sigCh
+		log.Printf("Shutting down...")
+		leader.Stop()
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		srv.Shutdown(ctx)
+	}()
+
 	log.Printf("Go leader starting on %s", bind)
-	return srv.ListenAndServe()
+	err := srv.ListenAndServe()
+	if err == http.ErrServerClosed {
+		return nil
+	}
+	return err
 }
