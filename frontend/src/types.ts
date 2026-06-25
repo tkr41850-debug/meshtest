@@ -6,6 +6,7 @@ export interface CheckResult {
   ping_latency_ms: number | null;
   http_latency_ms: number | null;
   timestamp: number;
+  is_extra?: boolean;
 }
 
 export interface BarEntry {

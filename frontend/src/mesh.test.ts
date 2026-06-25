@@ -305,6 +305,161 @@ describe("renderCards", () => {
       90,
     );
   });
+
+  it("renders extra target cards below normal cards per source", () => {
+    const container = document.createElement("div");
+    renderCards(
+      container,
+      ["10.0.0.1", "10.0.0.2"],
+      [
+        {
+          node_ip: "10.0.0.1",
+          target_ip: "10.0.0.2",
+          ping_status: "OK",
+          http_status: "OK",
+        },
+      ],
+      [
+        {
+          node_ip: "10.0.0.1",
+          target_ip: "10.0.0.2",
+          ping_ok: true,
+          http_ok: true,
+          ping_latency_ms: 5,
+          http_latency_ms: 10,
+          timestamp: 1000000,
+        },
+        {
+          node_ip: "10.0.0.1",
+          target_ip: "10.0.0.99",
+          ping_ok: true,
+          http_ok: true,
+          ping_latency_ms: 3,
+          http_latency_ms: 8,
+          timestamp: 1000000,
+          is_extra: true,
+        },
+      ],
+      new Map([
+        ["10.0.0.1|10.0.0.2", [99.5, 100]],
+      ]),
+    );
+    // Normal target card should be present
+    expect(container.innerHTML).toContain("10.0.0.2");
+    expect(container.innerHTML).toContain("5.0ms");
+    // Extra target card should be present
+    expect(container.innerHTML).toContain("10.0.0.99");
+    expect(container.innerHTML).toContain("3.0ms");
+    // Extra target card should show "extra target" annotation
+    expect(container.innerHTML).toContain("extra target");
+  });
+
+  it("renders extra target cards in the same data-source-group as their source", () => {
+    const container = document.createElement("div");
+    renderCards(
+      container,
+      ["10.0.0.1", "10.0.0.2"],
+      [
+        {
+          node_ip: "10.0.0.1",
+          target_ip: "10.0.0.2",
+          ping_status: "OK",
+          http_status: "OK",
+        },
+      ],
+      [
+        {
+          node_ip: "10.0.0.1",
+          target_ip: "10.0.0.99",
+          ping_ok: true,
+          http_ok: true,
+          ping_latency_ms: 3,
+          http_latency_ms: 8,
+          timestamp: 1000000,
+          is_extra: true,
+        },
+      ],
+      new Map(),
+    );
+    const groups = container.querySelectorAll("[data-source-group]");
+    // Extra target should be in the 10.0.0.1 group
+    const group1 = groups[0];
+    expect(group1?.textContent).toContain("10.0.0.99");
+    expect(group1?.textContent).toContain("extra target");
+    // Extra target should NOT be in the 10.0.0.2 group
+    const group2 = groups[1];
+    expect(group2?.textContent).not.toContain("10.0.0.99");
+  });
+
+  it("does not show extra target annotation for normal cards", () => {
+    const container = document.createElement("div");
+    renderCards(
+      container,
+      ["10.0.0.1", "10.0.0.2"],
+      [
+        {
+          node_ip: "10.0.0.1",
+          target_ip: "10.0.0.2",
+          ping_status: "OK",
+          http_status: "OK",
+        },
+      ],
+      [
+        {
+          node_ip: "10.0.0.1",
+          target_ip: "10.0.0.2",
+          ping_ok: true,
+          http_ok: true,
+          ping_latency_ms: 5,
+          http_latency_ms: 10,
+          timestamp: 1000000,
+        },
+      ],
+      new Map(),
+    );
+    expect(container.innerHTML).not.toContain("extra target");
+  });
+
+  it("does not count extra targets in summary label", () => {
+    const container = document.createElement("div");
+    renderCards(
+      container,
+      ["10.0.0.1", "10.0.0.2"],
+      [
+        {
+          node_ip: "10.0.0.1",
+          target_ip: "10.0.0.2",
+          ping_status: "OK",
+          http_status: "OK",
+        },
+      ],
+      [
+        {
+          node_ip: "10.0.0.1",
+          target_ip: "10.0.0.2",
+          ping_ok: true,
+          http_ok: true,
+          ping_latency_ms: 5,
+          http_latency_ms: 10,
+          timestamp: 1000000,
+        },
+        {
+          node_ip: "10.0.0.1",
+          target_ip: "10.0.0.99",
+          ping_ok: true,
+          http_ok: true,
+          ping_latency_ms: 3,
+          http_latency_ms: 8,
+          timestamp: 1000000,
+          is_extra: true,
+        },
+      ],
+      new Map(),
+    );
+    const header = container.querySelector("[data-source-header]");
+    // Summary should say "1 targets" (only the normal peer), not "2 targets"
+    expect(header?.textContent).toContain("1 targets");
+  });
 });
 
 describe("renderDay30", () => {

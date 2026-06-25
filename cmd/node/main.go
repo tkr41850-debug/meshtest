@@ -6,6 +6,7 @@ import (
 	"net"
 	"os"
 	"os/signal"
+	"strings"
 	"strconv"
 	"syscall"
 	"time"
@@ -47,6 +48,12 @@ func main() {
 
 	n := node.NewNode(leaderURL, nodeURL, listenPort)
 	n.NodeIP = getNodeIP()
+
+	if extra := os.Getenv("NODE_EXTRA_TARGETS"); extra != "" {
+		parts := strings.Fields(extra)
+		n.SetExtraTargets(parts)
+		log.Printf("Extra targets: %v", parts)
+	}
 
 	srv, err := node.StartListener(n, listenPort)
 	if err != nil {

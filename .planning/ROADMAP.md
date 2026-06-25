@@ -144,6 +144,18 @@ A distributed mesh connectivity testing tool for monitoring network health acros
 
 **Plans**: TBD
 
+### ✅ Phase 36: mesh-node NODE_EXTRA_TARGETS — extra node targets for additional diagnostics, leader handles out-of-network gracefully, frontend displays as extra rows
+
+**Goal:** Add support for extra target IPs that are checked every cycle alongside normal peers, marked with `is_extra` flag, excluded from pair status computation, and displayed as non-collapsible cards with "extra target" annotation in the frontend.
+**Requirements**: GO-NODE-EXTRA-TARGETS, GO-LEADER-EXTRA-FILTER, GO-FRONTEND-EXTRA-DISPLAY
+**Depends on:** Phase 35
+**Plans:** 3 plans
+
+Plans:
+- [x] Plan 1: Data model — Add `IsExtra` field to `CheckResult`/`CheckResultWithNode`, skip extra checks in `checkPairStatus`, propagate `IsExtra` through flush/read pipeline
+- [x] Plan 2: Node — Read `NODE_EXTRA_TARGETS` env var, add extra targets to check cycle with `IsExtra: true`
+- [x] Plan 3: Frontend — Filter extra checks, render as non-collapsible cards with "extra target" annotation below normal mesh cards per source node
+
 ---
 
 ## Progress
@@ -160,5 +172,6 @@ A distributed mesh connectivity testing tool for monitoring network health acros
 | 33 — Go Node Agent | v0.11 | — | ✅ Complete | 2026-06-22 |
 | 34 — Go Node Peer Listener | v0.11 | — | ✅ Complete | 2026-06-22 |
 | 35 — Docker & Integration Tests | v0.11 | — | ✅ Complete | 2026-06-22 |
+| 36 — Extra Targets (NODE_EXTRA_TARGETS) | v0.11 | — | ✅ Complete | 2026-06-24 |
 
 See `.planning/milestones/v0.10.1-ROADMAP.md` for previous milestone details.

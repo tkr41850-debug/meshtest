@@ -51,6 +51,7 @@ type CheckResultWithNode struct {
 	HTTPOK   bool    `json:"http_ok"`
 	Timestamp float64 `json:"timestamp"`
 	LatencyMs float64 `json:"latency_ms,omitempty"`
+	IsExtra   bool    `json:"is_extra,omitempty"`
 }
 
 func (s *ResultsStore) Query90m(registry *Registry) QueryResult90m {
@@ -63,14 +64,15 @@ func (s *ResultsStore) Query90m(registry *Registry) QueryResult90m {
 	for nodeIP, nodeResults := range s.results {
 		for _, r := range nodeResults {
 			if r.Timestamp >= cutoff {
-				checks = append(checks, CheckResultWithNode{
-					NodeIP:    nodeIP,
-					TargetIP:  r.TargetIP,
-					PingOK:    r.PingOK,
-					HTTPOK:    r.HTTPOK,
-					Timestamp: r.Timestamp,
-					LatencyMs: r.LatencyMs,
-				})
+			checks = append(checks, CheckResultWithNode{
+				NodeIP:    nodeIP,
+				TargetIP:  r.TargetIP,
+				PingOK:    r.PingOK,
+				HTTPOK:    r.HTTPOK,
+				Timestamp: r.Timestamp,
+				LatencyMs: r.LatencyMs,
+				IsExtra:   r.IsExtra,
+			})
 			}
 		}
 	}
@@ -104,6 +106,9 @@ func checkPairStatus(results map[string][]CheckResult, srcIP, dstIP string, cuto
 		return false
 	}
 	for _, c := range nodeResults {
+		if c.IsExtra {
+			continue
+		}
 		if c.TargetIP == dstIP && c.Timestamp >= cutoff {
 			if checkType == "ping" && c.PingOK {
 				return true

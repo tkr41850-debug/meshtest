@@ -14,6 +14,7 @@ type CheckResult struct {
 	HTTPOK    bool    `json:"http_ok"`
 	Timestamp float64 `json:"timestamp"`
 	LatencyMs float64 `json:"latency_ms,omitempty"`
+	IsExtra   bool    `json:"is_extra,omitempty"`
 }
 
 type RegisterRequest struct {

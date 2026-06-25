@@ -518,6 +518,70 @@ func TestSubmitAutoRegistersNode(t *testing.T) {
 	}
 }
 
+func TestExtraTargetExcludedFromStatuses(t *testing.T) {
+	l := newTestLeader()
+	mux := l.Mux()
+	now := float64(time.Now().Unix())
+
+	mux.ServeHTTP(httptest.NewRecorder(),
+		httptest.NewRequest("POST", "/register", jsonBody(t, map[string]string{"node_ip": "10.0.0.1"})))
+	mux.ServeHTTP(httptest.NewRecorder(),
+		httptest.NewRequest("POST", "/register", jsonBody(t, map[string]string{"node_ip": "10.0.0.2"})))
+
+	// Submit both a normal check (failed) and an extra check (passed) from 10.0.0.1→10.0.0.2
+	mux.ServeHTTP(httptest.NewRecorder(),
+		httptest.NewRequest("POST", "/submit", jsonBody(t, SubmitRequest{
+			NodeIP: "10.0.0.1",
+			Checks: []CheckResult{
+				{TargetIP: "10.0.0.2", PingOK: false, HTTPOK: false, Timestamp: now, IsExtra: false},
+				{TargetIP: "10.0.0.2", PingOK: true, HTTPOK: true, Timestamp: now, IsExtra: true},
+			},
+			Timestamp: &now,
+		})))
+
+	req := httptest.NewRequest("GET", "/data?window=90m", nil)
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Errorf("expected 200, got %d", rec.Code)
+	}
+	var resp QueryResult90m
+	decodeJSON(t, rec.Body, &resp)
+
+	// Both checks should appear in the checks array with correct IsExtra values
+	normalFound := false
+	extraFound := false
+	for _, c := range resp.Checks {
+		if c.TargetIP == "10.0.0.2" && c.NodeIP == "10.0.0.1" && !c.IsExtra {
+			normalFound = true
+			if c.PingOK || c.HTTPOK {
+				t.Error("normal check should have false PingOK/HTTPOK")
+			}
+		}
+		if c.TargetIP == "10.0.0.2" && c.NodeIP == "10.0.0.1" && c.IsExtra {
+			extraFound = true
+			if !c.PingOK || !c.HTTPOK {
+				t.Error("extra check should have true PingOK/HTTPOK")
+			}
+		}
+	}
+	if !normalFound {
+		t.Error("expected normal check in checks array")
+	}
+	if !extraFound {
+		t.Error("expected extra check in checks array with IsExtra=true")
+	}
+
+	// checkPairStatus should skip the IsExtra check.
+	// The normal check has PingOK=false, HTTPOK=false, so status should be false.
+	for _, st := range resp.Statuses {
+		if st.SrcIP == "10.0.0.1" && st.DstIP == "10.0.0.2" && st.OK {
+			t.Errorf("expected false status for 10.0.0.1→10.0.0.2 (skipped IsExtra check, normal check is false); got type=%s ok=true", st.Type)
+		}
+	}
+}
+
 func TestCORSHeaders(t *testing.T) {
 	l := newTestLeader()
 	mux := l.Mux()

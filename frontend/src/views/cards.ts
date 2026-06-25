@@ -70,6 +70,54 @@ function aggregateByMinute(
   return { pingBars, httpBars };
 }
 
+function renderCardsForSource(
+  src: string,
+  targets: string[],
+  combined: Map<string, string>,
+  latestCheck: Map<string, CheckResult>,
+  checks: CheckResult[],
+  uptimeMap: Map<string, [number | null, number | null]>,
+  isExtra: boolean,
+): string {
+  let html = "";
+  for (const tgt of targets) {
+    const key = `${src}|${tgt}`;
+    const ck = latestCheck.get(key) ?? ({} as CheckResult);
+    const pingLat =
+      ck.ping_latency_ms != null
+        ? `${ck.ping_latency_ms.toFixed(1)}ms`
+        : "—";
+    const httpLat =
+      ck.http_latency_ms != null
+        ? `${ck.http_latency_ms.toFixed(1)}ms`
+        : "—";
+    const lastSeen = ck.timestamp
+      ? new Date(ck.timestamp * 1000).toLocaleTimeString()
+      : "—";
+    const uptime = uptimeMap.get(key) ?? [null, null];
+    const { pingBars, httpBars } = aggregateByMinute(checks, src, tgt);
+    const totalChecks = checks.filter(
+      (c) => c.node_ip === src && c.target_ip === tgt,
+    ).length;
+    const st = combined.get(key) ?? "Pending";
+    html += cardHtml(
+      tgt,
+      st,
+      pingLat,
+      httpLat,
+      lastSeen,
+      uptime[0],
+      uptime[1],
+      totalChecks,
+      pingBars,
+      httpBars,
+      undefined,
+      isExtra,
+    );
+  }
+  return html;
+}
+
 export function renderCards(
   container: HTMLElement,
   nodes: string[],
@@ -95,13 +143,31 @@ export function renderCards(
     combined.set(`${s.node_ip}|${s.target_ip}`, st);
   }
 
-  const latestCheck = new Map<string, CheckResult>();
-  for (const c of checks) {
+  const normalChecks = checks.filter((c) => !c.is_extra);
+  const extraChecks = checks.filter((c) => c.is_extra);
+
+  const latestNormalCheck = new Map<string, CheckResult>();
+  for (const c of normalChecks) {
     const key = `${c.node_ip}|${c.target_ip}`;
-    const existing = latestCheck.get(key);
+    const existing = latestNormalCheck.get(key);
     if (!existing || c.timestamp > existing.timestamp) {
-      latestCheck.set(key, c);
+      latestNormalCheck.set(key, c);
     }
+  }
+
+  const latestExtraCheck = new Map<string, CheckResult>();
+  for (const c of extraChecks) {
+    const key = `${c.node_ip}|${c.target_ip}`;
+    const existing = latestExtraCheck.get(key);
+    if (!existing || c.timestamp > existing.timestamp) {
+      latestExtraCheck.set(key, c);
+    }
+  }
+
+  // Collect source IPs that have extra targets
+  const extraSources = new Set<string>();
+  for (const c of extraChecks) {
+    extraSources.add(c.node_ip);
   }
 
   const sorted = [...nodes].sort();
@@ -112,37 +178,15 @@ export function renderCards(
     html += `<div data-source-group class="mb-6">`;
     html += `<div data-source-header class="sticky top-0 bg-mesh-bg z-10 font-mono text-sm font-semibold text-mesh-dark py-2 border-b border-mesh-border">${src}  [${summary}]  — ${targets.length} targets</div>`;
     html += `<div class="pl-4 mt-2">`;
-    for (const tgt of targets) {
-      const st = combined.get(`${src}|${tgt}`) ?? "Pending";
-      const ck = latestCheck.get(`${src}|${tgt}`) ?? ({} as CheckResult);
-      const pingLat =
-        ck.ping_latency_ms != null
-          ? `${ck.ping_latency_ms.toFixed(1)}ms`
-          : "—";
-      const httpLat =
-        ck.http_latency_ms != null
-          ? `${ck.http_latency_ms.toFixed(1)}ms`
-          : "—";
-      const lastSeen = ck.timestamp
-        ? new Date(ck.timestamp * 1000).toLocaleTimeString()
-        : "—";
-      const uptime = uptimeMap.get(`${src}|${tgt}`) ?? [null, null];
-      const { pingBars, httpBars } = aggregateByMinute(checks, src, tgt);
-      const totalChecks = checks.filter(
-        (c) => c.node_ip === src && c.target_ip === tgt,
-      ).length;
-      html += cardHtml(
-        tgt,
-        st,
-        pingLat,
-        httpLat,
-        lastSeen,
-        uptime[0],
-        uptime[1],
-        totalChecks,
-        pingBars,
-        httpBars,
-      );
+    html += renderCardsForSource(src, targets, combined, latestNormalCheck, normalChecks, uptimeMap, false);
+    // Extra targets for this source node
+    if (extraSources.has(src)) {
+      const srcExtraTargets = [...new Set(
+        extraChecks.filter((c) => c.node_ip === src).map((c) => c.target_ip),
+      )].sort();
+      if (srcExtraTargets.length > 0) {
+        html += renderCardsForSource(src, srcExtraTargets, combined, latestExtraCheck, extraChecks, uptimeMap, true);
+      }
     }
     html += "</div></div>";
   }

@@ -39,6 +39,7 @@ type Node struct {
 	NodeURL       string
 	ListenPort    int
 	Peers         []leader.PeerDict
+	ExtraTargets  []string
 	CheckInterval int
 	BufferSize    int
 	resultBuffer []CheckCycleResult
@@ -120,9 +121,12 @@ func (n *Node) RunCheckCycle(timeout time.Duration) []CheckCycleResult {
 	n.mu.RLock()
 	peers := make([]leader.PeerDict, len(n.Peers))
 	copy(peers, n.Peers)
+	extras := make([]string, len(n.ExtraTargets))
+	copy(extras, n.ExtraTargets)
 	n.mu.RUnlock()
 
-	if len(peers) == 0 {
+	totalChecks := len(peers) + len(extras)
+	if totalChecks == 0 {
 		return nil
 	}
 
@@ -130,11 +134,13 @@ func (n *Node) RunCheckCycle(timeout time.Duration) []CheckCycleResult {
 		idx int
 		r   CheckCycleResult
 	}
-	ch := make(chan result, len(peers))
+	ch := make(chan result, totalChecks)
 	sem := make(chan struct{}, 10)
 
 	now := float64(time.Now().Unix())
 	var wg sync.WaitGroup
+
+	// Peer checks (normal targets)
 	for i, p := range peers {
 		wg.Add(1)
 		go func(i int, p leader.PeerDict) {
@@ -159,12 +165,34 @@ func (n *Node) RunCheckCycle(timeout time.Duration) []CheckCycleResult {
 		}(i, p)
 	}
 
+	// Extra target checks
+	for i, ip := range extras {
+		wg.Add(1)
+		go func(i int, ip string) {
+			defer wg.Done()
+			sem <- struct{}{}
+			defer func() { <-sem }()
+
+			pingRes := PingNode(ip, timeout)
+			httpRes := CheckHTTP(ip, 80, timeout)
+			idx := len(peers) + i
+			ch <- result{idx, CheckCycleResult{
+				TargetIP:  ip,
+				PingOK:    pingRes.OK,
+				HTTPOK:    httpRes.OK,
+				Timestamp: now,
+				LatencyMs: pingRes.LatencyMs,
+				IsExtra:   true,
+			}}
+		}(i, ip)
+	}
+
 	go func() {
 		wg.Wait()
 		close(ch)
 	}()
 
-	results := make([]CheckCycleResult, len(peers))
+	results := make([]CheckCycleResult, totalChecks)
 	for r := range ch {
 		results[r.idx] = r.r
 	}
@@ -276,4 +304,10 @@ func (n *Node) GetPeers() []leader.PeerDict {
 	peers := make([]leader.PeerDict, len(n.Peers))
 	copy(peers, n.Peers)
 	return peers
+}
+
+func (n *Node) SetExtraTargets(extraTargets []string) {
+	n.mu.Lock()
+	defer n.mu.Unlock()
+	n.ExtraTargets = extraTargets
 }

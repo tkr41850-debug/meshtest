@@ -12,8 +12,8 @@ See: .planning/PROJECT.md (updated 2026-06-22)
 Milestone: v0.11 (Go Rewrite)
 Phase: Complete
 Plan: —
-Status: Shipped 2026-06-22
-Last activity: 2026-06-22 — v0.11 complete, tagged v0.11
+Status: Shipped 2026-06-22 (Phases 31-35), Phase 36 completed 2026-06-24
+Last activity: 2026-06-24 — Phase 36 (NODE_EXTRA_TARGETS) implemented and complete
 
 ## Performance Metrics
 
@@ -102,6 +102,7 @@ Phase 4 (CI/CD) decisions:
 - Phase **30** added: Setup Integration Tests (spec) — HTTP-only integration tests against local mesh-leader
 - v0.10.1 complete: Phases 26-30 shipped 2026-06-22, tagged v0.10.1
 - v0.11 starts at Phase 31: Go Rewrite — leader + node in Go, minimal Docker images, TDD
+- Phase **36** added to v0.11: mesh-node NODE_EXTRA_TARGETS — extra node targets for additional diagnostics, leader handles out-of-network gracefully, frontend displays as extra rows
 
 ### Milestone v0.7 Status
 

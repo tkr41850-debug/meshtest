@@ -33,6 +33,7 @@ export function cardHtml(
   pingBars: BarEntry[],
   httpBars: BarEntry[],
   pairKey?: string,
+  isExtra?: boolean,
 ): string {
   const badge = BADGE_MAP[status] ?? BADGE_MAP.Pending;
   const pingBarHtml = renderBars(pingBars);
@@ -41,11 +42,15 @@ export function cardHtml(
     ? splitCircle(pingUp, httpUp)
     : "";
   const pairAttr = pairKey ? ` data-node-pair="${pairKey}"` : "";
+  const extraNote = isExtra
+    ? `<span class="text-xs text-mesh-muted italic ml-auto">extra target</span>`
+    : "";
   return [
     `<div${pairAttr} class="border border-mesh-border border-l-4 rounded-lg p-3 mb-2 bg-white" style="border-left-color:${badge.color}">`,
     `<div class="flex items-center gap-2 mb-1">`,
     `<span class="inline-block px-2.5 py-0.5 rounded-full text-xs font-semibold tracking-wide text-white" style="background:${badge.color}">${badge.label}</span>`,
     `<span class="font-mono text-sm font-semibold text-mesh-dark">${tgtIp}</span>`,
+    `${extraNote}`,
     `<span class="ml-auto flex items-center gap-1">${circle}</span>`,
     `</div>`,
     `<div class="text-xs text-mesh-muted flex gap-4 flex-wrap">`,

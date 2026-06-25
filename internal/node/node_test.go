@@ -242,3 +242,68 @@ func TestBufferLimit(t *testing.T) {
 		t.Errorf("expected buffer size 3, got %d", bufLen)
 	}
 }
+
+func TestSetExtraTargets(t *testing.T) {
+	n := NewNode("http://localhost:58080", "", 0)
+	n.SetExtraTargets([]string{"10.0.0.99", "10.0.0.100"})
+	n.mu.RLock()
+	if len(n.ExtraTargets) != 2 {
+		t.Errorf("expected 2 extra targets, got %d", len(n.ExtraTargets))
+	}
+	if n.ExtraTargets[0] != "10.0.0.99" {
+		t.Errorf("expected 10.0.0.99, got %s", n.ExtraTargets[0])
+	}
+	if n.ExtraTargets[1] != "10.0.0.100" {
+		t.Errorf("expected 10.0.0.100, got %s", n.ExtraTargets[1])
+	}
+	n.mu.RUnlock()
+}
+
+func TestRunCheckCycleWithExtraTargetsOnly(t *testing.T) {
+	n := NewNode("http://localhost:58080", "", 0)
+	n.SetExtraTargets([]string{"127.0.0.1"})
+
+	results := n.RunCheckCycle(5 * time.Second)
+	if len(results) != 1 {
+		t.Fatalf("expected 1 result, got %d", len(results))
+	}
+	if !results[0].IsExtra {
+		t.Error("expected extra target result to have IsExtra=true")
+	}
+	if results[0].TargetIP != "127.0.0.1" {
+		t.Errorf("expected target IP 127.0.0.1, got %s", results[0].TargetIP)
+	}
+}
+
+func TestRunCheckCycleWithPeersAndExtraTargets(t *testing.T) {
+	healthServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer healthServer.Close()
+
+	port := getPort(healthServer)
+
+	n := NewNode("http://localhost:58080", "", 0)
+	n.UpdatePeers([]leader.PeerDict{
+		{IP: "127.0.0.1", Port: port},
+	})
+	n.SetExtraTargets([]string{"127.0.0.1"})
+
+	results := n.RunCheckCycle(5 * time.Second)
+	if len(results) != 2 {
+		t.Fatalf("expected 2 results, got %d", len(results))
+	}
+
+	peerResult := results[0]
+	extraResult := results[1]
+
+	if peerResult.IsExtra {
+		t.Error("expected peer result to have IsExtra=false")
+	}
+	if !extraResult.IsExtra {
+		t.Error("expected extra target result to have IsExtra=true")
+	}
+	if peerResult.TargetIP != extraResult.TargetIP {
+		t.Error("both should target the same IP")
+	}
+}

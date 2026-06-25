@@ -187,6 +187,7 @@ func flushOnce(store *ResultsStore) {
 					HTTPOK:    c.HTTPOK,
 					Timestamp: c.Timestamp,
 					LatencyMs: c.LatencyMs,
+					IsExtra:   c.IsExtra,
 				})
 			}
 			if c.Timestamp >= float64(cutoff90h) {
