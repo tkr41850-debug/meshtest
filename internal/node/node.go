@@ -10,11 +10,16 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"strings"
 	"sync"
 	"time"
 
 	"github.com/tkr41850-debug/meshtest/internal/leader"
 )
+
+func joinURL(base, path string) string {
+	return strings.TrimRight(base, "/") + path
+}
 
 var (
 	DefaultCheckInterval = 10
@@ -113,7 +118,7 @@ func (n *Node) SubmitResults(checks []CheckCycleResult, timestamp float64) bool 
 		return false
 	}
 
-	resp, err := n.client.Post(n.LeaderURL+"/submit", "application/json", &buf)
+	resp, err := n.client.Post(joinURL(n.LeaderURL, "/submit"), "application/json", &buf)
 	if err != nil {
 		log.Printf("Submit failed: %v", err)
 		n.bufferResults(checks)
@@ -227,7 +232,7 @@ func (n *Node) FetchPeers(ctx context.Context) ([]leader.PeerDict, error) {
 	if ctx == nil {
 		ctx = context.Background()
 	}
-	req, err := http.NewRequestWithContext(ctx, "GET", n.LeaderURL+"/node-list", nil)
+	req, err := http.NewRequestWithContext(ctx, "GET", joinURL(n.LeaderURL, "/node-list"), nil)
 	if err != nil {
 		return nil, err
 	}
@@ -264,7 +269,7 @@ func (n *Node) Register(ctx context.Context) error {
 		return err
 	}
 
-	req, err := http.NewRequestWithContext(ctx, "POST", n.LeaderURL+"/register", &buf)
+	req, err := http.NewRequestWithContext(ctx, "POST", joinURL(n.LeaderURL, "/register"), &buf)
 	if err != nil {
 		return err
 	}

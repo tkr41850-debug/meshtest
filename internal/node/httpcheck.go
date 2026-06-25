@@ -3,6 +3,7 @@ package node
 import (
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"time"
 )
@@ -10,7 +11,8 @@ import (
 func CheckHTTP(targetIP string, port int, timeout time.Duration) HTTPResult {
 	client := &http.Client{Timeout: timeout}
 	start := time.Now()
-	resp, err := client.Get(fmt.Sprintf("http://%s:%d/healthz", targetIP, port))
+	url := fmt.Sprintf("http://%s/healthz", net.JoinHostPort(targetIP, fmt.Sprintf("%d", port)))
+	resp, err := client.Get(url)
 	if err != nil {
 		return HTTPResult{}
 	}

@@ -66,6 +66,70 @@ func TestCheckHTTPTimeout(t *testing.T) {
 	}
 }
 
+func TestCheckHTTPWithHostname(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		json.NewEncoder(w).Encode(map[string]string{"status": "alive"})
+	}))
+	defer server.Close()
+
+	port := getPort(server)
+	result := CheckHTTP("localhost", port, 5*time.Second)
+	if !result.OK {
+		t.Errorf("expected HTTP OK with hostname target, got false")
+	}
+	if result.Status != 200 {
+		t.Errorf("expected status 200, got %d", result.Status)
+	}
+	if result.LatencyMs <= 0 {
+		t.Errorf("expected positive latency, got %f", result.LatencyMs)
+	}
+}
+
+func TestCheckHTTPWithHostnameInPeerCycle(t *testing.T) {
+	healthServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer healthServer.Close()
+
+	port := getPort(healthServer)
+
+	n := NewNode("http://localhost:58080", "", 0)
+	n.UpdatePeers([]leader.PeerDict{
+		{IP: "localhost", Port: port},
+	})
+
+	results := n.RunCheckCycle(5 * time.Second)
+	if len(results) != 1 {
+		t.Fatalf("expected 1 result, got %d", len(results))
+	}
+	if !results[0].HTTPOK {
+		t.Errorf("expected HTTP OK with hostname peer, got false")
+	}
+	if !results[0].PingOK {
+		t.Errorf("expected Ping OK with hostname peer, got false")
+	}
+}
+
+func TestURLJoinNoDoubleSlash(t *testing.T) {
+	tests := []struct {
+		base   string
+		path   string
+		expect string
+	}{
+		{"http://leader:58080", "/submit", "http://leader:58080/submit"},
+		{"http://leader:58080/", "/submit", "http://leader:58080/submit"},
+		{"http://localhost:58080", "/register", "http://localhost:58080/register"},
+		{"http://10.0.0.1:58080/", "/node-list", "http://10.0.0.1:58080/node-list"},
+	}
+	for _, tc := range tests {
+		got := joinURL(tc.base, tc.path)
+		if got != tc.expect {
+			t.Errorf("joinURL(%q, %q) = %q, want %q", tc.base, tc.path, got, tc.expect)
+		}
+	}
+}
+
 func TestSubmitSuccess(t *testing.T) {
 	var received bool
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
