@@ -1,6 +1,6 @@
 .PHONY: ci test test-frontend test-backend test-go test-integration lint format-check format build check typecheck-frontend
 
-ci: lint format-check test-backend test-frontend test-go build
+ci: lint format-check test-backend test-frontend build test-go
 
 test-backend:
 	uv run --extra dev pytest tests/ -v
@@ -27,6 +27,7 @@ format:
 
 build:
 	cd frontend && npm run build
+	cp -r frontend/dist/* internal/leader/staticdist/
 
 typecheck-frontend:
 	cd frontend && npx tsc --noEmit

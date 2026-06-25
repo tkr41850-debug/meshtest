@@ -223,6 +223,7 @@ func (l *Leader) Mux() http.Handler {
 	mux.HandleFunc("POST /submit", l.HandleSubmit)
 	mux.HandleFunc("GET /data", l.HandleData)
 	mux.HandleFunc("POST /updateConfig", l.HandleUpdateConfig)
+	mux.Handle("GET /", staticHandler)
 	return mux
 }
 

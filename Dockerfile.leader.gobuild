@@ -1,8 +1,16 @@
+FROM node:22-alpine AS frontend
+WORKDIR /app
+COPY frontend/package.json frontend/package-lock.json /app/
+RUN npm ci
+COPY frontend/ /app/
+RUN npm run build
+
 FROM golang:1.22-alpine AS builder
 WORKDIR /build
 COPY go.mod ./
 COPY cmd/ ./cmd/
 COPY internal/ ./internal/
+COPY --from=frontend /app/dist/ /build/internal/leader/staticdist/
 RUN go mod tidy && CGO_ENABLED=0 go build -o /build/mesh-leader ./cmd/leader
 
 FROM scratch

@@ -594,3 +594,67 @@ func TestCORSHeaders(t *testing.T) {
 		t.Error("expected CORS header")
 	}
 }
+
+func TestIndexHTMLRedirectsToRoot(t *testing.T) {
+	l := newTestLeader()
+	mux := l.Mux()
+
+	req := httptest.NewRequest("GET", "/index.html", nil)
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+
+	// Go's FileServer redirects /index.html to / (standard behavior)
+	if rec.Code != http.StatusMovedPermanently {
+		t.Errorf("expected 301 redirect to /, got %d", rec.Code)
+	}
+}
+
+func TestRootReturnsIndexHTML(t *testing.T) {
+	l := newTestLeader()
+	mux := l.Mux()
+
+	req := httptest.NewRequest("GET", "/", nil)
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Errorf("expected 200, got %d", rec.Code)
+	}
+	if rec.Body.Len() == 0 {
+		t.Error("expected non-empty body")
+	}
+}
+
+func TestStaticFileNotFoundReturns404(t *testing.T) {
+	l := newTestLeader()
+	mux := l.Mux()
+
+	req := httptest.NewRequest("GET", "/nonexistent-file-xyz", nil)
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusNotFound {
+		t.Errorf("expected 404, got %d", rec.Code)
+	}
+}
+
+func TestStaticHandlerDoesNotInterfereWithAPI(t *testing.T) {
+	l := newTestLeader()
+	mux := l.Mux()
+
+	req := httptest.NewRequest("GET", "/livez", nil)
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Errorf("expected /livez to still return 200, got %d", rec.Code)
+	}
+
+	req = httptest.NewRequest("POST", "/register", jsonBody(t, map[string]string{"node_ip": "10.0.0.1"}))
+	rec = httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Errorf("expected POST /register to still return 200, got %d", rec.Code)
+	}
+}
