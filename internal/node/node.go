@@ -6,7 +6,10 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"net"
 	"net/http"
+	"net/url"
+	"os"
 	"sync"
 	"time"
 
@@ -31,6 +34,27 @@ type HTTPResult struct {
 }
 
 type CheckCycleResult = leader.CheckResult
+
+func ResolveNodeIP(nodeURL string) string {
+	if ip := os.Getenv("NODE_IP"); ip != "" {
+		return ip
+	}
+	if nodeURL != "" {
+		parsed, err := url.Parse(nodeURL)
+		if err == nil && parsed.Hostname() != "" {
+			return parsed.Hostname()
+		}
+	}
+	addrs, err := net.InterfaceAddrs()
+	if err == nil {
+		for _, addr := range addrs {
+			if ipnet, ok := addr.(*net.IPNet); ok && !ipnet.IP.IsLoopback() && ipnet.IP.To4() != nil {
+				return ipnet.IP.String()
+			}
+		}
+	}
+	return "127.0.0.1"
+}
 
 type Node struct {
 	mu            sync.RWMutex

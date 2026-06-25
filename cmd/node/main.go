@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"log"
-	"net"
 	"os"
 	"os/signal"
 	"strings"
@@ -13,21 +12,6 @@ import (
 
 	"github.com/tkr41850-debug/meshtest/internal/node"
 )
-
-func getNodeIP() string {
-	if ip := os.Getenv("NODE_IP"); ip != "" {
-		return ip
-	}
-	addrs, err := net.InterfaceAddrs()
-	if err == nil {
-		for _, addr := range addrs {
-			if ipnet, ok := addr.(*net.IPNet); ok && !ipnet.IP.IsLoopback() && ipnet.IP.To4() != nil {
-				return ipnet.IP.String()
-			}
-		}
-	}
-	return "127.0.0.1"
-}
 
 func main() {
 	leaderURL := os.Getenv("LEADER_URL")
@@ -47,7 +31,7 @@ func main() {
 	}
 
 	n := node.NewNode(leaderURL, nodeURL, listenPort)
-	n.NodeIP = getNodeIP()
+	n.NodeIP = node.ResolveNodeIP(os.Getenv("NODE_URL"))
 
 	if extra := os.Getenv("NODE_EXTRA_TARGETS"); extra != "" {
 		parts := strings.Fields(extra)

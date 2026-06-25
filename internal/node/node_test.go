@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"os"
 	"strconv"
 	"testing"
 	"time"
@@ -225,6 +226,47 @@ func TestBufferOnSubmitFailure(t *testing.T) {
 	if bufLen != 1 {
 		t.Errorf("expected 1 buffered result, got %d", bufLen)
 	}
+}
+
+func TestResolveNodeIP(t *testing.T) {
+	t.Run("parses hostname from NODE_URL", func(t *testing.T) {
+		ip := ResolveNodeIP("http://my-node:58081")
+		if ip != "my-node" {
+			t.Errorf("expected my-node, got %s", ip)
+		}
+	})
+
+	t.Run("parses IP from NODE_URL", func(t *testing.T) {
+		ip := ResolveNodeIP("http://10.0.0.5:58081")
+		if ip != "10.0.0.5" {
+			t.Errorf("expected 10.0.0.5, got %s", ip)
+		}
+	})
+
+	t.Run("parses hostname without port from NODE_URL", func(t *testing.T) {
+		ip := ResolveNodeIP("http://node1.example.com")
+		if ip != "node1.example.com" {
+			t.Errorf("expected node1.example.com, got %s", ip)
+		}
+	})
+
+	t.Run("falls back to detect ip when NODE_URL empty", func(t *testing.T) {
+		ip := ResolveNodeIP("")
+		if ip == "" {
+			t.Error("expected non-empty IP")
+		}
+	})
+
+	t.Run("NODE_IP env var takes priority", func(t *testing.T) {
+		prev := os.Getenv("NODE_IP")
+		os.Setenv("NODE_IP", "10.0.0.99")
+		defer os.Setenv("NODE_IP", prev)
+
+		ip := ResolveNodeIP("http://my-node:58081")
+		if ip != "10.0.0.99" {
+			t.Errorf("expected 10.0.0.99, got %s", ip)
+		}
+	})
 }
 
 func TestBufferLimit(t *testing.T) {
