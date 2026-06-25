@@ -2,6 +2,7 @@ package node
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -192,6 +193,62 @@ func TestRegisterSuccess(t *testing.T) {
 	if len(peers) != 1 {
 		t.Errorf("expected 1 peer, got %d", len(peers))
 	}
+}
+
+func TestLeaderURLWithDNSHostname(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/register":
+			json.NewEncoder(w).Encode(map[string]any{
+				"status": "registered",
+				"peers":  []map[string]any{{"ip": "10.0.0.2", "port": 58080}},
+			})
+		case "/node-list":
+			json.NewEncoder(w).Encode(map[string]any{
+				"nodes": []map[string]any{{"ip": "10.0.0.2", "port": 58080}},
+				"count": 1,
+			})
+		case "/submit":
+			w.WriteHeader(http.StatusAccepted)
+			json.NewEncoder(w).Encode(map[string]string{"status": "accepted"})
+		default:
+			w.WriteHeader(http.StatusNotFound)
+		}
+	}))
+	defer server.Close()
+
+	port := getPort(server)
+	leaderURL := fmt.Sprintf("http://localhost:%d", port)
+
+	t.Run("Register via DNS hostname", func(t *testing.T) {
+		n := NewNode(leaderURL, "http://node1:58081", 58081)
+		n.NodeIP = ResolveNodeIP("http://node1:58081")
+		err := n.Register(nil)
+		if err != nil {
+			t.Fatalf("Register failed with DNS hostname: %v", err)
+		}
+	})
+
+	t.Run("FetchPeers via DNS hostname", func(t *testing.T) {
+		n := NewNode(leaderURL, "", 58081)
+		peers, err := n.FetchPeers(nil)
+		if err != nil {
+			t.Fatalf("FetchPeers failed with DNS hostname: %v", err)
+		}
+		if len(peers) != 1 {
+			t.Fatalf("expected 1 peer, got %d", len(peers))
+		}
+	})
+
+	t.Run("SubmitResults via DNS hostname", func(t *testing.T) {
+		n := NewNode(leaderURL, "", 58081)
+		ok := n.SubmitResults([]CheckCycleResult{
+			{TargetIP: "10.0.0.2", PingOK: true, HTTPOK: true, Timestamp: float64(time.Now().Unix())},
+		}, float64(time.Now().Unix()))
+		if !ok {
+			t.Fatal("SubmitResults failed with DNS hostname")
+		}
+	})
 }
 
 func TestRegisterHTTPError(t *testing.T) {
