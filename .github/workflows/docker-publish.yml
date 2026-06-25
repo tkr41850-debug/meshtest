@@ -19,9 +19,9 @@ jobs:
       matrix:
         image:
           - name: mesh-leader
-            dockerfile: Dockerfile.leader
+            dockerfile: Dockerfile.leader.gobuild
           - name: mesh-node
-            dockerfile: Dockerfile.node
+            dockerfile: Dockerfile.node.gobuild
 
     steps:
       - name: Checkout
